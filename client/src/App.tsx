@@ -299,6 +299,7 @@ function App() {
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
   const [naturalHeight, setNaturalHeight] = useState<number | null>(null)
+  const [offsetY, setOffsetY] = useState(0)
   const [ghost, setGhost] = useState<{
     piece: ActivePiece
     x: number
@@ -464,8 +465,10 @@ function App() {
     if (naturalHeight == null || typeof window === 'undefined') return
     const updateScale = () => {
       const viewportH = window.innerHeight
-      const next = viewportH / naturalHeight
-      setScale(next > 1 ? 1 : next)
+      const raw = viewportH / naturalHeight
+      const next = raw > 1 ? 1 : raw
+      setScale(next)
+      setOffsetY(viewportH - naturalHeight * next)
     }
     window.addEventListener('resize', updateScale)
     updateScale()
@@ -564,7 +567,11 @@ function App() {
       <div
         className="hexaclear-root"
         ref={rootRef}
-        style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+          marginTop: offsetY,
+        }}
       >
       <header className="hexaclear-header">
         <div className="hexaclear-title">Cubic Cleanup</div>
