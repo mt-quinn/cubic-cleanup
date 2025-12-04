@@ -454,21 +454,32 @@ function App() {
   useLayoutEffect(() => {
     if (!rootRef.current) return
     const el = rootRef.current
-    const previous = el.style.transform
+    const previousTransform = el.style.transform
+    const previousMinHeight = el.style.minHeight
     el.style.transform = ''
+    el.style.minHeight = 'auto'
     const height = el.offsetHeight
-    el.style.transform = previous
+    el.style.transform = previousTransform
+    el.style.minHeight = previousMinHeight
     setNaturalHeight(height)
   }, [])
 
   useEffect(() => {
     if (naturalHeight == null || typeof window === 'undefined') return
     const updateScale = () => {
+      const viewportW = window.innerWidth
       const viewportH = window.innerHeight
+      const isNarrow = viewportW <= 768
+      if (!isNarrow) {
+        // Desktop / wide screens: preserve original desktop scale
+        setScale(1)
+        setOffsetY(0)
+        return
+      }
+      // Mobile / narrow screens: scale so full game height exactly fits viewport
       const raw = viewportH / naturalHeight
-      const next = raw > 1 ? 1 : raw
-      setScale(next)
-      setOffsetY(viewportH - naturalHeight * next)
+      setScale(raw)
+      setOffsetY(0)
     }
     window.addEventListener('resize', updateScale)
     updateScale()
