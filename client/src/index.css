@@ -297,6 +297,7 @@ body {
   background: rgba(44, 20, 11, 0.95);
   color: #fde9d3;
   font-family: inherit;
+  font-size: 16px; /* Prevent iOS input-focus zoom */
 }
 
 .hexaclear-overlay-card button {
@@ -403,6 +404,8 @@ body {
   justify-content: center;
   cursor: grab;
   min-height: 90px;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .hexaclear-piece-button.selected {
