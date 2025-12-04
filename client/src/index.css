@@ -1,0 +1,300 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+    system-ui, sans-serif;
+  line-height: 1.4;
+  font-weight: 400;
+  color: #f5f9ff;
+  background-color: #05070b;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #021b2b 0, #02040a 40%, #000 100%);
+  color: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.hexaclear-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem;
+  max-width: 480px;
+  margin: 0 auto;
+  gap: 0.75rem;
+}
+
+.hexaclear-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hexaclear-title {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+}
+
+.hexaclear-stats {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.hexaclear-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hexaclear-stat .label {
+  opacity: 0.65;
+  font-size: 0.7rem;
+}
+
+.hexaclear-stat .value {
+  font-variant-numeric: tabular-nums;
+}
+
+.hexaclear-reset {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 232, 255, 0.7);
+  background: rgba(2, 15, 24, 0.9);
+  color: #94e8ff;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.hexaclear-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hexaclear-board-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 260px;
+  border-radius: 1.25rem;
+  background: radial-gradient(circle at 30% 0%, #04172b, #02050c 60%, #000 100%);
+  box-shadow:
+    0 0 0 1px rgba(148, 232, 255, 0.08),
+    0 18px 45px rgba(0, 0, 0, 0.7),
+    0 0 80px rgba(0, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hexaclear-board {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.hexaclear-hex {
+  stroke-width: 2.6;
+  vector-effect: non-scaling-stroke;
+  transition:
+    fill 0.15s ease-out,
+    stroke 0.15s ease-out,
+    opacity 0.1s ease-out;
+}
+
+.hexaclear-hex.empty {
+  fill: rgba(5, 20, 35, 0.9);
+  stroke: rgba(90, 120, 150, 0.7);
+}
+
+.hexaclear-hex.filled {
+  fill: #e9f6ff;
+  stroke: #10151c;
+}
+
+.hexaclear-hex.clearing {
+  fill: #e9f6ff;
+  stroke: #94e8ff;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-flip-clear 420ms ease-out forwards;
+}
+
+.hexaclear-flower-boundary {
+  stroke: #3be0ff;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.hexaclear-debug-label {
+  font-size: 8px;
+  fill: rgba(180, 220, 255, 0.9);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.hexaclear-hex.preview-valid {
+  fill: rgba(148, 232, 255, 0.25);
+  stroke: #94e8ff;
+}
+
+.hexaclear-hex.preview-invalid {
+  fill: rgba(255, 119, 137, 0.25);
+  stroke: #ff7789;
+}
+
+.hexaclear-hex.piece {
+  fill: #e9f6ff;
+  stroke: #10151c;
+}
+
+.hexaclear-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.95));
+}
+
+.hexaclear-overlay-card {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #081425, #02050b);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.8);
+  text-align: center;
+}
+
+.hexaclear-overlay-card .title {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.hexaclear-overlay-card .score {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  margin-bottom: 0.9rem;
+}
+
+.hexaclear-overlay-card button {
+  border-radius: 999px;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  background: linear-gradient(135deg, #3be0ff, #7effc8);
+  color: #021018;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hexaclear-score-popup {
+  position: absolute;
+  top: 1.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.4rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 232, 255, 0.8);
+  background: rgba(3, 20, 36, 0.95);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  z-index: 2;
+  animation: hexaclear-score-popup-fade 2.6s ease-out forwards;
+}
+
+.hexaclear-hex-cube line {
+  stroke: rgba(16, 21, 28, 0.95);
+  stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.hexaclear-hand {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hexaclear-piece-button {
+  flex: 1;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(94, 141, 172, 0.7);
+  background: radial-gradient(circle at 10% 0%, #041327, #02040c 65%, #000 100%);
+  padding: 0.3rem 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.hexaclear-piece-button.selected {
+  border-color: #94e8ff;
+  box-shadow: 0 0 0 1px rgba(148, 232, 255, 0.45);
+}
+
+.hexaclear-piece-svg {
+  width: 100%;
+  height: auto;
+}
+
+button {
+  font-family: inherit;
+}
+
+@media (min-width: 768px) {
+  .hexaclear-root {
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+  }
+}
+
+@keyframes hexaclear-flip-clear {
+  0% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleX(0);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes hexaclear-score-popup-fade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+
