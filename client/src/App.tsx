@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD_DEFINITION } from './game/boardDefinition'
 import {
   applyPlacement,
@@ -297,9 +297,7 @@ function App() {
     pointerId: number | null
   }>({ pieceId: null, pointerId: null })
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
-  const [scale, setScale] = useState(1)
-  const [naturalHeight, setNaturalHeight] = useState<number | null>(null)
-  const [offsetY, setOffsetY] = useState(0)
+  const scale = 1
   const [ghost, setGhost] = useState<{
     piece: ActivePiece
     x: number
@@ -451,41 +449,6 @@ function App() {
     return () => window.clearTimeout(timeout)
   }, [scorePopup, scorePopupId])
 
-  useLayoutEffect(() => {
-    if (!rootRef.current) return
-    const el = rootRef.current
-    const previousTransform = el.style.transform
-    const previousMinHeight = el.style.minHeight
-    el.style.transform = ''
-    el.style.minHeight = 'auto'
-    const height = el.offsetHeight
-    el.style.transform = previousTransform
-    el.style.minHeight = previousMinHeight
-    setNaturalHeight(height)
-  }, [])
-
-  useEffect(() => {
-    if (naturalHeight == null || typeof window === 'undefined') return
-    const updateScale = () => {
-      const viewportW = window.innerWidth
-      const viewportH = window.innerHeight
-      const isNarrow = viewportW <= 768
-      if (!isNarrow) {
-        // Desktop / wide screens: preserve original desktop scale
-        setScale(1)
-        setOffsetY(0)
-        return
-      }
-      // Mobile / narrow screens: scale so full game height exactly fits viewport
-      const raw = viewportH / naturalHeight
-      setScale(raw)
-      setOffsetY(0)
-    }
-    window.addEventListener('resize', updateScale)
-    updateScale()
-    return () => window.removeEventListener('resize', updateScale)
-  }, [naturalHeight])
-
   useEffect(() => {
     if (!game.gameOver) return
     const score = game.score
@@ -575,15 +538,7 @@ function App() {
 
   return (
     <div className="cubic-viewport">
-      <div
-        className="hexaclear-root"
-        ref={rootRef}
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'top center',
-          marginTop: offsetY,
-        }}
-      >
+      <div className="hexaclear-root" ref={rootRef}>
       <header className="hexaclear-header">
         <div className="hexaclear-title">Cubic Cleanup</div>
         <div className="hexaclear-stats">
