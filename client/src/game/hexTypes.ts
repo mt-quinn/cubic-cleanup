@@ -41,4 +41,16 @@ export const addAxial = (a: Axial, b: Axial): Axial => ({
   r: a.r + b.r,
 })
 
+export const rotateAxial = (coord: Axial, times: number): Axial => {
+  let { q, r } = coord
+  const steps = ((times % 6) + 6) % 6
+  for (let i = 0; i < steps; i++) {
+    const newQ = -r
+    const newR = q + r
+    q = newQ
+    r = newR
+  }
+  return { q, r }
+}
+
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD_DEFINITION } from './game/boardDefinition'
 import {
   applyPlacement,
+  canPlacePiece,
   createInitialGameState,
   dealHand,
   hasAnyValidMove,
@@ -133,15 +134,31 @@ const CubeLines = ({ cx, cy }: { cx: number; cy: number }) => {
     vertices.push({ x, y })
   }
 
+  // Choose three wedge faces meeting at center: top, lower-right, lower-left
   const v0 = vertices[0]
+  const v1 = vertices[1]
   const v2 = vertices[2]
+  const v3 = vertices[3]
   const v4 = vertices[4]
+  const v5 = vertices[5]
 
   return (
     <g className="hexaclear-hex-cube">
-      <line x1={cx} y1={cy} x2={v0.x} y2={v0.y} />
-      <line x1={cx} y1={cy} x2={v2.x} y2={v2.y} />
-      <line x1={cx} y1={cy} x2={v4.x} y2={v4.y} />
+      {/* right face */}
+      <polygon
+        className="cube-face cube-right"
+        points={`${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`}
+      />
+      {/* left face */}
+      <polygon
+        className="cube-face cube-left"
+        points={`${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`}
+      />
+      {/* top face drawn last so it's not partially occluded */}
+      <polygon
+        className="cube-face cube-top"
+        points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
+      />
     </g>
   )
 }
@@ -149,7 +166,7 @@ const CubeLines = ({ cx, cy }: { cx: number; cy: number }) => {
 const getBestPlacementPreview = (
   hoveredCellId: string | null,
   selectedPiece: ActivePiece | null,
-  board: GameState['board'],
+  game: GameState,
 ) => {
   if (!hoveredCellId || !selectedPiece) return null
 
@@ -162,13 +179,85 @@ const getBestPlacementPreview = (
     const targetQ = originCell.coord.q + rel.q
     const targetR = originCell.coord.r + rel.r
     const targetId = axialToId({ q: targetQ, r: targetR })
-    if (!(targetId in board) || board[targetId] !== 'empty') {
+    if (!(targetId in game.board) || game.board[targetId] !== 'empty') {
       valid = false
     }
     targetIds.push(targetId)
   }
 
-  return { targetIds, valid }
+  let clearedIds: string[] = []
+  if (valid) {
+    const previewGame: GameState = {
+      ...game,
+      board: { ...game.board },
+      hand: [selectedPiece],
+      handSlots: [selectedPiece.id],
+      gameOver: false,
+    }
+    const result = applyPlacement(previewGame, selectedPiece, hoveredCellId)
+    if (result && result.clearedPatterns.length > 0) {
+      clearedIds = result.clearedCellIds
+    }
+  }
+
+  return { targetIds, valid, clearedIds }
+}
+
+type HighScoreEntry = {
+  name: string
+  score: number
+  date: number
+}
+
+const loadHighScores = (): HighScoreEntry[] => {
+  try {
+    const raw = window.localStorage.getItem('cubic-highscores')
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as HighScoreEntry[]
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (e) =>
+          typeof e.name === 'string' &&
+          typeof e.score === 'number' &&
+          typeof e.date === 'number',
+      )
+      .sort((a, b) => b.score - a.score || a.date - b.date)
+      .slice(0, 5)
+  } catch {
+    return []
+  }
+}
+
+const qualifiesForHighScore = (
+  score: number,
+  entries: HighScoreEntry[],
+): boolean => {
+  if (score <= 0) return false
+  if (entries.length < 5) return true
+  const sorted = [...entries].sort(
+    (a, b) => b.score - a.score || a.date - b.date,
+  )
+  const last = sorted[sorted.length - 1]
+  return score > last.score
+}
+
+const triggerHaptics = (didClear: boolean) => {
+  if (typeof window === 'undefined') return
+  const nav: any = navigator
+  if (!nav || typeof nav.vibrate !== 'function') return
+  if (didClear) {
+    nav.vibrate([15, 40, 25])
+  } else {
+    nav.vibrate(10)
+  }
+}
+
+const triggerGrabHaptic = () => {
+  if (typeof window === 'undefined') return
+  const nav: any = navigator
+  if (!nav || typeof nav.vibrate !== 'function') return
+  nav.vibrate(5)
 }
 
 function App() {
@@ -179,6 +268,18 @@ function App() {
   const [scorePopup, setScorePopup] = useState<string | null>(null)
   const [scorePopupId, setScorePopupId] = useState(0)
   const [showScoring, setShowScoring] = useState(false)
+  const [showHighScores, setShowHighScores] = useState(false)
+  const [highScores, setHighScores] = useState<HighScoreEntry[]>(() =>
+    typeof window === 'undefined' ? [] : loadHighScores(),
+  )
+  const [pendingHighScore, setPendingHighScore] = useState(false)
+  const [pendingScore, setPendingScore] = useState<number | null>(null)
+  const [highScoreSaved, setHighScoreSaved] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [playerName, setPlayerName] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.localStorage.getItem('cubic-player-name') ?? ''
+  })
   const [bestScore, setBestScore] = useState<number | null>(() => {
     const stored = window.localStorage.getItem('hexaclear-best-score')
     return stored ? Number(stored) : null
@@ -189,11 +290,21 @@ function App() {
     return game.hand.find((p) => p.id === selectedPieceId) ?? null
   }, [game.hand, selectedPieceId])
 
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const boardWrapperRef = useRef<HTMLDivElement | null>(null)
   const dragState = useRef<{
     pieceId: string | null
     pointerId: number | null
   }>({ pieceId: null, pointerId: null })
+  const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
+  const [scale, setScale] = useState(1)
+  const [ghost, setGhost] = useState<{
+    piece: ActivePiece
+    x: number
+    y: number
+  } | null>(null)
+  const lastValidHoverRef = useRef<string | null>(null)
 
   const findClosestCellIdFromClientPoint = (clientX: number, clientY: number): string | null => {
     const svg = svgRef.current
@@ -258,6 +369,9 @@ function App() {
       }
 
       const newScore = current.score + result.pointsGained
+      const flatPoints = piece.shape.cells.length
+      const finalScore = newScore + flatPoints
+
       if (result.clearedPatterns.length > 0) {
         setClearingCells(result.clearedCellIds)
         const totalClears = result.clearedPatterns.length
@@ -269,13 +383,15 @@ function App() {
         setScorePopupId((id) => id + 1)
       }
 
+      triggerHaptics(result.clearedPatterns.length > 0)
+
       setBestScore((prev) => {
-        if (prev === null || newScore > prev) {
+        if (prev === null || finalScore > prev) {
           window.localStorage.setItem(
             'hexaclear-best-score',
-            String(newScore),
+            String(finalScore),
           )
-          return newScore
+          return finalScore
         }
         return prev
       })
@@ -285,7 +401,7 @@ function App() {
       return {
         ...current,
         board: result.board,
-        score: newScore,
+        score: finalScore,
         streak: result.clearedPatterns.length > 0 ? newStreak : 0,
         hand: newHand,
         handSlots: updatedSlots,
@@ -303,6 +419,7 @@ function App() {
     setGame(createInitialGameState())
     setSelectedPieceId(null)
     setHover(null)
+    setHighScoreSaved(false)
   }
 
   const preview = useMemo(
@@ -311,10 +428,10 @@ function App() {
         ? getBestPlacementPreview(
             hover.cellId,
             selectedPiece,
-            game.board,
+            game,
           )
         : null,
-    [hover, selectedPiece, game.board],
+    [hover, selectedPiece, game],
   )
 
   useEffect(() => {
@@ -335,22 +452,129 @@ function App() {
   }, [scorePopup, scorePopupId])
 
   useEffect(() => {
+    const updateScale = () => {
+      if (!rootRef.current || typeof window === 'undefined') return
+      const viewportH = window.innerHeight
+      const rect = rootRef.current.getBoundingClientRect()
+      const total = rect.height
+      if (total === 0) return
+      const margin = 24
+      const available = viewportH - margin
+      const next = total > available ? available / total : 1
+      setScale(next > 1 ? 1 : next)
+    }
+
+    window.addEventListener('resize', updateScale)
+    updateScale()
+
+    return () => {
+      window.removeEventListener('resize', updateScale)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!game.gameOver) return
+    const score = game.score
+    setPendingScore(score)
+    setPendingHighScore(
+      !highScoreSaved && qualifiesForHighScore(score, highScores),
+    )
+  }, [game.gameOver, game.score, highScores, highScoreSaved])
+
+  const handleSaveHighScore = () => {
+    if (pendingScore === null) return
+    const name = playerName.trim() || 'Player'
+    const entry: HighScoreEntry = {
+      name,
+      score: pendingScore,
+      date: Date.now(),
+    }
+    const next = [...highScores, entry]
+      .sort((a, b) => b.score - a.score || a.date - b.date)
+      .slice(0, 5)
+    setHighScores(next)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('cubic-highscores', JSON.stringify(next))
+      window.localStorage.setItem('cubic-player-name', name)
+    }
+    setPendingHighScore(false)
+    setHighScoreSaved(true)
+  }
+
+  const handleResetHighScores = () => {
+    setHighScores([])
+    setPendingHighScore(false)
+    setPendingScore(null)
+    setHighScoreSaved(false)
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('cubic-highscores')
+    }
+    setShowResetConfirm(false)
+  }
+
+  useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
       if (!dragState.current.pieceId) return
-      const cellId = findClosestCellIdFromClientPoint(e.clientX, e.clientY)
-      if (cellId) {
-        setHover({ cellId })
+      const wrapper = boardWrapperRef.current
+      if (!wrapper) return
+      const rect = wrapper.getBoundingClientRect()
+      const x = (e.clientX - rect.left) / scale
+      const y = (e.clientY - rect.top) / scale
+      setGhost((prev) => (prev ? { ...prev, x, y } : prev))
+      const candidateId = findClosestCellIdFromClientPoint(
+        e.clientX,
+        e.clientY - 80,
+      )
+
+      const currentPiece =
+        dragState.current.pieceId &&
+        game.hand.find((p) => p.id === dragState.current.pieceId)
+
+      if (!currentPiece) {
+        if (candidateId) {
+          setHover({ cellId: candidateId })
+        } else {
+          setHover(null)
+        }
+        return
+      }
+
+      if (!candidateId) {
+        if (lastValidHoverRef.current) {
+          setHover({ cellId: lastValidHoverRef.current })
+        } else {
+          setHover(null)
+        }
+        return
+      }
+
+      const canPlaceHere = !!canPlacePiece(
+        game.board,
+        currentPiece.shape,
+        candidateId,
+      )
+
+      if (canPlaceHere) {
+        lastValidHoverRef.current = candidateId
+        setHover({ cellId: candidateId })
+      } else if (lastValidHoverRef.current) {
+        setHover({ cellId: lastValidHoverRef.current })
       } else {
-        setHover(null)
+        setHover({ cellId: candidateId })
       }
     }
 
     const handlePointerUp = (e: PointerEvent) => {
       if (!dragState.current.pieceId) return
-      const cellId = findClosestCellIdFromClientPoint(e.clientX, e.clientY)
+      const cellId = findClosestCellIdFromClientPoint(
+        e.clientX,
+        e.clientY - 80,
+      )
       const pieceId = dragState.current.pieceId
       dragState.current.pointerId = null
       dragState.current.pieceId = null
+      setDraggingPieceId(null)
+      setGhost(null)
       if (cellId && pieceId) {
         placePieceAtCell(pieceId, cellId)
       }
@@ -365,23 +589,20 @@ function App() {
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerUp)
     }
-  }, [])
+  }, [scale, game.board, game.hand])
 
   return (
-    <div className="hexaclear-root">
+    <div className="cubic-viewport">
+      <div
+        className="hexaclear-root"
+        ref={rootRef}
+        style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+      >
       <header className="hexaclear-header">
         <div className="hexaclear-title">Cubic Cleanup</div>
         <div className="hexaclear-stats">
-          <div className="hexaclear-stat">
-            <span className="label">Score</span>
-            <span className="value">{game.score}</span>
-          </div>
-          <div className="hexaclear-stat">
-            <span className="label">Streak</span>
-            <span className="value">{game.streak}</span>
-          </div>
           {bestScore !== null && (
-            <div className="hexaclear-stat">
+            <div className="hexaclear-best-banner">
               <span className="label">Best</span>
               <span className="value">{bestScore}</span>
             </div>
@@ -397,10 +618,17 @@ function App() {
         >
           Scoring
         </button>
+        <button
+          className="hexaclear-reset"
+          type="button"
+          onClick={() => setShowHighScores(true)}
+        >
+          High Scores
+        </button>
       </header>
 
       <main className="hexaclear-main">
-        <div className="hexaclear-board-wrapper">
+        <div className="hexaclear-board-wrapper" ref={boardWrapperRef}>
           <svg
             className="hexaclear-board"
             ref={svgRef}
@@ -419,6 +647,8 @@ function App() {
                 !isClearing &&
                 preview &&
                 preview.targetIds.includes(cell.id)
+              const willClearInPreview =
+                preview && preview.clearedIds.includes(cell.id)
               const previewValid = preview?.valid ?? false
 
               return (
@@ -429,6 +659,7 @@ function App() {
                       'hexaclear-hex',
                       isFilled ? 'filled' : 'empty',
                       isClearing ? 'clearing' : '',
+                      willClearInPreview ? 'preview-clear' : '',
                       inPreview
                         ? previewValid
                           ? 'preview-valid'
@@ -437,9 +668,20 @@ function App() {
                     ]
                       .filter(Boolean)
                       .join(' ')}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${
+                      isFilled ? 'Filled' : 'Empty'
+                    } cell at ${cell.coord.q}, ${cell.coord.r}`}
                     onMouseEnter={() => setHover({ cellId: cell.id })}
                     onMouseLeave={() => setHover(null)}
                     onClick={() => handleCellClick(cell.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        handleCellClick(cell.id)
+                      }
+                    }}
                   />
                   {isFilled && <CubeLines cx={cx} cy={cy} />}
                   {DEBUG_SHOW_COORDS && (
@@ -465,6 +707,28 @@ function App() {
               />
             ))}
           </svg>
+          <div className="hexaclear-board-hud">
+            <div className="board-hud-block left">
+              <span className="label">Score:</span>
+              <span className="value">{game.score}</span>
+            </div>
+            <div className="board-hud-block right">
+              <span className="label">Streak</span>
+              <span className="value">{game.streak}</span>
+            </div>
+          </div>
+          {ghost && (
+            <div
+              className="hexaclear-ghost"
+              style={{
+                left: ghost.x,
+                top: ghost.y,
+                transform: 'translate(-30%, -10%)',
+              }}
+            >
+              <PiecePreview shape={ghost.piece.shape} mode="board" />
+            </div>
+          )}
           {scorePopup && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
           )}
@@ -473,6 +737,43 @@ function App() {
               <div className="hexaclear-overlay-card">
                 <div className="title">No more moves</div>
                 <div className="score">Final score: {game.score}</div>
+                {pendingHighScore && (
+                  <div className="score">
+                    <p>New high score! Enter your name:</p>
+                    <input
+                      className="hexaclear-input"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value)}
+                      placeholder="Your name"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveHighScore}
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      Save score
+                    </button>
+                  </div>
+                )}
+                {highScores.length > 0 && (
+                  <div className="score">
+                    <p>Top scores:</p>
+                    <ol className="hexaclear-highscores">
+                      {highScores
+                        .slice()
+                        .sort(
+                          (a, b) =>
+                            b.score - a.score || a.date - b.date,
+                        )
+                        .map((entry, idx) => (
+                          <li key={entry.date + entry.name + idx}>
+                            <span className="name">{entry.name}</span>
+                            <span className="value">{entry.score}</span>
+                          </li>
+                        ))}
+                    </ol>
+                  </div>
+                )}
                 <button onClick={resetGame}>Play again</button>
               </div>
             </div>
@@ -501,6 +802,73 @@ function App() {
               </div>
             </div>
           )}
+          {showHighScores && (
+            <div className="hexaclear-overlay">
+              <div className="hexaclear-overlay-card">
+                <div className="title">High Scores</div>
+                <div className="score">
+                  {highScores.length === 0 ? (
+                    <p>No scores yet. Play a game!</p>
+                  ) : (
+                    <ol className="hexaclear-highscores">
+                      {highScores
+                        .slice()
+                        .sort(
+                          (a, b) =>
+                            b.score - a.score || a.date - b.date,
+                        )
+                        .map((entry, idx) => (
+                          <li key={entry.date + entry.name + idx}>
+                            <span className="name">{entry.name}</span>
+                            <span className="value">{entry.score}</span>
+                          </li>
+                        ))}
+                    </ol>
+                  )}
+                </div>
+                {!showResetConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowResetConfirm(true)}
+                    style={{ marginTop: '0.75rem' }}
+                  >
+                    Reset Hiscores
+                  </button>
+                ) : (
+                  <div className="score" style={{ marginTop: '0.75rem' }}>
+                    <p>Reset all local hiscores? This cannot be undone.</p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        marginTop: '0.25rem',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleResetHighScores}
+                      >
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowResetConfirm(false)}
+                      >
+                        No
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowHighScores(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <section className="hexaclear-hand">
@@ -508,6 +876,7 @@ function App() {
             const piece = game.hand.find((p) => p.id === pieceId) ?? null
             const isSelected =
               !!piece && selectedPieceId === piece.id
+            const isDragging = !!piece && draggingPieceId === piece.id
 
             return (
             <button
@@ -515,9 +884,15 @@ function App() {
               className={[
                 'hexaclear-piece-button',
                 isSelected ? 'selected' : '',
+                isDragging ? 'dragging' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
+              aria-label={
+                piece
+                  ? `${piece.shape.size}-cube piece`
+                  : 'Empty hand slot'
+              }
               onClick={() => {
                 if (!piece) return
                 setSelectedPieceId(
@@ -533,53 +908,142 @@ function App() {
                   pointerId: e.pointerId,
                 }
                 setSelectedPieceId(piece.id)
+                setDraggingPieceId(piece.id)
+                const wrapper = boardWrapperRef.current
+                if (wrapper) {
+                  const rect = wrapper.getBoundingClientRect()
+                  setGhost({
+                    piece,
+                    x: (e.clientX - rect.left) / scale,
+                    y: (e.clientY - rect.top) / scale,
+                  })
+                }
+                triggerGrabHaptic()
               }}
             >
-              {piece && <PiecePreview shape={piece.shape} />}
+              {piece && piece.id !== draggingPieceId && (
+                <PiecePreview shape={piece.shape} mode="hand" />
+              )}
             </button>
             )
           })}
         </section>
       </main>
+      </div>
     </div>
   )
 }
 
 type PiecePreviewProps = {
   shape: ActivePiece['shape']
+  mode?: 'hand' | 'board'
 }
 
-const PiecePreview = ({ shape }: PiecePreviewProps) => {
+const PiecePreview = ({ shape, mode = 'hand' }: PiecePreviewProps) => {
   const coords = shape.cells
-  let minQ = Infinity
-  let maxQ = -Infinity
-  let minR = Infinity
-  let maxR = -Infinity
-  coords.forEach((c) => {
-    minQ = Math.min(minQ, c.q)
-    maxQ = Math.max(maxQ, c.q)
-    minR = Math.min(minR, c.r)
-    maxR = Math.max(maxR, c.r)
+
+  if (mode === 'board') {
+    let minQ = Infinity
+    let maxQ = -Infinity
+    let minR = Infinity
+    let maxR = -Infinity
+    coords.forEach((c) => {
+      minQ = Math.min(minQ, c.q)
+      maxQ = Math.max(maxQ, c.q)
+      minR = Math.min(minR, c.r)
+      maxR = Math.max(maxR, c.r)
+    })
+
+    const width = (maxQ - minQ + 2.5) * HEX_SIZE * SQRT3
+    const height = (maxR - minR + 2.5) * HEX_SIZE * 1.5
+
+    const normalized = coords.map((c) => ({
+      q: c.q - minQ,
+      r: c.r - minR,
+    }))
+
+    return (
+      <svg
+        className="hexaclear-piece-svg"
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+        height={height}
+      >
+        {normalized.map((c, idx) => {
+          const { x, y } = axialToPixel(c.q, c.r)
+          const cx = x + HEX_SIZE * 1
+          const cy = y + HEX_SIZE * 1
+          const points = buildHexPoints(cx, cy)
+          return (
+            <polygon
+              key={idx}
+              points={points}
+              className="hexaclear-hex piece"
+            />
+          )
+        })}
+        {normalized.map((c, idx) => {
+          const { x, y } = axialToPixel(c.q, c.r)
+          return (
+            <CubeLines
+              key={`cube-${idx}`}
+              cx={x + HEX_SIZE * 1}
+              cy={y + HEX_SIZE * 1}
+            />
+          )
+        })}
+      </svg>
+    )
+  }
+
+  const PREVIEW_SIZE = HEX_SIZE * 0.9
+  const CARD_W = PREVIEW_SIZE * SQRT3 * 5
+  const CARD_H = PREVIEW_SIZE * 1.5 * 5
+
+  const axialToPixelPreview = (q: number, r: number) => {
+    const x = PREVIEW_SIZE * (SQRT3 * q + (SQRT3 / 2) * r)
+    const y = PREVIEW_SIZE * (1.5 * r)
+    return { x, y }
+  }
+
+  const centers = coords.map((c) =>
+    axialToPixelPreview(c.q, c.r),
+  )
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  centers.forEach(({ x, y }) => {
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minY = Math.min(minY, y)
+    maxY = Math.max(maxY, y)
   })
+  const centerX = (minX + maxX) / 2
+  const centerY = (minY + maxY) / 2
 
-  const width = (maxQ - minQ + 2.5) * HEX_SIZE * SQRT3
-  const height = (maxR - minR + 2.5) * HEX_SIZE * 1.5
-
-  const normalized = coords.map((c) => ({
-    q: c.q - minQ,
-    r: c.r - minR,
-  }))
+  const buildPreviewHexPoints = (cx: number, cy: number): string => {
+    const points: string[] = []
+    for (let i = 0; i < 6; i++) {
+      const angleRad = ((60 * i - 30) * Math.PI) / 180
+      const x = cx + PREVIEW_SIZE * Math.cos(angleRad)
+      const y = cy + PREVIEW_SIZE * Math.sin(angleRad)
+      points.push(`${x},${y}`)
+    }
+    return points.join(' ')
+  }
 
   return (
     <svg
       className="hexaclear-piece-svg"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${CARD_W} ${CARD_H}`}
+      width={CARD_W}
+      height={CARD_H}
     >
-      {normalized.map((c, idx) => {
-        const { x, y } = axialToPixel(c.q, c.r)
-        const cx = x + HEX_SIZE * 1
-        const cy = y + HEX_SIZE * 1
-        const points = buildHexPoints(cx, cy)
+      {centers.map(({ x, y }, idx) => {
+        const cx = CARD_W / 2 + (x - centerX)
+        const cy = CARD_H / 2 + (y - centerY)
+        const points = buildPreviewHexPoints(cx, cy)
         return (
           <polygon
             key={idx}
@@ -588,13 +1052,14 @@ const PiecePreview = ({ shape }: PiecePreviewProps) => {
           />
         )
       })}
-      {normalized.map((c, idx) => {
-        const { x, y } = axialToPixel(c.q, c.r)
+      {centers.map(({ x, y }, idx) => {
+        const cx = CARD_W / 2 + (x - centerX)
+        const cy = CARD_H / 2 + (y - centerY)
         return (
           <CubeLines
             key={`cube-${idx}`}
-            cx={x + HEX_SIZE * 1}
-            cy={y + HEX_SIZE * 1}
+            cx={cx}
+            cy={cy}
           />
         )
       })}

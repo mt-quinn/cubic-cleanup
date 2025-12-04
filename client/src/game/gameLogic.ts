@@ -2,6 +2,7 @@ import { BOARD_DEFINITION } from './boardDefinition'
 import { ALL_PIECE_SHAPES } from './pieces'
 import type { PieceShape } from './pieces'
 import type { CellId, Pattern } from './hexTypes'
+import { rotateAxial } from './hexTypes'
 
 export type CellState = 'empty' | 'filled'
 
@@ -35,6 +36,34 @@ export type GameState = {
 const randomOf = <T>(arr: T[]): T =>
   arr[Math.floor(Math.random() * arr.length)]!
 
+const scoringPatternIds = new Set([
+  ...BOARD_DEFINITION.scoringLineIds,
+  ...BOARD_DEFINITION.flowerIds,
+])
+
+export const findClears = (
+  board: BoardState,
+): { clearedPatterns: Pattern[]; clearedCellIds: CellId[] } => {
+  const clearedPatterns: Pattern[] = []
+  const clearedCellsSet = new Set<CellId>()
+
+  for (const pattern of BOARD_DEFINITION.patterns) {
+    if (!scoringPatternIds.has(pattern.id)) continue
+    const allFilled = pattern.cellIds.every((id) => board[id] === 'filled')
+    if (allFilled) {
+      clearedPatterns.push(pattern)
+      for (const cellId of pattern.cellIds) {
+        clearedCellsSet.add(cellId)
+      }
+    }
+  }
+
+  return {
+    clearedPatterns,
+    clearedCellIds: Array.from(clearedCellsSet),
+  }
+}
+
 export const createEmptyBoard = (): BoardState => {
   const state: BoardState = {}
   for (const cell of BOARD_DEFINITION.cells) {
@@ -45,12 +74,29 @@ export const createEmptyBoard = (): BoardState => {
 
 export const dealHand = (): Hand => {
   const hand: Hand = []
+  let totalCells = 0
   for (let i = 0; i < 3; i++) {
-    const shape = randomOf(ALL_PIECE_SHAPES)
+    let shape = randomOf(ALL_PIECE_SHAPES)
+    let attempts = 0
+    while (shape.size === 4 && totalCells + shape.size > 10 && attempts < 20) {
+      shape = randomOf(ALL_PIECE_SHAPES)
+      attempts++
+    }
+
+    const rotation = Math.floor(Math.random() * 6)
+    const rotatedCells =
+      rotation === 0
+        ? shape.cells
+        : shape.cells.map((c) => rotateAxial(c, rotation))
+    const instanceShape: PieceShape = {
+      ...shape,
+      cells: rotatedCells,
+    }
     hand.push({
       id: `piece-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
-      shape,
+      shape: instanceShape,
     })
+    totalCells += shape.size
   }
   return hand
 }
@@ -90,24 +136,7 @@ export const applyPlacement = (
     board[id] = 'filled'
   }
 
-  const clearedPatterns: Pattern[] = []
-  const clearedCellsSet = new Set<CellId>()
-
-  const scoringPatternIds = new Set([
-    ...BOARD_DEFINITION.scoringLineIds,
-    ...BOARD_DEFINITION.flowerIds,
-  ])
-
-  for (const pattern of BOARD_DEFINITION.patterns) {
-    if (!scoringPatternIds.has(pattern.id)) continue
-    const allFilled = pattern.cellIds.every((id) => board[id] === 'filled')
-    if (allFilled) {
-      clearedPatterns.push(pattern)
-      for (const cellId of pattern.cellIds) {
-        clearedCellsSet.add(cellId)
-      }
-    }
-  }
+  const { clearedPatterns, clearedCellIds } = findClears(board)
 
   if (clearedPatterns.length === 0) {
     return {
@@ -120,7 +149,7 @@ export const applyPlacement = (
     }
   }
 
-  for (const id of clearedCellsSet) {
+  for (const id of clearedCellIds) {
     board[id] = 'empty'
   }
 
@@ -128,12 +157,21 @@ export const applyPlacement = (
   const comboMultiplier = 1 + 0.5 * (numClears - 1)
   const streakMultiplier = 1 + 0.1 * current.streak
 
-  const basePoints = 10 * numClears
+  const wasBoardEmptyBefore = Object.values(current.board).every(
+    (state) => state === 'empty',
+  )
+  const isBoardEmptyAfter = Object.values(board).every(
+    (state) => state === 'empty',
+  )
+  const boardClearedBonus =
+    !wasBoardEmptyBefore && isBoardEmptyAfter ? 25 : 0
+
+  const basePoints = 10 * numClears + boardClearedBonus
   const pointsGained = Math.round(basePoints * comboMultiplier * streakMultiplier)
 
   return {
     board,
-    clearedCellIds: Array.from(clearedCellsSet),
+    clearedCellIds,
     clearedPatterns,
     pointsGained,
     comboMultiplier,
