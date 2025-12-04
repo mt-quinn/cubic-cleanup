@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { BOARD_DEFINITION } from './game/boardDefinition'
 import {
   applyPlacement,
-  canPlacePiece,
   createInitialGameState,
   dealHand,
   hasAnyValidMove,
@@ -299,12 +298,12 @@ function App() {
   }>({ pieceId: null, pointerId: null })
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
   const [scale, setScale] = useState(1)
+  const [naturalHeight, setNaturalHeight] = useState<number | null>(null)
   const [ghost, setGhost] = useState<{
     piece: ActivePiece
     x: number
     y: number
   } | null>(null)
-  const lastValidHoverRef = useRef<string | null>(null)
 
   const findClosestCellIdFromClientPoint = (clientX: number, clientY: number): string | null => {
     const svg = svgRef.current
@@ -451,26 +450,27 @@ function App() {
     return () => window.clearTimeout(timeout)
   }, [scorePopup, scorePopupId])
 
+  useLayoutEffect(() => {
+    if (!rootRef.current) return
+    const el = rootRef.current
+    const previous = el.style.transform
+    el.style.transform = ''
+    const height = el.offsetHeight
+    el.style.transform = previous
+    setNaturalHeight(height)
+  }, [])
+
   useEffect(() => {
+    if (naturalHeight == null || typeof window === 'undefined') return
     const updateScale = () => {
-      if (!rootRef.current || typeof window === 'undefined') return
       const viewportH = window.innerHeight
-      const rect = rootRef.current.getBoundingClientRect()
-      const total = rect.height
-      if (total === 0) return
-      const margin = 24
-      const available = viewportH - margin
-      const next = total > available ? available / total : 1
+      const next = viewportH / naturalHeight
       setScale(next > 1 ? 1 : next)
     }
-
     window.addEventListener('resize', updateScale)
     updateScale()
-
-    return () => {
-      window.removeEventListener('resize', updateScale)
-    }
-  }, [])
+    return () => window.removeEventListener('resize', updateScale)
+  }, [naturalHeight])
 
   useEffect(() => {
     if (!game.gameOver) return
@@ -514,53 +514,21 @@ function App() {
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
-      if (!dragState.current.pieceId) return
+      if (!dragState.current.pointerId) return
       const wrapper = boardWrapperRef.current
       if (!wrapper) return
       const rect = wrapper.getBoundingClientRect()
       const x = (e.clientX - rect.left) / scale
       const y = (e.clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
-      const candidateId = findClosestCellIdFromClientPoint(
+      const cellId = findClosestCellIdFromClientPoint(
         e.clientX,
         e.clientY - 80,
       )
-
-      const currentPiece =
-        dragState.current.pieceId &&
-        game.hand.find((p) => p.id === dragState.current.pieceId)
-
-      if (!currentPiece) {
-        if (candidateId) {
-          setHover({ cellId: candidateId })
-        } else {
-          setHover(null)
-        }
-        return
-      }
-
-      if (!candidateId) {
-        if (lastValidHoverRef.current) {
-          setHover({ cellId: lastValidHoverRef.current })
-        } else {
-          setHover(null)
-        }
-        return
-      }
-
-      const canPlaceHere = !!canPlacePiece(
-        game.board,
-        currentPiece.shape,
-        candidateId,
-      )
-
-      if (canPlaceHere) {
-        lastValidHoverRef.current = candidateId
-        setHover({ cellId: candidateId })
-      } else if (lastValidHoverRef.current) {
-        setHover({ cellId: lastValidHoverRef.current })
+      if (cellId) {
+        setHover({ cellId })
       } else {
-        setHover({ cellId: candidateId })
+        setHover(null)
       }
     }
 
@@ -589,7 +557,7 @@ function App() {
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerUp)
     }
-  }, [scale, game.board, game.hand])
+  }, [scale])
 
   return (
     <div className="cubic-viewport">
