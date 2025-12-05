@@ -627,6 +627,14 @@ function App() {
   const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
     getTodayKey(),
   )
+  const dailyCubesRemaining = useMemo(() => {
+    if (game.mode !== 'daily') return 0
+    let count = 0
+    for (const hits of Object.values(game.dailyHits)) {
+      if (hits > 0) count++
+    }
+    return count
+  }, [game.mode, game.dailyHits])
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
     return game.hand.find((p) => p.id === selectedPieceId) ?? null
@@ -1272,9 +1280,15 @@ function App() {
             {game.mode === 'daily' ? (
               <>
                 <div className="board-hud-block left">
-                  <span className="value small">
-                    Clear all numbered cubes to win!
-                  </span>
+                  {game.moves === 0 ? (
+                    <span className="value small">
+                      Clear all numbered cubes to win!
+                    </span>
+                  ) : (
+                    <span className="value">
+                       {dailyCubesRemaining} Cubes Remain
+                    </span>
+                  )}
       </div>
                 {game.moves > 0 && (
                   <div className="board-hud-block right">
