@@ -511,10 +511,9 @@ function App() {
 
     const handlePointerUp = (e: PointerEvent) => {
       if (!dragState.current.pieceId) return
-      const cellId = findClosestCellIdFromClientPoint(
-        e.clientX,
-        e.clientY - 80,
-      )
+      const cellId =
+        hover?.cellId ??
+        findClosestCellIdFromClientPoint(e.clientX, e.clientY - 80)
       const pieceId = dragState.current.pieceId
       dragState.current.pointerId = null
       dragState.current.pieceId = null
@@ -534,7 +533,7 @@ function App() {
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerUp)
     }
-  }, [scale])
+  }, [scale, hover])
 
   return (
     <div
