@@ -196,6 +196,8 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .hexaclear-hex {
@@ -252,8 +254,11 @@ body {
   filter: brightness(0.7) saturate(1.3);
 }
 
-/* preview-clear is a logical flag; visual effect is applied to cube faces only */
 .hexaclear-hex.preview-clear {
+  stroke: #ffe9a6;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 8px rgba(255, 240, 180, 0.95))
+    drop-shadow(0 0 16px rgba(255, 240, 180, 0.85));
 }
 
 .hexaclear-hex.piece {
@@ -351,7 +356,10 @@ body {
 }
 
 .hexaclear-hex.preview-clear + .hexaclear-hex-cube .cube-face {
-  filter: brightness(1.7) saturate(1.35);
+  filter:
+    brightness(2.1)
+    saturate(1.5)
+    drop-shadow(0 0 10px rgba(255, 240, 180, 0.9));
   animation: hexaclear-preview-pulse 900ms ease-in-out infinite alternate;
 }
 

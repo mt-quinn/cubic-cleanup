@@ -537,7 +537,12 @@ function App() {
   }, [scale])
 
   return (
-    <div className="cubic-viewport">
+    <div
+      className="cubic-viewport"
+      onDragStart={(e) => {
+        e.preventDefault()
+      }}
+    >
       <div className="hexaclear-root" ref={rootRef}>
       <header className="hexaclear-header">
         <div className="hexaclear-title">Cubic Cleanup</div>
@@ -864,9 +869,7 @@ function App() {
                 triggerGrabHaptic()
               }}
             >
-              {piece && piece.id !== draggingPieceId && (
-                <PiecePreview shape={piece.shape} mode="hand" />
-              )}
+              {piece && <PiecePreview shape={piece.shape} mode="hand" />}
             </button>
             )
           })}
