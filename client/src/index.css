@@ -143,7 +143,8 @@ body {
   flex: 1;
   min-height: 260px;
   border-radius: 1.25rem;
-  background: #3b2317;
+  background:
+    radial-gradient(circle at 10% 0%, #5a341b, #3b2317 55%, #28130a 100%);
   box-shadow:
     0 0 0 1px rgba(255, 204, 153, 0.25),
     0 18px 45px rgba(0, 0, 0, 0.75),
@@ -210,8 +211,8 @@ body {
 }
 
 .hexaclear-hex.empty {
-  fill: #3b2317;
-  stroke: #8f5c35;
+  fill: transparent;
+  stroke: #94633a;
 }
 
 .hexaclear-hex.filled {
@@ -238,6 +239,34 @@ body {
   fill: rgba(180, 220, 255, 0.9);
   text-anchor: middle;
   pointer-events: none;
+}
+
+.hexaclear-slot-top {
+  fill: #190c07; /* slightly darker bottom plane */
+}
+
+.hexaclear-slot-right {
+  fill: #2f1a0f; /* darker side away from light */
+}
+
+.hexaclear-slot-left {
+  fill: #402214; /* darker side catching light from top-right */
+}
+
+.hexaclear-board-outline-back {
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 11;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)) blur(0.5px);
+}
+
+.hexaclear-board-outline-front {
+  stroke: #ffcf8a;
+  stroke-width: 4;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.65));
 }
 
 .hexaclear-hex.preview-valid {

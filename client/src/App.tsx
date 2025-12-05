@@ -113,6 +113,49 @@ const FLOWER_BOUNDARY_SEGMENTS: Segment[] = (() => {
   return segments
 })()
 
+// Exterior outline of the whole board: all hex edges whose neighbor is not
+// another board cell, de-duped so we get a single continuous hex-shaped hull.
+const BOARD_OUTLINE_SEGMENTS: Segment[] = (() => {
+  const segments: Segment[] = []
+  const cellSet = new Set(BOARD_DEFINITION.cells.map((c) => c.id))
+  const seen = new Set<string>()
+
+  for (const cell of BOARD_DEFINITION.cells) {
+    const pos = BOARD_LAYOUT.positions[cell.id]
+    const cx = pos.x + BOARD_LAYOUT.offsetX
+    const cy = pos.y + BOARD_LAYOUT.offsetY
+
+    for (let side = 0; side < 6; side++) {
+      const dir = directions[EDGE_DIRECTION_INDEX[side]]
+      const neighborCoord = addAxial(cell.coord, dir)
+      const neighborId = axialToId(neighborCoord)
+      if (cellSet.has(neighborId)) continue
+
+      const angleA = ((60 * side - 30) * Math.PI) / 180
+      const angleB = ((60 * ((side + 1) % 6) - 30) * Math.PI) / 180
+      const x1 = cx + HEX_SIZE * Math.cos(angleA)
+      const y1 = cy + HEX_SIZE * Math.sin(angleA)
+      const x2 = cx + HEX_SIZE * Math.cos(angleB)
+      const y2 = cy + HEX_SIZE * Math.sin(angleB)
+
+      const key =
+        x1 <= x2
+          ? `${x1.toFixed(2)},${y1.toFixed(2)}|${x2.toFixed(2)},${y2.toFixed(
+              2,
+            )}`
+          : `${x2.toFixed(2)},${y2.toFixed(2)}|${x1.toFixed(2)},${y1.toFixed(
+              2,
+            )}`
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      segments.push({ x1, y1, x2, y2 })
+    }
+  }
+
+  return segments
+})()
+
 const buildHexPoints = (cx: number, cy: number): string => {
   const points: string[] = []
   for (let i = 0; i < 6; i++) {
@@ -159,6 +202,39 @@ const CubeLines = ({ cx, cy }: { cx: number; cy: number }) => {
         className="cube-face cube-top"
         points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
       />
+    </g>
+  )
+}
+
+const SlotGeometry = ({ cx, cy }: { cx: number; cy: number }) => {
+  const vertices: { x: number; y: number }[] = []
+  const radius = HEX_SIZE * 0.9
+
+  for (let i = 0; i < 6; i++) {
+    const angleRad = ((60 * i - 30) * Math.PI) / 180
+    vertices.push({
+      x: cx + radius * Math.cos(angleRad),
+      y: cy + radius * Math.sin(angleRad),
+    })
+  }
+
+  const v0 = vertices[0]
+  const v1 = vertices[1]
+  const v2 = vertices[2]
+  const v3 = vertices[3]
+  const v4 = vertices[4]
+  const v5 = vertices[5]
+
+  // Use same three-face layout as cubes, but darker palette to read as a slot.
+  const rightFace = `${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`
+  const leftFace = `${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`
+  const topFace = `${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`
+
+  return (
+    <g className="hexaclear-slot">
+      <polygon className="hexaclear-slot-right" points={rightFace} />
+      <polygon className="hexaclear-slot-left" points={leftFace} />
+      <polygon className="hexaclear-slot-top" points={topFace} />
     </g>
   )
 }
@@ -593,6 +669,26 @@ function App() {
             ref={svgRef}
             viewBox={`0 0 ${BOARD_LAYOUT.width} ${BOARD_LAYOUT.height}`}
           >
+            {BOARD_OUTLINE_SEGMENTS.map((seg, idx) => (
+              <line
+                key={`outline-back-${idx}`}
+                x1={seg.x1}
+                y1={seg.y1}
+                x2={seg.x2}
+                y2={seg.y2}
+                className="hexaclear-board-outline-back"
+              />
+            ))}
+            {BOARD_OUTLINE_SEGMENTS.map((seg, idx) => (
+              <line
+                key={`outline-front-${idx}`}
+                x1={seg.x1}
+                y1={seg.y1}
+                x2={seg.x2}
+                y2={seg.y2}
+                className="hexaclear-board-outline-front"
+              />
+            ))}
             {BOARD_DEFINITION.cells.map((cell) => {
               const pos = BOARD_LAYOUT.positions[cell.id]
               const cx = pos.x + BOARD_LAYOUT.offsetX
@@ -642,6 +738,9 @@ function App() {
                       }
                     }}
                   />
+                  {!isFilled && !inPreview && !willClearInPreview && (
+                    <SlotGeometry cx={cx} cy={cy} />
+                  )}
                   {isFilled && <CubeLines cx={cx} cy={cy} />}
                   {DEBUG_SHOW_COORDS && (
                     <text
