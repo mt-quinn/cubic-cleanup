@@ -180,11 +180,20 @@ export const applyPlacement = (
 }
 
 export const hasAnyValidMove = (board: BoardState, hand: Hand): boolean => {
+  // Use the same placement path as real moves (including clears),
+  // so "space created by clears" is always considered.
+  const fakeGame: GameState = {
+    board,
+    score: 0,
+    streak: 0,
+    hand,
+    handSlots: hand.map((p) => p.id),
+    gameOver: false,
+  }
   for (const piece of hand) {
     for (const cell of BOARD_DEFINITION.cells) {
-      if (canPlacePiece(board, piece.shape, cell.id)) {
-        return true
-      }
+      const result = applyPlacement(fakeGame, piece, cell.id)
+      if (result) return true
     }
   }
   return false

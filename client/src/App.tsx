@@ -830,6 +830,7 @@ function App() {
                 .filter(Boolean)
                 .join(' ')}
               draggable={false}
+              onDragStart={(e) => e.preventDefault()}
               aria-label={
                 piece
                   ? `${piece.shape.size}-cube piece`
