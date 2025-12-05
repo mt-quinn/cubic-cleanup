@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD_DEFINITION } from './game/boardDefinition'
 import {
   applyPlacement,
+  canPlacePiece,
   createInitialGameState,
   dealHand,
   hasAnyValidMove,
@@ -303,6 +304,19 @@ function App() {
     x: number
     y: number
   } | null>(null)
+
+  const playablePieceIds = useMemo<Set<string>>(() => {
+    const playable = new Set<string>()
+    for (const piece of game.hand) {
+      for (const cell of BOARD_DEFINITION.cells) {
+        if (canPlacePiece(game.board, piece.shape, cell.id)) {
+          playable.add(piece.id)
+          break
+        }
+      }
+    }
+    return playable
+  }, [game.board, game.hand])
 
   const findClosestCellIdFromClientPoint = (clientX: number, clientY: number): string | null => {
     const svg = svgRef.current
@@ -822,6 +836,7 @@ function App() {
             const isSelected =
               !!piece && selectedPieceId === piece.id
             const isDragging = !!piece && draggingPieceId === piece.id
+            const isPlayable = !!piece && playablePieceIds.has(piece.id)
 
             return (
             <button
@@ -830,6 +845,7 @@ function App() {
                 'hexaclear-piece-button',
                 isSelected ? 'selected' : '',
                 isDragging ? 'dragging' : '',
+                piece && !isPlayable ? 'unplayable' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}

@@ -422,6 +422,14 @@ body {
   box-shadow: 0 0 0 1px rgba(255, 213, 123, 0.7);
 }
 
+.hexaclear-piece-button.unplayable {
+  opacity: 0.45;
+}
+
+.hexaclear-piece-button.unplayable .hexaclear-piece-svg {
+  filter: grayscale(1) brightness(0.7);
+}
+
 .hexaclear-piece-button.dragging {
   cursor: grabbing;
 }
