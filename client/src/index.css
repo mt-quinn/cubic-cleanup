@@ -50,6 +50,10 @@ body {
   display: flex;
   flex-direction: column;
   padding: 0.9rem;
+  /* Lock the game width so it doesn't shrink when the hand contents
+     get narrower (e.g. 1 piece left). This keeps the board scale
+     stable regardless of hand state. */
+  width: 100%;
   max-width: 520px;
   margin: 0 auto;
   gap: 0.75rem;
