@@ -4,10 +4,11 @@ import {
   applyPlacement,
   canPlacePiece,
   createInitialGameState,
+  createDailyGameState,
   dealHand,
   hasAnyValidMove,
 } from './game/gameLogic'
-import type { ActivePiece, GameState } from './game/gameLogic'
+import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { Axial } from './game/hexTypes'
 import './index.css'
@@ -167,7 +168,17 @@ const buildHexPoints = (cx: number, cy: number): string => {
   return points.join(' ')
 }
 
-const CubeLines = ({ cx, cy }: { cx: number; cy: number }) => {
+const CubeLines = ({
+  cx,
+  cy,
+  variant = 'normal',
+  dailyHits,
+}: {
+  cx: number
+  cy: number
+  variant?: 'normal' | 'dailyTarget'
+  dailyHits?: number
+}) => {
   const vertices: { x: number; y: number }[] = []
   const radius = HEX_SIZE
   for (let i = 0; i < 6; i++) {
@@ -185,8 +196,49 @@ const CubeLines = ({ cx, cy }: { cx: number; cy: number }) => {
   const v4 = vertices[4]
   const v5 = vertices[5]
 
+  const variantClass =
+    variant === 'dailyTarget' ? 'hexaclear-hex-cube daily-target' : 'hexaclear-hex-cube'
+
+  // Face centers for placing embossed numbers on each visible face.
+  const rightCenter = {
+    x: (cx + v1.x + v2.x + v3.x) / 4,
+    y: (cy + v1.y + v2.y + v3.y) / 4,
+  }
+  const leftCenter = {
+    x: (cx + v3.x + v4.x + v5.x) / 4,
+    y: (cy + v3.y + v4.y + v5.y) / 4,
+  }
+  const topCenter = {
+    x: (cx + v5.x + v0.x + v1.x) / 4,
+    y: (cy + v5.y + v0.y + v1.y) / 4,
+  }
+
+  // Angles of the shared "spine" edges between the top face and each
+  // side face (center → vertex), so we can orient baselines relative to
+  // those like a real d6. With our pointy-top hex layout:
+  // - v1 is the shared edge direction to the darker right face
+  // - v5 is the shared edge direction to the mid-tone left face
+  const rightSharedAngle =
+    (Math.atan2(v1.y - cy, v1.x - cx) * 180) / Math.PI
+  const leftSharedAngle =
+    (Math.atan2(v5.y - cy, v5.x - cx) * 180) / Math.PI
+
+  // Final, hand-tuned offsets for daily-mode digits, derived from the
+  // in-game debug sliders.
+  const TOP_DX = 0.2
+  const TOP_DY = 1.8
+  const TOP_ANGLE = 13
+
+  const RIGHT_DX = 0.4
+  const RIGHT_DY = -0.4
+  const RIGHT_ANGLE_OFFSET = 93
+
+  const LEFT_DX = 0.6
+  const LEFT_DY = -0.2
+  const LEFT_ANGLE_OFFSET = -105
+
   return (
-    <g className="hexaclear-hex-cube">
+    <g className={variantClass}>
       {/* right face */}
       <polygon
         className="cube-face cube-right"
@@ -202,6 +254,45 @@ const CubeLines = ({ cx, cy }: { cx: number; cy: number }) => {
         className="cube-face cube-top"
         points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
       />
+      {variant === 'dailyTarget' && typeof dailyHits === 'number' && (
+        <>
+          {/* Top face number */}
+          <text
+            x={topCenter.x + TOP_DX}
+            y={topCenter.y + TOP_DY}
+            className="hexaclear-daily-number daily-number-top"
+            transform={`rotate(${TOP_ANGLE} ${topCenter.x + TOP_DX} ${
+              topCenter.y + TOP_DY
+            })`}
+          >
+            {dailyHits}
+          </text>
+          {/* Right (darkest) face: baseline follows the shared edge with
+              the top/lightest face. */}
+          <text
+            x={rightCenter.x + RIGHT_DX}
+            y={rightCenter.y + RIGHT_DY}
+            className="hexaclear-daily-number daily-number-right"
+            transform={`rotate(${
+              rightSharedAngle + RIGHT_ANGLE_OFFSET
+            } ${rightCenter.x + RIGHT_DX} ${rightCenter.y + RIGHT_DY})`}
+          >
+            {dailyHits}
+          </text>
+          {/* Left (second-lightest) face: baseline is opposite (rotated
+              90° from) its shared edge with the top face. */}
+          <text
+            x={leftCenter.x + LEFT_DX}
+            y={leftCenter.y + LEFT_DY}
+            className="hexaclear-daily-number daily-number-left"
+            transform={`rotate(${
+              leftSharedAngle + 90 + LEFT_ANGLE_OFFSET
+            } ${leftCenter.x + LEFT_DX} ${leftCenter.y + LEFT_DY})`}
+          >
+            {dailyHits}
+          </text>
+        </>
+      )}
     </g>
   )
 }
@@ -235,6 +326,46 @@ const SlotGeometry = ({ cx, cy }: { cx: number; cy: number }) => {
       <polygon className="hexaclear-slot-right" points={rightFace} />
       <polygon className="hexaclear-slot-left" points={leftFace} />
       <polygon className="hexaclear-slot-top" points={topFace} />
+    </g>
+  )
+}
+
+const PlacementGhost = ({
+  originCellId,
+  piece,
+  valid,
+}: {
+  originCellId: string
+  piece: ActivePiece
+  valid: boolean
+}) => {
+  const originCell = BOARD_DEFINITION.cells.find((c) => c.id === originCellId)
+  if (!originCell) return null
+
+  return (
+    <g className="hexaclear-placement-ghost">
+      {piece.shape.cells.map((rel, idx) => {
+        const targetQ = originCell.coord.q + rel.q
+        const targetR = originCell.coord.r + rel.r
+        const { x, y } = axialToPixel(targetQ, targetR)
+        const cx = x + BOARD_LAYOUT.offsetX
+        const cy = y + BOARD_LAYOUT.offsetY
+        const points = buildHexPoints(cx, cy)
+        return (
+          <polygon
+            key={idx}
+            points={points}
+            className={[
+              'hexaclear-hex',
+              'placement-ghost',
+              valid ? 'placement-ghost-valid' : 'placement-ghost-invalid',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            pointerEvents="none"
+          />
+        )
+      })}
     </g>
   )
 }
@@ -285,6 +416,12 @@ type HighScoreEntry = {
   date: number
 }
 
+type DailyHighScoreEntry = {
+  name: string
+  moves: number
+  date: number
+}
+
 const loadHighScores = (): HighScoreEntry[] => {
   try {
     const raw = window.localStorage.getItem('cubic-highscores')
@@ -305,6 +442,26 @@ const loadHighScores = (): HighScoreEntry[] => {
   }
 }
 
+const loadDailyHighScores = (): DailyHighScoreEntry[] => {
+  try {
+    const raw = window.localStorage.getItem('cubic-daily-highscores')
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as DailyHighScoreEntry[]
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (e) =>
+          typeof e.name === 'string' &&
+          typeof e.moves === 'number' &&
+          typeof e.date === 'number',
+      )
+      .sort((a, b) => a.moves - b.moves || a.date - b.date)
+      .slice(0, 5)
+  } catch {
+    return []
+  }
+}
+
 const qualifiesForHighScore = (
   score: number,
   entries: HighScoreEntry[],
@@ -316,6 +473,89 @@ const qualifiesForHighScore = (
   )
   const last = sorted[sorted.length - 1]
   return score > last.score
+}
+
+const qualifiesForDailyHighScore = (
+  moves: number,
+  entries: DailyHighScoreEntry[],
+): boolean => {
+  if (moves <= 0) return false
+  if (entries.length < 5) return true
+  const sorted = [...entries].sort(
+    (a, b) => a.moves - b.moves || a.date - b.date,
+  )
+  const last = sorted[sorted.length - 1]
+  return moves < last.moves
+}
+
+const getTodayKey = (): string => {
+  const now = new Date()
+  const y = now.getUTCFullYear()
+  const m = now.getUTCMonth() + 1
+  const d = now.getUTCDate()
+  const mm = String(m).padStart(2, '0')
+  const dd = String(d).padStart(2, '0')
+  return `${y}-${mm}-${dd}`
+}
+
+const getDateKeyFromTimestamp = (timestamp: number): string => {
+  const d = new Date(timestamp)
+  const y = d.getUTCFullYear()
+  const m = d.getUTCMonth() + 1
+  const day = d.getUTCDate()
+  const mm = String(m).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  return `${y}-${mm}-${dd}`
+}
+
+const shiftDateKey = (key: string, deltaDays: number): string => {
+  const [yStr, mStr, dStr] = key.split('-')
+  const y = Number(yStr)
+  const m = Number(mStr)
+  const d = Number(dStr)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return getTodayKey()
+  }
+  const date = new Date(Date.UTC(y, m - 1, d + deltaDays))
+  const yy = date.getUTCFullYear()
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(date.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+type PersistedGameEnvelope = {
+  version: 1
+  mode: GameMode
+  game: GameState
+  // For daily mode we also stash the date key so we don't restore an
+  // old daily puzzle on a new day.
+  dateKey?: string
+}
+
+const loadInitialGameFromStorage = (): GameState => {
+  if (typeof window === 'undefined') {
+    return createInitialGameState()
+  }
+  try {
+    const raw = window.localStorage.getItem('cubic-current-game')
+    if (!raw) return createInitialGameState()
+    const parsed = JSON.parse(raw) as PersistedGameEnvelope
+    if (!parsed || parsed.version !== 1 || !parsed.game) {
+      return createInitialGameState()
+    }
+
+    // For daily games, only restore if the stored date matches today.
+    if (parsed.mode === 'daily') {
+      const todayKey = getTodayKey()
+      if (parsed.dateKey && parsed.dateKey !== todayKey) {
+        return createDailyGameState()
+      }
+    }
+
+    return parsed.game
+  } catch {
+    return createInitialGameState()
+  }
 }
 
 const triggerHaptics = (didClear: boolean) => {
@@ -337,7 +577,7 @@ const triggerGrabHaptic = () => {
 }
 
 function App() {
-  const [game, setGame] = useState<GameState>(() => createInitialGameState())
+  const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null)
   const [hover, setHover] = useState<HoverInfo>(null)
   const [clearingCells, setClearingCells] = useState<string[]>([])
@@ -352,6 +592,14 @@ function App() {
   const [pendingScore, setPendingScore] = useState<number | null>(null)
   const [highScoreSaved, setHighScoreSaved] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
+    () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
+  )
+  const [pendingDailyHighScore, setPendingDailyHighScore] = useState(false)
+  const [pendingDailyMoves, setPendingDailyMoves] = useState<number | null>(
+    null,
+  )
+  const [dailyHighScoreSaved, setDailyHighScoreSaved] = useState(false)
   const [playerName, setPlayerName] = useState(() => {
     if (typeof window === 'undefined') return ''
     return window.localStorage.getItem('cubic-player-name') ?? ''
@@ -360,6 +608,25 @@ function App() {
     const stored = window.localStorage.getItem('hexaclear-best-score')
     return stored ? Number(stored) : null
   })
+  const [savedEndlessGame, setSavedEndlessGame] = useState<GameState | null>(
+    null,
+  )
+  const [savedDailyGame, setSavedDailyGame] = useState<GameState | null>(null)
+  const [todayDailyBestMoves, setTodayDailyBestMoves] = useState<number | null>(
+    () => {
+      if (typeof window === 'undefined') return null
+      const key = getTodayKey()
+      const raw = window.localStorage.getItem(
+        `cubic-daily-best-${key}`,
+      )
+      if (!raw) return null
+      const n = Number(raw)
+      return Number.isFinite(n) && n > 0 ? n : null
+    },
+  )
+  const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
+    getTodayKey(),
+  )
 
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
@@ -372,7 +639,8 @@ function App() {
   const dragState = useRef<{
     pieceId: string | null
     pointerId: number | null
-  }>({ pieceId: null, pointerId: null })
+    pointerType: string | null
+  }>({ pieceId: null, pointerId: null, pointerType: null })
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
   const scale = 1
   const [ghost, setGhost] = useState<{
@@ -452,37 +720,54 @@ function App() {
         }
       }
 
-      if (!hasAnyValidMove(result.board, newHand)) {
-        gameOver = true
+      if (current.mode === 'daily') {
+        // Daily puzzles end when all numbered targets are broken.
+        gameOver = result.dailyCompleted
+      } else {
+        if (!hasAnyValidMove(result.board, newHand)) {
+          gameOver = true
+        }
       }
 
-      const newScore = current.score + result.pointsGained
-      const flatPoints = piece.shape.cells.length
-      const finalScore = newScore + flatPoints
+      // Score is only surfaced in endless mode. We keep it updated
+      // internally so we don't have to special-case game logic.
+      let finalScore = current.score
+      if (current.mode === 'endless') {
+        const newScore = current.score + result.pointsGained
+        const flatPoints = piece.shape.cells.length
+        finalScore = newScore + flatPoints
 
-      if (result.clearedPatterns.length > 0) {
-        setClearingCells(result.clearedCellIds)
-        const totalClears = result.clearedPatterns.length
-        const popupText =
-          totalClears === 1
-            ? `Clear · +${result.pointsGained}`
-            : `${totalClears} clears · +${result.pointsGained}`
-        setScorePopup(popupText)
-        setScorePopupId((id) => id + 1)
+        if (result.clearedPatterns.length > 0) {
+          setClearingCells(result.clearedCellIds)
+          const totalClears = result.clearedPatterns.length
+          const popupText =
+            totalClears === 1
+              ? `Clear · +${result.pointsGained}`
+              : `${totalClears} clears · +${result.pointsGained}`
+          setScorePopup(popupText)
+          setScorePopupId((id) => id + 1)
+        }
+
+        setBestScore((prev) => {
+          if (prev === null || finalScore > prev) {
+            window.localStorage.setItem(
+              'hexaclear-best-score',
+              String(finalScore),
+            )
+            return finalScore
+          }
+          return prev
+        })
+      } else {
+        // Still show the clearing animation in daily mode.
+        if (result.clearedPatterns.length > 0) {
+          setClearingCells(result.clearedCellIds)
+        }
       }
 
       triggerHaptics(result.clearedPatterns.length > 0)
 
-      setBestScore((prev) => {
-        if (prev === null || finalScore > prev) {
-          window.localStorage.setItem(
-            'hexaclear-best-score',
-            String(finalScore),
-          )
-          return finalScore
-        }
-        return prev
-      })
+      const newMoves = current.moves + 1
 
       setSelectedPieceId(null)
 
@@ -494,6 +779,11 @@ function App() {
         hand: newHand,
         handSlots: updatedSlots,
         gameOver,
+        moves: newMoves,
+        dailyHits: result.dailyHits,
+        dailyTotalHits: result.dailyTotalHits,
+        dailyRemainingHits: result.dailyRemainingHits,
+        dailyCompleted: result.dailyCompleted,
       }
     })
   }
@@ -504,10 +794,46 @@ function App() {
   }
 
   const resetGame = () => {
-    setGame(createInitialGameState())
+    if (game.mode === 'daily') {
+      const next = createDailyGameState()
+      setGame(next)
+      setSavedDailyGame(next)
+      setDailyHighScoreSaved(false)
+    } else {
+      const next = createInitialGameState()
+      setGame(next)
+      setSavedEndlessGame(next)
+      setHighScoreSaved(false)
+    }
     setSelectedPieceId(null)
     setHover(null)
-    setHighScoreSaved(false)
+  }
+
+  const toggleDailyMode = () => {
+    setGame((current) => {
+      if (current.mode === 'daily') {
+        // Leaving daily → restore endless run (or start fresh).
+        setSavedDailyGame(current)
+        if (savedEndlessGame) {
+          return savedEndlessGame
+        }
+        const endless = createInitialGameState()
+        setSavedEndlessGame(endless)
+        return endless
+      } else {
+        // Entering daily → restore today's run if we have one,
+        // otherwise create a fresh daily puzzle.
+        setSavedEndlessGame(current)
+        if (savedDailyGame) {
+          return savedDailyGame
+        }
+        const daily = createDailyGameState()
+        setSavedDailyGame(daily)
+        return daily
+      }
+    })
+    setSelectedPieceId(null)
+    setHover(null)
   }
 
   const preview = useMemo(
@@ -541,12 +867,76 @@ function App() {
 
   useEffect(() => {
     if (!game.gameOver) return
-    const score = game.score
-    setPendingScore(score)
-    setPendingHighScore(
-      !highScoreSaved && qualifiesForHighScore(score, highScores),
-    )
-  }, [game.gameOver, game.score, highScores, highScoreSaved])
+
+    if (game.mode === 'daily' && game.dailyCompleted) {
+      const moves = game.moves
+      setPendingDailyMoves(moves)
+      setPendingDailyHighScore(
+        !dailyHighScoreSaved &&
+          qualifiesForDailyHighScore(moves, dailyHighScores),
+      )
+
+      // Track the best (lowest) move count for today's daily puzzle,
+      // independent of the global daily high score table.
+      if (typeof window !== 'undefined') {
+        const todayKey = getTodayKey()
+        setTodayDailyBestMoves((prev) => {
+          if (prev === null || moves < prev) {
+            window.localStorage.setItem(
+              `cubic-daily-best-${todayKey}`,
+              String(moves),
+            )
+            return moves
+          }
+          return prev
+        })
+      }
+    } else if (game.mode === 'endless') {
+      const score = game.score
+      setPendingScore(score)
+      setPendingHighScore(
+        !highScoreSaved && qualifiesForHighScore(score, highScores),
+      )
+    }
+  }, [
+    game.gameOver,
+    game.mode,
+    game.score,
+    game.moves,
+    game.dailyCompleted,
+    highScores,
+    highScoreSaved,
+    dailyHighScores,
+    dailyHighScoreSaved,
+  ])
+
+  // Whenever the high score modal is opened, reset the viewed daily
+  // scores date back to today.
+  useEffect(() => {
+    if (showHighScores) {
+      setDailyScoresDateKey(getTodayKey())
+    }
+  }, [showHighScores])
+
+  // Persist the current game state on every change so that a refresh
+  // resumes exactly where the player left off.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const envelope: PersistedGameEnvelope = {
+        version: 1,
+        mode: game.mode,
+        game,
+        dateKey: game.mode === 'daily' ? getTodayKey() : undefined,
+      }
+      window.localStorage.setItem(
+        'cubic-current-game',
+        JSON.stringify(envelope),
+      )
+    } catch {
+      // Best-effort persistence; ignore quota/serialization errors.
+    }
+  }, [game])
 
   const handleSaveHighScore = () => {
     if (pendingScore === null) return
@@ -568,6 +958,29 @@ function App() {
     setHighScoreSaved(true)
   }
 
+  const handleSaveDailyHighScore = () => {
+    if (pendingDailyMoves === null) return
+    const name = playerName.trim() || 'Player'
+    const entry: DailyHighScoreEntry = {
+      name,
+      moves: pendingDailyMoves,
+      date: Date.now(),
+    }
+    const next = [...dailyHighScores, entry]
+      .sort((a, b) => a.moves - b.moves || a.date - b.date)
+      .slice(0, 5)
+    setDailyHighScores(next)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'cubic-daily-highscores',
+        JSON.stringify(next),
+      )
+      window.localStorage.setItem('cubic-player-name', name)
+    }
+    setPendingDailyHighScore(false)
+    setDailyHighScoreSaved(true)
+  }
+
   const handleResetHighScores = () => {
     setHighScores([])
     setPendingHighScore(false)
@@ -575,22 +988,34 @@ function App() {
     setHighScoreSaved(false)
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('cubic-highscores')
+      window.localStorage.removeItem('cubic-daily-highscores')
     }
+    setDailyHighScores([])
+    setPendingDailyHighScore(false)
+    setPendingDailyMoves(null)
+    setDailyHighScoreSaved(false)
     setShowResetConfirm(false)
   }
 
   useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
-      if (!dragState.current.pointerId) return
+      if (
+        !dragState.current.pointerId ||
+        e.pointerId !== dragState.current.pointerId
+      ) {
+        return
+      }
       const wrapper = boardWrapperRef.current
       if (!wrapper) return
       const rect = wrapper.getBoundingClientRect()
       const x = (e.clientX - rect.left) / scale
       const y = (e.clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
+      const isTouch = dragState.current.pointerType === 'touch'
+      const previewOffsetY = isTouch ? 80 : 0
       const cellId = findClosestCellIdFromClientPoint(
         e.clientX,
-        e.clientY - 80,
+        e.clientY - previewOffsetY,
       )
       if (cellId) {
         setHover({ cellId })
@@ -600,10 +1025,21 @@ function App() {
     }
 
     const handlePointerUp = (e: PointerEvent) => {
-      if (!dragState.current.pieceId) return
+      if (
+        !dragState.current.pieceId ||
+        (dragState.current.pointerId !== null &&
+          e.pointerId !== dragState.current.pointerId)
+      ) {
+        return
+      }
+      const isTouch = dragState.current.pointerType === 'touch'
+      const previewOffsetY = isTouch ? 80 : 0
       const cellId =
         hover?.cellId ??
-        findClosestCellIdFromClientPoint(e.clientX, e.clientY - 80)
+        findClosestCellIdFromClientPoint(
+          e.clientX,
+          e.clientY - previewOffsetY,
+        )
       const pieceId = dragState.current.pieceId
       dragState.current.pointerId = null
       dragState.current.pieceId = null
@@ -634,32 +1070,80 @@ function App() {
     >
       <div className="hexaclear-root" ref={rootRef}>
       <header className="hexaclear-header">
-        <div className="hexaclear-title">Cubic Cleanup</div>
-        <div className="hexaclear-stats">
-          {bestScore !== null && (
-            <div className="hexaclear-best-banner">
-              <span className="label">Best</span>
-              <span className="value">{bestScore}</span>
-            </div>
-          )}
+        <div className="hexaclear-header-main">
+          <div className="hexaclear-title">Cubic Cleanup</div>
+          <div className="hexaclear-best-banner">
+            <span className="label">
+              {game.mode === 'daily' ? 'Best (today)' : 'Best'}
+            </span>
+            <span className="value">
+              {game.mode === 'daily'
+                ? todayDailyBestMoves !== null
+                  ? todayDailyBestMoves
+                  : '—'
+                : bestScore ?? '—'}
+            </span>
+          </div>
         </div>
-        <button className="hexaclear-reset" onClick={resetGame}>
-          New Game
-        </button>
-        <button
-          className="hexaclear-reset"
-          type="button"
-          onClick={() => setShowScoring(true)}
-        >
-          Scoring
-        </button>
-        <button
-          className="hexaclear-reset"
-          type="button"
-          onClick={() => setShowHighScores(true)}
-        >
-          High Scores
-        </button>
+        <div className="hexaclear-header-controls">
+          <div className="hexaclear-mode-toggle">
+            <button
+              type="button"
+              className={[
+                'mode-pill',
+                game.mode === 'endless' ? 'active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => {
+                if (game.mode !== 'endless') {
+                  toggleDailyMode()
+                }
+              }}
+            >
+              Endless
+            </button>
+            <button
+              type="button"
+              className={[
+                'mode-pill',
+                game.mode === 'daily' ? 'active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => {
+                if (game.mode !== 'daily') {
+                  toggleDailyMode()
+                }
+              }}
+            >
+              Daily
+            </button>
+          </div>
+          <div className="hexaclear-header-buttons">
+            <button
+              className="hexaclear-reset"
+              type="button"
+              onClick={resetGame}
+            >
+              {game.mode === 'daily' ? 'Restart' : 'New Run'}
+            </button>
+            <button
+              className="hexaclear-reset"
+              type="button"
+              onClick={() => setShowScoring(true)}
+            >
+              Scoring
+            </button>
+            <button
+              className="hexaclear-reset"
+              type="button"
+              onClick={() => setShowHighScores(true)}
+            >
+              Scores
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="hexaclear-main">
@@ -706,6 +1190,9 @@ function App() {
                 preview && preview.clearedIds.includes(cell.id)
               const previewValid = preview?.valid ?? false
 
+              const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
+              const isDailyTarget = dailyHitsForCell > 0
+
               return (
                 <g key={cell.id}>
                   <polygon
@@ -741,7 +1228,14 @@ function App() {
                   {!isFilled && !inPreview && !willClearInPreview && (
                     <SlotGeometry cx={cx} cy={cy} />
                   )}
-                  {isFilled && <CubeLines cx={cx} cy={cy} />}
+                  {isFilled && (
+                    <CubeLines
+                      cx={cx}
+                      cy={cy}
+                      variant={isDailyTarget ? 'dailyTarget' : 'normal'}
+                      dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                    />
+                  )}
                   {DEBUG_SHOW_COORDS && (
                     <text
                       x={cx}
@@ -764,16 +1258,55 @@ function App() {
                 className="hexaclear-flower-boundary"
               />
             ))}
+            {preview && selectedPiece && hover?.cellId && !preview.valid && (
+              <PlacementGhost
+                originCellId={hover.cellId}
+                piece={selectedPiece}
+                valid={false}
+              />
+            )}
           </svg>
           <div className="hexaclear-board-hud">
-            <div className="board-hud-block left">
-              <span className="label">Score:</span>
-              <span className="value">{game.score}</span>
-            </div>
-            <div className="board-hud-block right">
-              <span className="label">Streak</span>
-              <span className="value">{game.streak}</span>
-            </div>
+            {game.mode === 'daily' ? (
+              <>
+                <div className="board-hud-block left">
+                  <span className="value small">
+                    Clear all numbered cubes to win!
+                  </span>
+                </div>
+                {game.moves > 0 && (
+                  <div
+                    className="board-hud-block right"
+                    style={{
+                      transform: 'translate(-26.5px, 7.5px) scale(1.16)',
+                      transformOrigin: 'top right',
+                    }}
+                  >
+                    <span className="label">Moves</span>
+                    <span className="value">{game.moves}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="board-hud-block left">
+                  {game.streak > 0 && (
+                    <span className="value">Streak {game.streak}</span>
+                  )}
+                </div>
+                <div
+                  className="board-hud-block right"
+                  style={{
+                    transform:
+                      'translate(-26.5px, 7.5px) scale(1.16)',
+                    transformOrigin: 'top right',
+                  }}
+                >
+                  <span className="label">Score</span>
+                  <span className="value">{game.score}</span>
+                </div>
+              </>
+            )}
           </div>
           {ghost && (
             <div
@@ -787,10 +1320,10 @@ function App() {
               <PiecePreview shape={ghost.piece.shape} mode="board" />
             </div>
           )}
-          {scorePopup && (
+          {scorePopup && game.mode === 'endless' && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
           )}
-          {game.gameOver && (
+          {game.gameOver && game.mode === 'endless' && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card">
                 <div className="title">No more moves</div>
@@ -810,7 +1343,7 @@ function App() {
                       style={{ marginTop: '0.5rem' }}
                     >
                       Save score
-                    </button>
+        </button>
                   </div>
                 )}
                 {highScores.length > 0 && (
@@ -836,24 +1369,94 @@ function App() {
               </div>
             </div>
           )}
+          {game.gameOver && game.mode === 'daily' && (
+            <div className="hexaclear-overlay">
+              <div className="hexaclear-overlay-card">
+                <div className="title">
+                  {game.dailyCompleted ? 'Daily cleared!' : 'Daily over'}
+                </div>
+                <div className="score">
+                  <p>Moves: {game.moves}</p>
+                  <p>Goal: clear all numbered cubes.</p>
+                </div>
+                {pendingDailyHighScore && (
+                  <div className="score">
+                    <p>New daily best! Enter your name:</p>
+                    <input
+                      className="hexaclear-input"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value)}
+                      placeholder="Your name"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveDailyHighScore}
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      Save daily result
+                    </button>
+                  </div>
+                )}
+                {dailyHighScores.length > 0 && (
+                  <div className="score">
+                    <p>Best daily runs (fewest moves):</p>
+                    <ol className="hexaclear-highscores">
+                      {dailyHighScores
+                        .slice()
+                        .sort(
+                          (a, b) => a.moves - b.moves || a.date - b.date,
+                        )
+                        .map((entry, idx) => (
+                          <li key={entry.date + entry.name + idx}>
+                            <span className="name">{entry.name}</span>
+                            <span className="value">
+                              {entry.moves} moves
+                            </span>
+                          </li>
+                        ))}
+                    </ol>
+      </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = createDailyGameState()
+                    setGame(next)
+                    setSavedDailyGame(next)
+                    setDailyHighScoreSaved(false)
+                    setSelectedPieceId(null)
+                    setHover(null)
+                  }}
+                >
+                  Retry today&apos;s puzzle
+        </button>
+              </div>
+            </div>
+          )}
           {showScoring && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card">
-                <div className="title">Scoring</div>
-                <div className="score">
-                  <p>Each cleared line or flower is worth 10 points.</p>
-                  <p>
-                    Combo multiplier: +0.5 per additional clear in the same
-                    placement (1 clear = x1.0, 2 clears = x1.5, 3 clears = x2.0,
-                    etc.).
-                  </p>
-                  <p>
-                    Streak multiplier: +0.1 per consecutive clearing placement
-                    (1st clear after a miss = x1.0, 2nd in a row = x1.1, 3rd in
-                    a row = x1.2, etc.).
-                  </p>
-                  <p>Total points = 10 × clears × combo × streak.</p>
-                </div>
+                {game.mode === 'daily' ? (
+                  <>
+                    <div className="title">Daily puzzles</div>
+                    <div className="score">
+                      <p>Clear all numbered cubes to finish the puzzle.</p>
+                      <p>Every placement is one move.</p>
+                      <p>Your best daily runs are the ones with the fewest moves.</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="title">Endless scoring</div>
+                    <div className="score">
+                      <p>Clearing a full line or rosette is worth 10 base points.</p>
+                      <p>Clearing several lines or rosettes at once creates a combo that boosts those points.</p>
+                      <p>Clearing on back‑to‑back moves builds a streak that boosts them further.</p>
+                      <p>Clearing the entire board in one move gives a +25 bonus.</p>
+                      <p>You also gain a flat +1 point for every cube you place.</p>
+                    </div>
+                  </>
+                )}
                 <button type="button" onClick={() => setShowScoring(false)}>
                   Got it
                 </button>
@@ -865,8 +1468,9 @@ function App() {
               <div className="hexaclear-overlay-card">
                 <div className="title">High Scores</div>
                 <div className="score">
+                  <p>Endless (score):</p>
                   {highScores.length === 0 ? (
-                    <p>No scores yet. Play a game!</p>
+                    <p>No endless scores yet. Play a game!</p>
                   ) : (
                     <ol className="hexaclear-highscores">
                       {highScores
@@ -883,6 +1487,95 @@ function App() {
                         ))}
                     </ol>
                   )}
+                </div>
+                <div className="score" style={{ marginTop: '0.75rem' }}>
+                  <p style={{ marginTop: 0, marginBottom: '0.25rem' }}>
+                    Daily (fewest moves)
+                  </p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      marginBottom: '0.35rem',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{ minWidth: '1.8rem' }}
+                      onClick={() => {
+                        setDailyScoresDateKey((prev) =>
+                          shiftDateKey(prev || getTodayKey(), -1),
+                        )
+                      }}
+                    >
+                      ◀
+                    </button>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {dailyScoresDateKey}
+                    </span>
+                    <button
+                      type="button"
+                      style={{ minWidth: '1.8rem' }}
+                      onClick={() => {
+                        const today = getTodayKey()
+                        setDailyScoresDateKey((prev) => {
+                          const next = shiftDateKey(prev || today, 1)
+                          // Don&apos;t advance past today.
+                          return next > today ? today : next
+                        })
+                      }}
+                      disabled={dailyScoresDateKey >= getTodayKey()}
+                    >
+                      ▶
+                    </button>
+      </div>
+                  {dailyScoresDateKey !== getTodayKey() && (
+                    <div style={{ marginBottom: '0.4rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => setDailyScoresDateKey(getTodayKey())}
+                      >
+                        Today&apos;s scores
+                      </button>
+                    </div>
+                  )}
+                  {(() => {
+                    const todayKey = getTodayKey()
+                    const entriesForDay = dailyHighScores.filter(
+                      (entry) =>
+                        getDateKeyFromTimestamp(entry.date) ===
+                        dailyScoresDateKey,
+                    )
+                    if (entriesForDay.length === 0) {
+                      return (
+                        <p>
+                          No scores stored for this date
+                          {dailyScoresDateKey === todayKey
+                            ? ". Play today's puzzle!"
+                            : '.'}
+                        </p>
+                      )
+                    }
+                    return (
+                      <ol className="hexaclear-highscores">
+                        {entriesForDay
+                          .slice()
+                          .sort(
+                            (a, b) => a.moves - b.moves || a.date - b.date,
+                          )
+                          .map((entry, idx) => (
+                            <li key={entry.date + entry.name + idx}>
+                              <span className="name">{entry.name}</span>
+                              <span className="value">
+                                {entry.moves} moves
+                              </span>
+                            </li>
+                          ))}
+                      </ol>
+                    )
+                  })()}
                 </div>
                 {!showResetConfirm ? (
                   <button
@@ -968,6 +1661,7 @@ function App() {
                 dragState.current = {
                   pieceId: piece.id,
                   pointerId: e.pointerId,
+                  pointerType: e.pointerType || null,
                 }
                 setSelectedPieceId(piece.id)
                 setDraggingPieceId(piece.id)
