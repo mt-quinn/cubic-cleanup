@@ -627,7 +627,6 @@ function App() {
   const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
     getTodayKey(),
   )
-
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
     return game.hand.find((p) => p.id === selectedPieceId) ?? null
@@ -1276,15 +1275,9 @@ function App() {
                   <span className="value small">
                     Clear all numbered cubes to win!
                   </span>
-                </div>
+      </div>
                 {game.moves > 0 && (
-                  <div
-                    className="board-hud-block right"
-                    style={{
-                      transform: 'translate(-26.5px, 7.5px) scale(1.16)',
-                      transformOrigin: 'top right',
-                    }}
-                  >
+                  <div className="board-hud-block right">
                     <span className="label">Moves</span>
                     <span className="value">{game.moves}</span>
                   </div>
@@ -1297,14 +1290,7 @@ function App() {
                     <span className="value">Streak {game.streak}</span>
                   )}
                 </div>
-                <div
-                  className="board-hud-block right"
-                  style={{
-                    transform:
-                      'translate(-26.5px, 7.5px) scale(1.16)',
-                    transformOrigin: 'top right',
-                  }}
-                >
+                <div className="board-hud-block right">
                   <span className="label">Score</span>
                   <span className="value">{game.score}</span>
                 </div>
