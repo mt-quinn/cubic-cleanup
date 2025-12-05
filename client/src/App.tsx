@@ -720,11 +720,14 @@ function App() {
         }
       }
 
+      const noMovesLeft = !hasAnyValidMove(result.board, newHand)
+
       if (current.mode === 'daily') {
-        // Daily puzzles end when all numbered targets are broken.
-        gameOver = result.dailyCompleted
+        // Daily puzzles end either when all numbered targets are broken
+        // or when there are no valid moves remaining.
+        gameOver = result.dailyCompleted || noMovesLeft
       } else {
-        if (!hasAnyValidMove(result.board, newHand)) {
+        if (noMovesLeft) {
           gameOver = true
         }
       }
