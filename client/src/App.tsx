@@ -860,6 +860,10 @@ function App() {
     }
     setSelectedPieceId(null)
     setHover(null)
+    setUndoStack([])
+    setGoldenPopupCellId(null)
+    setClearingCells([])
+    setScorePopup(null)
   }
 
   const handleUndo = () => {
@@ -1210,7 +1214,7 @@ function App() {
               type="button"
               onClick={resetGame}
             >
-              {game.mode === 'daily' ? 'Restart' : 'New Run'}
+              Restart
             </button>
             <button
               className="hexaclear-reset"
