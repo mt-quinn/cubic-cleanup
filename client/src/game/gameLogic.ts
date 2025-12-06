@@ -30,6 +30,10 @@ export type PlacementResult = {
   dailyTotalHits: number
   dailyRemainingHits: number
   dailyCompleted: boolean
+  // Endless-mode golden cube state: the updated golden cell location
+  // and whether it was cleared in this placement.
+  goldenCellId: CellId | null
+  goldenCleared: boolean
 }
 
 export type GameState = {
@@ -47,6 +51,8 @@ export type GameState = {
   dailyTotalHits: number
   dailyRemainingHits: number
   dailyCompleted: boolean
+  // Endless-mode golden cube; null in daily mode.
+  goldenCellId: CellId | null
 }
 
 const randomOf = <T>(arr: T[]): T =>
@@ -113,6 +119,52 @@ export const createEmptyBoard = (): BoardState => {
     state[cell.id] = 'empty'
   }
   return state
+}
+
+// Choose a new golden cube position on the given board. The golden cube
+// behaves like a real filled cube: if it lands on an empty cell we set
+// that cell to 'filled', but we avoid any empty-cell placements that
+// would immediately complete a scoring pattern.
+const spawnGoldenCell = (board: BoardState): CellId | null => {
+  const cells = [...BOARD_DEFINITION.cells]
+  // Shuffle to avoid always biasing toward earlier cells.
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[cells[i], cells[j]] = [cells[j]!, cells[i]!]
+  }
+
+  let fallbackFilled: CellId | null = null
+
+  for (const cell of cells) {
+    const id = cell.id
+    const state = board[id]
+    if (state === 'filled') {
+      // Always safe: we're not changing occupancy so we can't create a
+      // new clear just by marking it golden.
+      return id
+    }
+
+    // Try treating this empty cell as filled and see if it would
+    // immediately complete any scoring pattern. If not, accept it and
+    // lock it in as filled.
+    board[id] = 'filled'
+    const { clearedPatterns } = findClears(board)
+    if (clearedPatterns.length === 0) {
+      return id
+    }
+    // Revert and keep looking.
+    board[id] = 'empty'
+  }
+
+  // If we couldn't find a safe empty slot, fall back to *any* filled
+  // cell (so we always have a golden cube somewhere).
+  for (const cell of cells) {
+    if (board[cell.id] === 'filled') {
+      fallbackFilled = cell.id
+      break
+    }
+  }
+  return fallbackFilled
 }
 
 export const dealHand = (): Hand => {
@@ -187,6 +239,7 @@ export const applyPlacement = (
   let dailyTotalHits = current.dailyTotalHits
   let dailyRemainingHits = current.dailyRemainingHits
   let dailyCompleted = current.dailyCompleted
+  let goldenCellId = current.goldenCellId
 
   if (clearedPatterns.length > 0 && Object.keys(dailyHits).length > 0) {
     // Count how many distinct clear-patterns each numbered cell
@@ -231,6 +284,8 @@ export const applyPlacement = (
       dailyTotalHits,
       dailyRemainingHits,
       dailyCompleted,
+      goldenCellId,
+      goldenCleared: false,
     }
   }
 
@@ -248,6 +303,17 @@ export const applyPlacement = (
     }
   }
 
+  // Track whether the golden cube was cleared in this placement (endless
+  // mode only). If so, we'll both award its bonus and immediately spawn
+  // it at a new location on the resulting board.
+  let goldenCleared = false
+  if (current.mode === 'endless' && goldenCellId) {
+    if (clearedCellIds.includes(goldenCellId)) {
+      goldenCleared = true
+      goldenCellId = null
+    }
+  }
+
   const numClears = clearedPatterns.length
   const comboMultiplier = 1 + 0.5 * (numClears - 1)
   const streakMultiplier = 1 + 0.1 * current.streak
@@ -261,8 +327,16 @@ export const applyPlacement = (
   const boardClearedBonus =
     !wasBoardEmptyBefore && isBoardEmptyAfter ? 25 : 0
 
-  const basePoints = 10 * numClears + boardClearedBonus
+  const goldenBonus = current.mode === 'endless' && goldenCleared ? 10 : 0
+  const basePoints = 10 * numClears + boardClearedBonus + goldenBonus
   const pointsGained = Math.round(basePoints * comboMultiplier * streakMultiplier)
+
+  // If we just cleared the golden cube in endless mode, immediately
+  // respawn it somewhere else on the board.
+  if (current.mode === 'endless' && goldenCleared) {
+    const newGolden = spawnGoldenCell(board)
+    goldenCellId = newGolden
+  }
 
   return {
     board,
@@ -275,6 +349,8 @@ export const applyPlacement = (
     dailyTotalHits,
     dailyRemainingHits,
     dailyCompleted,
+    goldenCellId,
+    goldenCleared,
   }
 }
 
@@ -294,6 +370,7 @@ export const hasAnyValidMove = (board: BoardState, hand: Hand): boolean => {
     dailyTotalHits: 0,
     dailyRemainingHits: 0,
     dailyCompleted: false,
+    goldenCellId: null,
   }
   for (const piece of hand) {
     for (const cell of BOARD_DEFINITION.cells) {
@@ -307,6 +384,8 @@ export const hasAnyValidMove = (board: BoardState, hand: Hand): boolean => {
 export const createInitialGameState = (): GameState => {
   const board = createEmptyBoard()
   const hand = dealHand()
+  // Spawn the initial golden cube for endless mode.
+  const goldenCellId = spawnGoldenCell(board)
   return {
     mode: 'endless',
     board,
@@ -320,6 +399,7 @@ export const createInitialGameState = (): GameState => {
     dailyTotalHits: 0,
     dailyRemainingHits: 0,
     dailyCompleted: false,
+    goldenCellId,
   }
 }
 
@@ -416,6 +496,7 @@ export const createDailyGameState = (): GameState => {
     dailyTotalHits: totalHits,
     dailyRemainingHits: totalHits,
     dailyCompleted: false,
+    goldenCellId: null,
   }
 }
 

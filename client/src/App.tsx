@@ -176,7 +176,7 @@ const CubeLines = ({
 }: {
   cx: number
   cy: number
-  variant?: 'normal' | 'dailyTarget'
+  variant?: 'normal' | 'dailyTarget' | 'golden'
   dailyHits?: number
 }) => {
   const vertices: { x: number; y: number }[] = []
@@ -196,8 +196,12 @@ const CubeLines = ({
   const v4 = vertices[4]
   const v5 = vertices[5]
 
-  const variantClass =
-    variant === 'dailyTarget' ? 'hexaclear-hex-cube daily-target' : 'hexaclear-hex-cube'
+  let variantClass = 'hexaclear-hex-cube'
+  if (variant === 'dailyTarget') {
+    variantClass += ' daily-target'
+  } else if (variant === 'golden') {
+    variantClass += ' golden'
+  }
 
   // Face centers for placing embossed numbers on each visible face.
   const rightCenter = {
@@ -254,6 +258,15 @@ const CubeLines = ({
         className="cube-face cube-top"
         points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
       />
+      {variant === 'golden' && (
+        <text
+          x={cx}
+          y={cy + 3}
+          className="hexaclear-gem-label"
+        >
+          +10
+        </text>
+      )}
       {variant === 'dailyTarget' && typeof dailyHits === 'number' && (
         <>
           {/* Top face number */}
@@ -627,6 +640,8 @@ function App() {
   const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
     getTodayKey(),
   )
+  const [goldenPopupCellId, setGoldenPopupCellId] = useState<string | null>(null)
+  const [goldenPopupToken, setGoldenPopupToken] = useState(0)
   const dailyCubesRemaining = useMemo(() => {
     if (game.mode !== 'daily') return 0
     let count = 0
@@ -635,6 +650,7 @@ function App() {
     }
     return count
   }, [game.mode, game.dailyHits])
+  const [undoStack, setUndoStack] = useState<GameState[]>([])
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
     return game.hand.find((p) => p.id === selectedPieceId) ?? null
@@ -702,6 +718,7 @@ function App() {
       const piece = current.hand.find((p) => p.id === pieceId)
       if (!piece) return current
 
+      const before = current
       const result = applyPlacement(current, piece, cellId)
       if (!result) return current
 
@@ -720,7 +737,14 @@ function App() {
       let newHand = remainingHand
       let gameOver = false
 
-      if (remainingHand.length === 0) {
+      const isThirdPieceThisHand = remainingHand.length === 0
+
+      if (isThirdPieceThisHand) {
+        newHand = dealHand()
+        for (let i = 0; i < 3; i++) {
+          updatedSlots[i] = newHand[i]?.id ?? null
+        }
+      } else if (remainingHand.length === 0) {
         newHand = dealHand()
         for (let i = 0; i < 3; i++) {
           updatedSlots[i] = newHand[i]?.id ?? null
@@ -768,6 +792,13 @@ function App() {
           }
           return prev
         })
+
+        // Golden cube bonus popup: when the golden cube is cleared in
+        // endless mode, show a local "+10" popup over that cell.
+        if (result.goldenCleared && current.goldenCellId) {
+          setGoldenPopupCellId(current.goldenCellId)
+          setGoldenPopupToken((t) => t + 1)
+        }
       } else {
         // Still show the clearing animation in daily mode.
         if (result.clearedPatterns.length > 0) {
@@ -778,6 +809,17 @@ function App() {
       triggerHaptics(result.clearedPatterns.length > 0)
 
       const newMoves = current.moves + 1
+
+      // Update per-hand undo history: we only allow undoing moves within
+      // the current 3-piece hand. We store snapshots of the pre-move
+      // state and clear the history once the third piece has been played.
+      if (!isThirdPieceThisHand) {
+        const capped =
+          undoStack.length >= 2 ? undoStack.slice(1) : undoStack
+        setUndoStack([...capped, before])
+      } else {
+        setUndoStack([])
+      }
 
       setSelectedPieceId(null)
 
@@ -794,6 +836,7 @@ function App() {
         dailyTotalHits: result.dailyTotalHits,
         dailyRemainingHits: result.dailyRemainingHits,
         dailyCompleted: result.dailyCompleted,
+        goldenCellId: result.goldenCellId,
       }
     })
   }
@@ -815,6 +858,26 @@ function App() {
       setSavedEndlessGame(next)
       setHighScoreSaved(false)
     }
+    setSelectedPieceId(null)
+    setHover(null)
+  }
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return
+    const previous = undoStack[undoStack.length - 1]
+    const remaining = undoStack.slice(0, -1)
+    setUndoStack(remaining)
+    setGoldenPopupCellId(null)
+    setClearingCells([])
+    setScorePopup(null)
+    setGame((current) => {
+      const restoredMoves =
+        current.mode === 'daily' ? current.moves : previous.moves
+      return {
+        ...previous,
+        moves: restoredMoves,
+      }
+    })
     setSelectedPieceId(null)
     setHover(null)
   }
@@ -865,6 +928,17 @@ function App() {
     }, 450)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
+
+  useEffect(() => {
+    if (!goldenPopupCellId) return
+    const tokenAtStart = goldenPopupToken
+    const timeout = window.setTimeout(() => {
+      setGoldenPopupCellId((prev) =>
+        tokenAtStart === goldenPopupToken ? null : prev,
+      )
+    }, 900)
+    return () => window.clearTimeout(timeout)
+  }, [goldenPopupCellId, goldenPopupToken])
 
   useEffect(() => {
     if (!scorePopup) return
@@ -1201,7 +1275,12 @@ function App() {
               const previewValid = preview?.valid ?? false
 
               const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
-              const isDailyTarget = dailyHitsForCell > 0
+              const isDailyTarget =
+                game.mode === 'daily' && dailyHitsForCell > 0
+              const isGolden =
+                game.mode === 'endless' &&
+                game.goldenCellId != null &&
+                game.goldenCellId === cell.id
 
               return (
                 <g key={cell.id}>
@@ -1242,10 +1321,26 @@ function App() {
                     <CubeLines
                       cx={cx}
                       cy={cy}
-                      variant={isDailyTarget ? 'dailyTarget' : 'normal'}
+                      variant={
+                        isDailyTarget
+                          ? 'dailyTarget'
+                          : isGolden
+                          ? 'golden'
+                          : 'normal'
+                      }
                       dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
                     />
                   )}
+                  {game.mode === 'endless' &&
+                    goldenPopupCellId === cell.id && (
+                      <text
+                        x={cx}
+                        y={cy - HEX_SIZE * 0.5}
+                        className="hexaclear-golden-popup"
+                      >
+                        +10
+                      </text>
+                    )}
                   {DEBUG_SHOW_COORDS && (
                     <text
                       x={cx}
@@ -1311,6 +1406,15 @@ function App() {
               </>
             )}
           </div>
+          {undoStack.length > 0 && !game.gameOver && (
+            <button
+              type="button"
+              className="hexaclear-undo-button"
+              onClick={handleUndo}
+            >
+              Undo
+            </button>
+          )}
           {ghost && (
             <div
               className="hexaclear-ghost"
@@ -1368,6 +1472,15 @@ function App() {
                     </ol>
                   </div>
                 )}
+                {undoStack.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    style={{ marginBottom: '0.5rem' }}
+                  >
+                    Undo last move
+                  </button>
+                )}
                 <button onClick={resetGame}>Play again</button>
               </div>
             </div>
@@ -1420,6 +1533,15 @@ function App() {
                     </ol>
       </div>
                 )}
+                {undoStack.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    style={{ marginBottom: '0.5rem' }}
+                  >
+                    Undo last move
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -1455,6 +1577,7 @@ function App() {
                       <p>Clearing a full line or rosette is worth 10 base points.</p>
                       <p>Clearing several lines or rosettes at once creates a combo that boosts those points.</p>
                       <p>Clearing on back‑to‑back moves builds a streak that boosts them further.</p>
+                      <p>Clearing a Ruby gives a +10 bonus.</p>
                       <p>Clearing the entire board in one move gives a +25 bonus.</p>
                       <p>You also gain a flat +1 point for every cube you place.</p>
                     </div>
