@@ -272,9 +272,6 @@ body {
 .hexaclear-hex.clearing {
   fill: transparent;
   stroke: none;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: hexaclear-flip-clear 420ms ease-out forwards;
 }
 
 .hexaclear-flower-boundary {
@@ -336,6 +333,14 @@ body {
   pointer-events: none;
 }
 
+.hexaclear-placement-ghost .placement-ghost-valid {
+  /* For valid ghost placements, show only an outline so we don’t get a
+     solid background plate behind animated cubes. */
+  fill: transparent;
+  stroke: #ffc469;
+  stroke-width: 2.4;
+}
+
 .hexaclear-placement-ghost .placement-ghost-invalid {
   fill: rgba(189, 68, 68, 0.55);
   stroke: #ff8a7a;
@@ -349,11 +354,113 @@ body {
   stroke-width: 3;
 }
 
-/* Shrink + float the cubes that are about to be cleared, iOS-homescreen style. */
+/* LINE CLEARS: cubes shrink straight into the center of their hex in a
+   quick wave down the line. While clearing, hide the board hex itself so
+   there’s no flat background plate behind the cubes. */
+.hexaclear-hex-cube.clearing-line {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.hexaclear-hex.clearing-line {
+  fill: transparent;
+  stroke: none;
+  /* Ensure the board polygon itself doesn’t render as a flat plate while
+     the line-clear animation is running. */
+  visibility: hidden;
+}
+
+.hexaclear-hex-cube.clearing-line-step-0 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 0ms;
+}
+
+.hexaclear-hex-cube.clearing-line-step-1 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 40ms;
+}
+
+.hexaclear-hex-cube.clearing-line-step-2 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 80ms;
+}
+
+.hexaclear-hex-cube.clearing-line-step-3 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 120ms;
+}
+
+.hexaclear-hex-cube.clearing-line-step-4 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 160ms;
+}
+
+.hexaclear-hex-cube.clearing-line-step-5 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 200ms;
+}
+
+.hexaclear-hex-cube.clearing-line-step-6 {
+  animation: hexaclear-line-clear 220ms ease-in forwards 240ms;
+}
+
+@keyframes hexaclear-line-clear {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+/* FLOWER (ROSETTE) CLEARS: center shrinks first, then the ring.
+   As with lines, hide the board hex during the animation so only cubes
+   are visible. */
+.hexaclear-hex-cube.clearing-flower-center {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-flower-center-clear 260ms ease-in forwards;
+}
+
+.hexaclear-hex-cube.clearing-flower-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-flower-ring-clear 260ms ease-in forwards 190ms;
+}
+
+.hexaclear-hex.clearing-flower-center,
+.hexaclear-hex.clearing-flower-ring {
+  fill: transparent;
+  stroke: none;
+  /* Hide the board polygon so only the cubes animate during rosette
+     clears; the underlying slot/background remains visible. */
+  visibility: hidden;
+}
+
+@keyframes hexaclear-flower-center-clear {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes hexaclear-flower-ring-clear {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+/* TO-BE-CLEARED HIGHLIGHT: cubes and ghost cells shrink very slightly and
+   perform a slow, in-place rotational idle. */
 .hexaclear-hex.preview-clear + .hexaclear-hex-cube {
   transform-box: fill-box;
   transform-origin: center;
-  animation: hexaclear-cube-wiggle 520ms ease-in-out infinite;
+  animation: hexaclear-cube-wiggle 700ms ease-in-out infinite;
 }
 
 /* And apply the same motion to the “ghost” preview hexes that both
@@ -361,24 +468,24 @@ body {
 .hexaclear-hex.preview-clear.preview-valid {
   transform-box: fill-box;
   transform-origin: center;
-  animation: hexaclear-cube-wiggle 520ms ease-in-out infinite;
+  animation: hexaclear-cube-wiggle 700ms ease-in-out infinite;
 }
 
 @keyframes hexaclear-cube-wiggle {
   0% {
-    transform: scale(0.85) translate(-1.5px, -1px);
+    transform: scale(0.9) rotate(-3deg);
   }
   25% {
-    transform: scale(0.87) translate(0.5px, -1.5px);
+    transform: scale(0.91) rotate(0deg);
   }
   50% {
-    transform: scale(0.85) translate(1.5px, 1px);
+    transform: scale(0.92) rotate(3deg);
   }
   75% {
-    transform: scale(0.87) translate(-0.5px, 1.5px);
+    transform: scale(0.91) rotate(0deg);
   }
   100% {
-    transform: scale(0.85) translate(-1.5px, -1px);
+    transform: scale(0.9) rotate(-3deg);
   }
 }
 
@@ -392,7 +499,7 @@ body {
 
   .hexaclear-hex.preview-clear + .hexaclear-hex-cube,
   .hexaclear-hex.preview-clear.preview-valid {
-    animation-duration: 440ms;
+    animation-duration: 580ms;
   }
 }
 
@@ -578,9 +685,7 @@ body {
     drop-shadow(-0.7px -0.9px 0 rgba(255, 250, 232, 0.8));
 }
 
-.hexaclear-hex.clearing + .hexaclear-hex-cube .cube-face {
-  animation: hexaclear-flip-clear 420ms ease-out forwards;
-}
+/* Legacy flip-clear kept for reference; no longer used for active clears. */
 
 .hexaclear-ghost {
   position: absolute;

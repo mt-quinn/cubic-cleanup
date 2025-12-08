@@ -173,11 +173,13 @@ const CubeLines = ({
   cy,
   variant = 'normal',
   dailyHits,
+  extraClasses = [],
 }: {
   cx: number
   cy: number
   variant?: 'normal' | 'dailyTarget' | 'golden'
   dailyHits?: number
+  extraClasses?: string[]
 }) => {
   const vertices: { x: number; y: number }[] = []
   const radius = HEX_SIZE
@@ -241,8 +243,10 @@ const CubeLines = ({
   const LEFT_DY = -0.2
   const LEFT_ANGLE_OFFSET = -105
 
+  const cubeClassName = [variantClass, ...extraClasses].join(' ')
+
   return (
-    <g className={variantClass}>
+    <g className={cubeClassName}>
       {/* right face */}
       <polygon
         className="cube-face cube-right"
@@ -597,6 +601,9 @@ function App() {
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null)
   const [hover, setHover] = useState<HoverInfo>(null)
   const [clearingCells, setClearingCells] = useState<string[]>([])
+  const [clearingClassesByCell, setClearingClassesByCell] = useState<
+    Record<string, string[]>
+  >({})
   const [scorePopup, setScorePopup] = useState<string | null>(null)
   const [scorePopupId, setScorePopupId] = useState(0)
   const [showScoring, setShowScoring] = useState(false)
@@ -729,6 +736,38 @@ function App() {
       const before = current
       const result = applyPlacement(current, piece, cellId)
       if (!result) return current
+
+      // Build per-cell clearing classes so we can drive different
+      // animations for lines vs flowers (center vs ring).
+      if (result.clearedPatterns.length > 0) {
+        const nextClearingClasses: Record<string, string[]> = {}
+        for (const pattern of result.clearedPatterns) {
+          if (pattern.type === 'line') {
+            pattern.cellIds.forEach((id, idx) => {
+              const classes = (nextClearingClasses[id] ||= [])
+              classes.push('clearing-line', `clearing-line-step-${idx}`)
+            })
+          } else if (pattern.type === 'flower') {
+            // Flower IDs are of the form "flower-N" where N matches
+            // our FLOWER_CENTERS ordering; use that to find the
+            // central hex for this rosette.
+            const parts = pattern.id.split('-')
+            const index = Number(parts[1])
+            const centerDef = FLOWER_CENTERS[index]
+            const centerIdForPattern = centerDef
+              ? axialToId(centerDef)
+              : null
+            for (const id of pattern.cellIds) {
+              const role =
+                centerIdForPattern && id === centerIdForPattern
+                  ? 'clearing-flower-center'
+                  : 'clearing-flower-ring'
+              ;(nextClearingClasses[id] ||= []).push(role)
+            }
+          }
+        }
+        setClearingClassesByCell(nextClearingClasses)
+      }
 
       const remainingHand = current.hand.filter((p) => p.id !== piece.id)
       const updatedSlots = current.handSlots.map((id) =>
@@ -937,7 +976,8 @@ function App() {
     if (clearingCells.length === 0) return
     const timeout = window.setTimeout(() => {
       setClearingCells([])
-    }, 450)
+      setClearingClassesByCell({})
+    }, 600)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
 
@@ -1357,6 +1397,8 @@ function App() {
                 game.goldenCellId != null &&
                 game.goldenCellId === cell.id
 
+              const clearingClasses = clearingClassesByCell[cell.id] ?? []
+
               return (
                 <g key={cell.id}>
                   <polygon
@@ -1366,6 +1408,7 @@ function App() {
                       isFilled ? 'filled' : 'empty',
                       isClearing ? 'clearing' : '',
                       willClearInPreview ? 'preview-clear' : '',
+                      ...clearingClasses,
                       inPreview
                         ? previewValid
                           ? 'preview-valid'
@@ -1389,7 +1432,7 @@ function App() {
                       }
                     }}
                   />
-                  {!isFilled && !inPreview && !willClearInPreview && (
+                  {!isFilledLogical && !inPreview && !willClearInPreview && (
                     <SlotGeometry cx={cx} cy={cy} />
                   )}
                   {isFilled && (
@@ -1404,6 +1447,7 @@ function App() {
                           : 'normal'
                       }
                       dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                      extraClasses={clearingClasses}
                     />
                   )}
                   {game.mode === 'endless' &&
