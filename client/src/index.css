@@ -460,15 +460,15 @@ body {
 .hexaclear-hex.preview-clear + .hexaclear-hex-cube {
   transform-box: fill-box;
   transform-origin: center;
-  transform: scale(0.85);
+  transform: scale(0.80);
 }
 
-/* And apply the same motion to the “ghost” preview hexes that both
+/* And apply the same motion to the "ghost" preview hexes that both
    belong to the piece (preview-valid) and are part of the clear. */
 .hexaclear-hex.preview-clear.preview-valid {
   transform-box: fill-box;
   transform-origin: center;
-  transform: scale(0.85);
+  transform: scale(0.80);
 }
 
 @keyframes hexaclear-cube-wiggle {

@@ -420,7 +420,17 @@ const getBestPlacementPreview = (
     }
     const result = applyPlacement(previewGame, selectedPiece, hoveredCellId)
     if (result && result.clearedPatterns.length > 0) {
-      clearedIds = result.clearedCellIds
+      // In daily mode, only highlight cells that will actually disappear
+      // (not numbered cubes that still have hits remaining after the clear).
+      if (game.mode === 'daily') {
+        clearedIds = result.clearedCellIds.filter((id) => {
+          const hitsAfter = result.dailyHits[id]
+          // If hitsAfter is undefined or 0, the cell will disappear.
+          return hitsAfter === undefined || hitsAfter === 0
+        })
+      } else {
+        clearedIds = result.clearedCellIds
+      }
     }
   }
 
@@ -745,20 +755,32 @@ function App() {
         for (const pattern of result.clearedPatterns) {
           if (pattern.type === 'line') {
             pattern.cellIds.forEach((id, idx) => {
+              // In daily mode, don't animate numbered cubes that won't
+              // actually disappear (still have hits remaining after clear).
+              if (
+                current.mode === 'daily' &&
+                result.dailyHits[id] !== undefined &&
+                result.dailyHits[id] > 0
+              ) {
+                return
+              }
               const classes = (nextClearingClasses[id] ||= [])
               classes.push('clearing-line', `clearing-line-step-${idx}`)
             })
           } else if (pattern.type === 'flower') {
-            // Flower IDs are of the form "flower-N" where N matches
-            // our FLOWER_CENTERS ordering; use that to find the
-            // central hex for this rosette.
-            const parts = pattern.id.split('-')
-            const index = Number(parts[1])
-            const centerDef = FLOWER_CENTERS[index]
-            const centerIdForPattern = centerDef
-              ? axialToId(centerDef)
-              : null
+            // boardDefinition always builds flower patterns with the
+            // center cell first: [centerId, ...petalIds].
+            const centerIdForPattern = pattern.cellIds[0] ?? null
             for (const id of pattern.cellIds) {
+              // In daily mode, don't animate numbered cubes that won't
+              // actually disappear (still have hits remaining after clear).
+              if (
+                current.mode === 'daily' &&
+                result.dailyHits[id] !== undefined &&
+                result.dailyHits[id] > 0
+              ) {
+                continue
+              }
               const role =
                 centerIdForPattern && id === centerIdForPattern
                   ? 'clearing-flower-center'
