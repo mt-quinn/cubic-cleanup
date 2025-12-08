@@ -374,36 +374,36 @@ body {
 }
 
 .hexaclear-hex-cube.clearing-line-step-0 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 0ms;
+  animation: hexaclear-line-clear 220ms ease-in both 0ms;
 }
 
 .hexaclear-hex-cube.clearing-line-step-1 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 40ms;
+  animation: hexaclear-line-clear 220ms ease-in both 40ms;
 }
 
 .hexaclear-hex-cube.clearing-line-step-2 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 80ms;
+  animation: hexaclear-line-clear 220ms ease-in both 80ms;
 }
 
 .hexaclear-hex-cube.clearing-line-step-3 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 120ms;
+  animation: hexaclear-line-clear 220ms ease-in both 120ms;
 }
 
 .hexaclear-hex-cube.clearing-line-step-4 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 160ms;
+  animation: hexaclear-line-clear 220ms ease-in both 160ms;
 }
 
 .hexaclear-hex-cube.clearing-line-step-5 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 200ms;
+  animation: hexaclear-line-clear 220ms ease-in both 200ms;
 }
 
 .hexaclear-hex-cube.clearing-line-step-6 {
-  animation: hexaclear-line-clear 220ms ease-in forwards 240ms;
+  animation: hexaclear-line-clear 220ms ease-in both 240ms;
 }
 
 @keyframes hexaclear-line-clear {
   0% {
-    transform: scale(1);
+    transform: scale(0.80);
     opacity: 1;
   }
   100% {
@@ -418,13 +418,13 @@ body {
 .hexaclear-hex-cube.clearing-flower-center {
   transform-box: fill-box;
   transform-origin: center;
-  animation: hexaclear-flower-center-clear 260ms ease-in forwards;
+  animation: hexaclear-flower-center-clear 260ms ease-in both;
 }
 
 .hexaclear-hex-cube.clearing-flower-ring {
   transform-box: fill-box;
   transform-origin: center;
-  animation: hexaclear-flower-ring-clear 260ms ease-in forwards 190ms;
+  animation: hexaclear-flower-ring-clear 260ms ease-in both 190ms;
 }
 
 .hexaclear-hex.clearing-flower-center,
@@ -435,7 +435,7 @@ body {
 
 @keyframes hexaclear-flower-center-clear {
   0% {
-    transform: scale(1);
+    transform: scale(0.80);
     opacity: 1;
   }
   100% {
@@ -446,7 +446,7 @@ body {
 
 @keyframes hexaclear-flower-ring-clear {
   0% {
-    transform: scale(1);
+    transform: scale(0.80);
     opacity: 1;
   }
   100% {
