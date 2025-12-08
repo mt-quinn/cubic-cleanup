@@ -503,9 +503,11 @@ const qualifiesForDailyHighScore = (
 
 const getTodayKey = (): string => {
   const now = new Date()
-  const y = now.getUTCFullYear()
-  const m = now.getUTCMonth() + 1
-  const d = now.getUTCDate()
+  // Use the client’s local calendar day so that daily puzzles reset at
+  // local midnight rather than a single global UTC boundary.
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const d = now.getDate()
   const mm = String(m).padStart(2, '0')
   const dd = String(d).padStart(2, '0')
   return `${y}-${mm}-${dd}`
@@ -513,9 +515,10 @@ const getTodayKey = (): string => {
 
 const getDateKeyFromTimestamp = (timestamp: number): string => {
   const d = new Date(timestamp)
-  const y = d.getUTCFullYear()
-  const m = d.getUTCMonth() + 1
-  const day = d.getUTCDate()
+  // Bucket stored scores by the player’s local day.
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const day = d.getDate()
   const mm = String(m).padStart(2, '0')
   const dd = String(day).padStart(2, '0')
   return `${y}-${mm}-${dd}`
@@ -604,6 +607,9 @@ function App() {
   const [pendingHighScore, setPendingHighScore] = useState(false)
   const [pendingScore, setPendingScore] = useState<number | null>(null)
   const [highScoreSaved, setHighScoreSaved] = useState(false)
+  const [lastSavedHighScoreDate, setLastSavedHighScoreDate] = useState<
+    number | null
+  >(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
     () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
@@ -613,6 +619,8 @@ function App() {
     null,
   )
   const [dailyHighScoreSaved, setDailyHighScoreSaved] = useState(false)
+  const [lastSavedDailyHighScoreDate, setLastSavedDailyHighScoreDate] =
+    useState<number | null>(null)
   const [playerName, setPlayerName] = useState(() => {
     if (typeof window === 'undefined') return ''
     return window.localStorage.getItem('cubic-player-name') ?? ''
@@ -1038,6 +1046,7 @@ function App() {
       .sort((a, b) => b.score - a.score || a.date - b.date)
       .slice(0, 5)
     setHighScores(next)
+    setLastSavedHighScoreDate(entry.date)
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('cubic-highscores', JSON.stringify(next))
       window.localStorage.setItem('cubic-player-name', name)
@@ -1058,6 +1067,7 @@ function App() {
       .sort((a, b) => a.moves - b.moves || a.date - b.date)
       .slice(0, 5)
     setDailyHighScores(next)
+    setLastSavedDailyHighScoreDate(entry.date)
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(
         'cubic-daily-highscores',
@@ -1086,24 +1096,19 @@ function App() {
   }
 
   useEffect(() => {
-    const handlePointerMove = (e: PointerEvent) => {
-      if (
-        !dragState.current.pointerId ||
-        e.pointerId !== dragState.current.pointerId
-      ) {
-        return
-      }
+    const updateFromClientPoint = (clientX: number, clientY: number) => {
+      if (!dragState.current.pieceId) return
       const wrapper = boardWrapperRef.current
       if (!wrapper) return
       const rect = wrapper.getBoundingClientRect()
-      const x = (e.clientX - rect.left) / scale
-      const y = (e.clientY - rect.top) / scale
+      const x = (clientX - rect.left) / scale
+      const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
       const cellId = findClosestCellIdFromClientPoint(
-        e.clientX,
-        e.clientY - previewOffsetY,
+        clientX,
+        clientY - previewOffsetY,
       )
       if (cellId) {
         setHover({ cellId })
@@ -1112,25 +1117,21 @@ function App() {
       }
     }
 
-    const handlePointerUp = (e: PointerEvent) => {
-      if (
-        !dragState.current.pieceId ||
-        (dragState.current.pointerId !== null &&
-          e.pointerId !== dragState.current.pointerId)
-      ) {
-        return
-      }
+    const finishDragAtPoint = (clientX: number | null, clientY: number | null) => {
+      if (!dragState.current.pieceId) return
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
-      const cellId =
-        hover?.cellId ??
-        findClosestCellIdFromClientPoint(
-          e.clientX,
-          e.clientY - previewOffsetY,
+      let cellId = hover?.cellId ?? null
+      if (!cellId && clientX !== null && clientY !== null) {
+        cellId = findClosestCellIdFromClientPoint(
+          clientX,
+          clientY - previewOffsetY,
         )
+      }
       const pieceId = dragState.current.pieceId
       dragState.current.pointerId = null
       dragState.current.pieceId = null
+      dragState.current.pointerType = null
       setDraggingPieceId(null)
       setGhost(null)
       if (cellId && pieceId) {
@@ -1139,13 +1140,83 @@ function App() {
       setHover(null)
     }
 
+    // Pointer Events (browsers that support them well)
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!dragState.current.pieceId) return
+      updateFromClientPoint(e.clientX, e.clientY)
+    }
+
+    const handlePointerUp = (e: PointerEvent) => {
+      finishDragAtPoint(e.clientX, e.clientY)
+    }
+
+    // Mouse fallback (for browsers where PointerEvents are flaky)
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragState.current.pieceId) return
+      // Only use this path for mouse-based drags.
+      if (
+        dragState.current.pointerType &&
+        dragState.current.pointerType !== 'mouse'
+      ) {
+        return
+      }
+      updateFromClientPoint(e.clientX, e.clientY)
+    }
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!dragState.current.pieceId) return
+      if (
+        dragState.current.pointerType &&
+        dragState.current.pointerType !== 'mouse'
+      ) {
+        return
+      }
+      finishDragAtPoint(e.clientX, e.clientY)
+    }
+
+    // Touch fallback (in case some Firefox builds send only touch events)
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragState.current.pieceId) return
+      const touch = e.touches[0]
+      if (!touch) return
+      if (
+        dragState.current.pointerType &&
+        dragState.current.pointerType !== 'touch'
+      ) {
+        return
+      }
+      updateFromClientPoint(touch.clientX, touch.clientY)
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!dragState.current.pieceId) return
+      const touch =
+        e.changedTouches[0] || e.touches[0] || null
+      if (touch) {
+        finishDragAtPoint(touch.clientX, touch.clientY)
+      } else {
+        finishDragAtPoint(null, null)
+      }
+    }
+
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
     window.addEventListener('pointercancel', handlePointerUp)
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('touchmove', handleTouchMove, { passive: false })
+    window.addEventListener('touchend', handleTouchEnd)
+    window.addEventListener('touchcancel', handleTouchEnd)
+
     return () => {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerUp)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
+      window.removeEventListener('touchcancel', handleTouchEnd)
     }
   }, [scale, hover])
 
@@ -1417,7 +1488,7 @@ function App() {
               onClick={handleUndo}
             >
               Undo
-            </button>
+        </button>
           )}
           {ghost && (
             <div
@@ -1467,12 +1538,21 @@ function App() {
                           (a, b) =>
                             b.score - a.score || a.date - b.date,
                         )
-                        .map((entry, idx) => (
-                          <li key={entry.date + entry.name + idx}>
-                            <span className="name">{entry.name}</span>
-                            <span className="value">{entry.score}</span>
-                          </li>
-                        ))}
+                        .map((entry, idx) => {
+                          const isRecent =
+                            highScoreSaved &&
+                            lastSavedHighScoreDate !== null &&
+                            entry.date === lastSavedHighScoreDate
+                          return (
+                            <li
+                              key={entry.date + entry.name + idx}
+                              className={isRecent ? 'recent' : undefined}
+                            >
+                              <span className="name">{entry.name}</span>
+                              <span className="value">{entry.score}</span>
+                            </li>
+                          )
+                        })}
                     </ol>
                   </div>
                 )}
@@ -1526,16 +1606,25 @@ function App() {
                         .sort(
                           (a, b) => a.moves - b.moves || a.date - b.date,
                         )
-                        .map((entry, idx) => (
-                          <li key={entry.date + entry.name + idx}>
-                            <span className="name">{entry.name}</span>
-                            <span className="value">
-                              {entry.moves} moves
-                            </span>
-                          </li>
-                        ))}
+                        .map((entry, idx) => {
+                          const isRecent =
+                            dailyHighScoreSaved &&
+                            lastSavedDailyHighScoreDate !== null &&
+                            entry.date === lastSavedDailyHighScoreDate
+                          return (
+                            <li
+                              key={entry.date + entry.name + idx}
+                              className={isRecent ? 'recent' : undefined}
+                            >
+                              <span className="name">{entry.name}</span>
+                              <span className="value">
+                                {entry.moves} moves
+                              </span>
+                            </li>
+                          )
+                        })}
                     </ol>
-      </div>
+                  </div>
                 )}
                 {undoStack.length > 0 && (
                   <button
@@ -1609,12 +1698,21 @@ function App() {
                           (a, b) =>
                             b.score - a.score || a.date - b.date,
                         )
-                        .map((entry, idx) => (
-                          <li key={entry.date + entry.name + idx}>
-                            <span className="name">{entry.name}</span>
-                            <span className="value">{entry.score}</span>
-                          </li>
-                        ))}
+                        .map((entry, idx) => {
+                          const isRecent =
+                            highScoreSaved &&
+                            lastSavedHighScoreDate !== null &&
+                            entry.date === lastSavedHighScoreDate
+                          return (
+                            <li
+                              key={entry.date + entry.name + idx}
+                              className={isRecent ? 'recent' : undefined}
+                            >
+                              <span className="name">{entry.name}</span>
+                              <span className="value">{entry.score}</span>
+                            </li>
+                          )
+                        })}
                     </ol>
                   )}
                 </div>
@@ -1695,14 +1793,23 @@ function App() {
                           .sort(
                             (a, b) => a.moves - b.moves || a.date - b.date,
                           )
-                          .map((entry, idx) => (
-                            <li key={entry.date + entry.name + idx}>
-                              <span className="name">{entry.name}</span>
-                              <span className="value">
-                                {entry.moves} moves
-                              </span>
-                            </li>
-                          ))}
+                          .map((entry, idx) => {
+                            const isRecent =
+                              dailyHighScoreSaved &&
+                              lastSavedDailyHighScoreDate !== null &&
+                              entry.date === lastSavedDailyHighScoreDate
+                            return (
+                              <li
+                                key={entry.date + entry.name + idx}
+                                className={isRecent ? 'recent' : undefined}
+                              >
+                                <span className="name">{entry.name}</span>
+                                <span className="value">
+                                  {entry.moves} moves
+                                </span>
+                              </li>
+                            )
+                          })}
                       </ol>
                     )
                   })()}
@@ -1807,7 +1914,9 @@ function App() {
                 triggerGrabHaptic()
               }}
             >
-              {piece && <PiecePreview shape={piece.shape} mode="hand" />}
+              {piece && !isDragging && (
+                <PiecePreview shape={piece.shape} mode="hand" />
+              )}
             </button>
             )
           })}

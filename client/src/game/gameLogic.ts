@@ -63,6 +63,10 @@ const scoringPatternIds = new Set([
   ...BOARD_DEFINITION.flowerIds,
 ])
 
+const FLOWER_PATTERNS = BOARD_DEFINITION.patterns.filter(
+  (p) => p.type === 'flower',
+)
+
 // Simple deterministic RNG used for daily puzzle generation so that the
 // same calendar day produces the same layout everywhere.
 type RNG = () => number
@@ -78,9 +82,11 @@ const makeSeededRandom = (seed: number): RNG => {
 
 const getTodaySeed = (): number => {
   const now = new Date()
-  const y = now.getUTCFullYear()
-  const m = now.getUTCMonth() + 1
-  const d = now.getUTCDate()
+  // Use the client’s local calendar day so that daily puzzles reset at
+  // local midnight rather than a single global UTC boundary.
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const d = now.getDate()
   const key = `${y}-${m}-${d}`
   // Simple string hash to int
   let hash = 0
@@ -124,8 +130,12 @@ export const createEmptyBoard = (): BoardState => {
 // Choose a new golden cube position on the given board. The golden cube
 // behaves like a real filled cube: if it lands on an empty cell we set
 // that cell to 'filled', but we avoid any empty-cell placements that
-// would immediately complete a scoring pattern.
-const spawnGoldenCell = (board: BoardState): CellId | null => {
+// would immediately complete a scoring pattern. Optionally, we can
+// forbid respawning inside certain flower (rosette) patterns.
+const spawnGoldenCell = (
+  board: BoardState,
+  forbiddenFlowers?: Set<string>,
+): CellId | null => {
   const cells = [...BOARD_DEFINITION.cells]
   // Shuffle to avoid always biasing toward earlier cells.
   for (let i = cells.length - 1; i > 0; i--) {
@@ -135,8 +145,20 @@ const spawnGoldenCell = (board: BoardState): CellId | null => {
 
   let fallbackFilled: CellId | null = null
 
-  for (const cell of cells) {
+cellLoop: for (const cell of cells) {
     const id = cell.id
+    if (forbiddenFlowers && forbiddenFlowers.size > 0) {
+      for (const pattern of FLOWER_PATTERNS) {
+        if (
+          forbiddenFlowers.has(pattern.id) &&
+          pattern.cellIds.includes(id)
+        ) {
+          // Skip any cells that live inside a forbidden flower.
+          continue cellLoop
+        }
+      }
+    }
+
     const state = board[id]
     if (state === 'filled') {
       // Always safe: we're not changing occupancy so we can't create a
@@ -158,9 +180,20 @@ const spawnGoldenCell = (board: BoardState): CellId | null => {
 
   // If we couldn't find a safe empty slot, fall back to *any* filled
   // cell (so we always have a golden cube somewhere).
-  for (const cell of cells) {
-    if (board[cell.id] === 'filled') {
-      fallbackFilled = cell.id
+  cellLoopFallback: for (const cell of cells) {
+    const id = cell.id
+    if (forbiddenFlowers && forbiddenFlowers.size > 0) {
+      for (const pattern of FLOWER_PATTERNS) {
+        if (
+          forbiddenFlowers.has(pattern.id) &&
+          pattern.cellIds.includes(id)
+        ) {
+          continue cellLoopFallback
+        }
+      }
+    }
+    if (board[id] === 'filled') {
+      fallbackFilled = id
       break
     }
   }
@@ -240,6 +273,7 @@ export const applyPlacement = (
   let dailyRemainingHits = current.dailyRemainingHits
   let dailyCompleted = current.dailyCompleted
   let goldenCellId = current.goldenCellId
+  const previousGoldenCellId = current.goldenCellId
 
   if (clearedPatterns.length > 0 && Object.keys(dailyHits).length > 0) {
     // Count how many distinct clear-patterns each numbered cell
@@ -334,7 +368,16 @@ export const applyPlacement = (
   // If we just cleared the golden cube in endless mode, immediately
   // respawn it somewhere else on the board.
   if (current.mode === 'endless' && goldenCleared) {
-    const newGolden = spawnGoldenCell(board)
+    let forbiddenFlowers: Set<string> | undefined
+    if (previousGoldenCellId) {
+      const ids = FLOWER_PATTERNS.filter((p) =>
+        p.cellIds.includes(previousGoldenCellId),
+      ).map((p) => p.id)
+      if (ids.length > 0) {
+        forbiddenFlowers = new Set(ids)
+      }
+    }
+    const newGolden = spawnGoldenCell(board, forbiddenFlowers)
     goldenCellId = newGolden
   }
 

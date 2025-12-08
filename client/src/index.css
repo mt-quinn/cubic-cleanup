@@ -614,6 +614,17 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.hexaclear-highscores li.recent {
+  font-weight: 900;
+}
+
+.hexaclear-highscores li.recent .name,
+.hexaclear-highscores li.recent .value {
+  font-weight: inherit;
+  color: #ffd9a0;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+}
+
 .hexaclear-hand {
   display: flex;
   justify-content: space-between;
