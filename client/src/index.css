@@ -390,7 +390,8 @@ body {
     stroke-width: 3;
   }
 
-  .hexaclear-hex.preview-clear + .hexaclear-hex-cube {
+  .hexaclear-hex.preview-clear + .hexaclear-hex-cube,
+  .hexaclear-hex.preview-clear.preview-valid {
     animation-duration: 440ms;
   }
 }
