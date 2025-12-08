@@ -271,7 +271,7 @@ body {
 
 .hexaclear-hex.clearing {
   fill: transparent;
-  stroke: none;
+  stroke: #94633a;
 }
 
 .hexaclear-flower-boundary {
@@ -354,6 +354,12 @@ body {
   stroke-width: 3;
 }
 
+.hexaclear-hex.filled.preview-clear {
+  /* For filled cells that will clear, restore the normal board edge stroke
+     so the hex boundary is visible behind the shrunk cube. */
+  stroke: #94633a;
+}
+
 /* LINE CLEARS: cubes shrink straight into the center of their hex in a
    quick wave down the line. While clearing, hide the board hex itself so
    there’s no flat background plate behind the cubes. */
@@ -364,10 +370,7 @@ body {
 
 .hexaclear-hex.clearing-line {
   fill: transparent;
-  stroke: none;
-  /* Ensure the board polygon itself doesn’t render as a flat plate while
-     the line-clear animation is running. */
-  visibility: hidden;
+  stroke: #94633a;
 }
 
 .hexaclear-hex-cube.clearing-line-step-0 {
@@ -427,10 +430,7 @@ body {
 .hexaclear-hex.clearing-flower-center,
 .hexaclear-hex.clearing-flower-ring {
   fill: transparent;
-  stroke: none;
-  /* Hide the board polygon so only the cubes animate during rosette
-     clears; the underlying slot/background remains visible. */
-  visibility: hidden;
+  stroke: #94633a;
 }
 
 @keyframes hexaclear-flower-center-clear {
