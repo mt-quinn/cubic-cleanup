@@ -604,6 +604,7 @@ function App() {
   const [clearingClassesByCell, setClearingClassesByCell] = useState<
     Record<string, string[]>
   >({})
+  const [clearingGoldenCellId, setClearingGoldenCellId] = useState<string | null>(null)
   const [scorePopup, setScorePopup] = useState<string | null>(null)
   const [scorePopupId, setScorePopupId] = useState(0)
   const [showScoring, setShowScoring] = useState(false)
@@ -820,6 +821,7 @@ function App() {
 
         if (result.clearedPatterns.length > 0) {
           setClearingCells(result.clearedCellIds)
+          setClearingGoldenCellId(current.goldenCellId)
           const totalClears = result.clearedPatterns.length
           const popupText =
             totalClears === 1
@@ -850,6 +852,7 @@ function App() {
         // Still show the clearing animation in daily mode.
         if (result.clearedPatterns.length > 0) {
           setClearingCells(result.clearedCellIds)
+          setClearingGoldenCellId(current.goldenCellId)
         }
       }
 
@@ -910,6 +913,7 @@ function App() {
     setUndoStack([])
     setGoldenPopupCellId(null)
     setClearingCells([])
+    setClearingGoldenCellId(null)
     setScorePopup(null)
   }
 
@@ -920,6 +924,7 @@ function App() {
     setUndoStack(remaining)
     setGoldenPopupCellId(null)
     setClearingCells([])
+    setClearingGoldenCellId(null)
     setScorePopup(null)
     setGame((current) => {
       const restoredMoves =
@@ -977,6 +982,7 @@ function App() {
     const timeout = window.setTimeout(() => {
       setClearingCells([])
       setClearingClassesByCell({})
+      setClearingGoldenCellId(null)
     }, 600)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
@@ -1394,8 +1400,8 @@ function App() {
                 game.mode === 'daily' && dailyHitsForCell > 0
               const isGolden =
                 game.mode === 'endless' &&
-                game.goldenCellId != null &&
-                game.goldenCellId === cell.id
+                ((game.goldenCellId != null && game.goldenCellId === cell.id) ||
+                  (clearingGoldenCellId != null && clearingGoldenCellId === cell.id))
 
               const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
