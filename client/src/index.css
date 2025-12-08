@@ -341,26 +341,57 @@ body {
   stroke: #ff8a7a;
 }
 
-.hexaclear-hex.preview-clear {
-  fill: rgba(255, 248, 210, 0.55); /* fallback glow that works even if filters are weak */
+.hexaclear-hex.empty.preview-clear {
+  /* For empty cells that will be cleared, keep the board background
+     visible and just add a subtle edge highlight. */
+  fill: transparent;
   stroke: #ffe9a6;
-  stroke-width: 4;
-  filter: drop-shadow(0 0 8px rgba(255, 240, 180, 0.95))
-    drop-shadow(0 0 16px rgba(255, 240, 180, 0.85));
+  stroke-width: 3;
 }
 
-/* On coarse (touch) pointers, push the preview glow a bit harder so it
-   reads well on mobile browsers with softer SVG filter rendering. */
+/* Shrink + float the cubes that are about to be cleared, iOS-homescreen style. */
+.hexaclear-hex.preview-clear + .hexaclear-hex-cube {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-cube-wiggle 520ms ease-in-out infinite;
+}
+
+/* And apply the same motion to the “ghost” preview hexes that both
+   belong to the piece (preview-valid) and are part of the clear. */
+.hexaclear-hex.preview-clear.preview-valid {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-cube-wiggle 520ms ease-in-out infinite;
+}
+
+@keyframes hexaclear-cube-wiggle {
+  0% {
+    transform: scale(0.85) translate(-1.5px, -1px);
+  }
+  25% {
+    transform: scale(0.87) translate(0.5px, -1.5px);
+  }
+  50% {
+    transform: scale(0.85) translate(1.5px, 1px);
+  }
+  75% {
+    transform: scale(0.87) translate(-0.5px, 1.5px);
+  }
+  100% {
+    transform: scale(0.85) translate(-1.5px, -1px);
+  }
+}
+
+/* On coarse (touch) pointers, keep the same motion but slightly bump
+   contrast so it stays readable on mobile browsers. */
 @media (pointer: coarse) {
-  .hexaclear-hex.preview-clear {
-    fill: rgba(255, 252, 220, 0.9);
-    stroke-width: 5;
+  .hexaclear-hex.empty.preview-clear {
+    fill: transparent;
+    stroke-width: 3;
   }
 
-  .hexaclear-hex.preview-clear + .hexaclear-hex-cube .cube-face {
-    filter:
-      brightness(2.3)
-      saturate(1.7);
+  .hexaclear-hex.preview-clear + .hexaclear-hex-cube {
+    animation-duration: 440ms;
   }
 }
 
@@ -544,14 +575,6 @@ body {
   filter:
     drop-shadow(0.4px 0.9px 0 rgba(0, 0, 0, 0.8))
     drop-shadow(-0.7px -0.9px 0 rgba(255, 250, 232, 0.8));
-}
-
-.hexaclear-hex.preview-clear + .hexaclear-hex-cube .cube-face {
-  filter:
-    brightness(2.1)
-    saturate(1.5)
-    drop-shadow(0 0 10px rgba(255, 240, 180, 0.9));
-  animation: hexaclear-preview-pulse 900ms ease-in-out infinite alternate;
 }
 
 .hexaclear-hex.clearing + .hexaclear-hex-cube .cube-face {

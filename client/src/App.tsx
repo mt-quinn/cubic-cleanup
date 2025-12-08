@@ -1556,7 +1556,7 @@ function App() {
                     </ol>
                   </div>
                 )}
-                {undoStack.length > 0 && (
+                {undoStack.length > 0 && !highScoreSaved && (
                   <button
                     type="button"
                     onClick={handleUndo}
@@ -1626,7 +1626,7 @@ function App() {
                     </ol>
                   </div>
                 )}
-                {undoStack.length > 0 && (
+                {undoStack.length > 0 && !dailyHighScoreSaved && (
                   <button
                     type="button"
                     onClick={handleUndo}
