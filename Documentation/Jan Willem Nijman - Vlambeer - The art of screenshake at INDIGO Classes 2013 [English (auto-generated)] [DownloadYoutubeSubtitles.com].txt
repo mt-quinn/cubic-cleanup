@@ -1,0 +1,2063 @@
+welcome
+
+back um it's a great pleasure to
+
+announce here JW yon willum from vamir
+
+who's uh we talked about game field he
+
+said that was a terrible term so we
+
+almost got into a fight about that so I
+
+said well you want to talk about
+
+whatever that is that we can't call
+
+gamefuel and he said yeah I'll will so
+
+you're going to destroy the term and uh
+
+I said that's okay but he's going to at
+
+least uh talk about how to make the
+
+games feel good and uh a warm Applause
+
+for Yan Willam from
+
+vumbia hello um all right let's do this
+
+so I'm y n I'm 50% of Indie studio
+
+flamber and I am responsible for game
+
+design and execution whatever that means
+
+uh and this talk is about game f with a
+
+lot of those things I don't know how you
+
+call those in English um this is our
+
+logo uh it's a flaming
+
+bear and we made a lot of video games uh
+
+this is a video game called Ridiculous
+
+Fishing uh which you'll hear more about
+
+tonight uh and I'm not talking about the
+
+awards because that would be silly um
+
+and this is a game called Super Crate
+
+Box which you can download uh for free
+
+also on Steam uh this is a game called
+
+gun Gods which you can also download for
+
+free it's like a first person shooter
+
+about gangster rap on Venus uh but
+
+nobody played it but it's actually not
+
+that bad um this is like a really badly
+
+cropped screenshot of an upcoming game
+
+called Loof risers about airplanes
+
+shooting each other uh yeah pretty much
+
+and this is a game we're working on
+
+right now called Nuclear Throne which is
+
+like a post-apocalyptic Rog like about
+
+mutants growing new Limbs and shooting
+
+monsters and all that kind of
+
+stuff all
+
+right so let me start with this I don't
+
+have that much to say about gamefuel I'm
+
+not a academic I'm more of a person who
+
+comes up with things and then makes them
+
+talking is kind of hard um you know I
+
+like tweeting that's easier shorter um
+
+so I'm not going to go too much into
+
+Theory here I'm not a psychologist I
+
+don't understand all that stuff but I
+
+have made a lot of games and I found out
+
+some small little tricks through that
+
+um let's start by getting some
+
+water
+
+um all
+
+right so there are some people uh who
+
+have great things to say about this
+
+subject uh actually there's Martin
+
+jonison and patri per who are actually
+
+giving a talk uh here today and they're
+
+right there and I didn't know they were
+
+giving it so I'm basically doing the
+
+same thing so if you want to not be
+
+spoiled you should walk away right now
+
+because their talk is probably
+
+better uh and Cactus or Jonathan s time
+
+uh gave a great talk at IGS in 2009
+
+about how making games is like making
+
+babies but uh it also had some really
+
+good tips on making games feel good um
+
+that stupid word feel like it's a super
+
+abstract thing and it's different for
+
+every player but you still have to work
+
+with
+
+it so um I present to you a video game
+
+um but this really sucks like this is
+
+just a computer with some [ __ ] on it and
+
+nothing's happening um you know games
+
+aren't really games unless you have
+
+something else which makes it a lot more
+
+complicated suddenly which is called a
+
+player um and the worst thing about
+
+players is that there's so many of them
+
+and they're all different
+
+and that makes making games very
+
+complicated like a game will be
+
+different for every single person
+
+playing them once again I don't
+
+understand these things actually I'm
+
+just saying what I think makes sense and
+
+it probably doesn't make sense but it
+
+works for us so let me explain how games
+
+work and it's very
+
+complicated so you have this game and a
+
+player then the game goes into the
+
+player's head through like basically
+
+visuals and sound don't have smell games
+
+yet
+
+uh and then the player's like oh yeah I
+
+see these things let me put some push
+
+some buttons and then the player puts
+
+his input back into the game and then
+
+the game's like all right I am going to
+
+change for you look see it actually
+
+changes bam and and the changes go back
+
+into the player and then the player is
+
+like ooh this has me thinking and now
+
+the game has meaning um and that's
+
+actually where the value comes in like
+
+people can change their lives learn
+
+something become a better person because
+
+they press those buttons in the game set
+
+hey this changed uh and that's why games
+
+are interesting at least to me and this
+
+is probably all wrong but once again
+
+that doesn't matter because it works for
+
+us and then those thoughts go back
+
+through the player into the game and the
+
+meaning becomes game play and all that
+
+stuff um but this is
+
+cooler um so with flamb beer we're
+
+basically good at just one thing with
+
+making games and that's like this part
+
+which is after the game goes into the
+
+player and then the player puts input
+
+into the game the game goes back into
+
+the player that's like like I press a
+
+button and a bullet flies and the bullet
+
+hits something that's that blue arrow
+
+there um and we make that feel good and
+
+that's why they asked us to give a talk
+
+about game view um I also put an extra
+
+slide in here so I can like animate this
+
+so it's kind of more
+
+exciting um so this whole model is kind
+
+of interesting because you can put many
+
+games into those arrows and kind of
+
+figure out which parts they focus on
+
+like you have some uh games that cover
+
+lots of meaningful subjects and they're
+
+all about that little green arrow going
+
+into that those thoughts um and you have
+
+uh Triple A games who only do like the
+
+first thing and pour that game into a
+
+player and player doesn't really do much
+
+um that makes me sad um all right enough
+
+talking
+
+about game feel how do you call those
+
+things like the hyphens or quotation
+
+on cool lots of quotation marks so I'm
+
+just going to scratch that name and then
+
+I think on the the menu of the
+
+conference not the menu how do you call
+
+that thing whatever the schedule uh this
+
+talk is called the art of screen Shake
+
+um which is also a bit silly so I'm just
+
+going to cut all the talk crap and just
+
+teach you guys some tricks I learned
+
+while making games so this talk is now
+
+officially called 30 tiny tricks that
+
+will make your action game better um
+
+which is something I can actually talk
+
+about um because I might not be an
+
+academic or a psychologist I make action
+
+games um and I'm proud of
+
+it let's
+
+go so we have here a super shitty
+
+platform shooter like average stuff
+
+anybody could make this crap I'm sorry
+
+um but seriously anybody could sit down
+
+with some tutorials and get some
+
+shooting in there
+
+and you know you have a game uh cactus
+
+in his IG talk in 2009 which I talked
+
+about um a couple of minutes ago showed
+
+this with like a Mario clone and it's
+
+like oh you have to jump on their heads
+
+many times before you die and it was
+
+really funny so I just stole it um so
+
+basically this game really sucks
+
+because you know not much is really
+
+happening
+
+that I have to fill an hour so is fine
+
+oh I killed one yay so um the end thank
+
+you no I'm kidding
+
+um so now I'm just going to put those 30
+
+tiny tricks in there to make this game
+
+better um so the first one is I
+
+don't basic animations and sound like
+
+I made those suns in sfxr which
+
+everybody uses I can now jump and my
+
+hair moves like that's me I'm actually
+
+wearing that sweater today and I can
+
+like shoot more and woo walking
+
+animation so now the game like the sound
+
+just makes the shooting feel much better
+
+that stuff is super
+
+important all right um so let's start
+
+fixing that shitty gameplay with enemies
+
+with too much health so lower enemy
+
+HP kind of yay now like this is such a
+
+silly tiny um change but if I would have
+
+shown you the first game uh instead of
+
+this one you would have totally thought
+
+it was a shitty game um but this is not
+
+that bad like this is starting to get
+
+somewhere everybody can kind of figure
+
+this out like enemy HP make it lower
+
+it's more fun um and then also make your
+
+rate of fire higher because it's even
+
+more fun because it's a [ __ ] video
+
+game about shooting things you might as
+
+well put a lot of shooting in there
+
+because it's my only way to communicate
+
+with this sad World um and now that we
+
+have this you might as well put more
+
+enemies in there because you get to
+
+shoot more things and it's basically the
+
+same as having one enemy with a lot of
+
+Health I'm just putting six in there
+
+with a little bit of Health it just like
+
+those tiny differences might not mean
+
+much for game play actually they do but
+
+you can pretend they don't like numbers
+
+wise but it it feels better like let's
+
+do that again yeah get some see not now
+
+I'm like this game feels better I think
+
+um all right bigger bullets uh that's
+
+also important see like that's like a
+
+beginner mistake in video games people
+
+make these tiny dots for bullets because
+
+in real life the bullet is
+
+Tiny doesn't really make a lot of sense
+
+like bullets in video games should be at
+
+least like the size of of your chest or
+
+something um but this is still kind of
+
+weird you know so let's make him like at
+
+a little muzzle flesh this is like the
+
+Cheap Trick we always use in flamer
+
+games it's just the first frame of your
+
+bullet Sprite just make it a
+
+circle hey muzzle
+
+flesh that's what all the first person
+
+shooters have
+
+um and fostter bullets because that just
+
+feels way better
+
+right so now now we're talking like this
+
+is not a a really shitty game anymore it
+
+has big bullets that move fast and a
+
+little muzzle flash um I don't know what
+
+did I put in after this um less accuracy
+
+because it looks more
+
+fun and it actually influences gameplay
+
+a little bit like but that that I don't
+
+know I just felt at this point while
+
+programming the presentation that was a
+
+good thing to add and it makes it less
+
+boring to watch it and this is pretty
+
+much all there is to watch it with this
+
+game it's all about shooting you know
+
+it's a Mindless stupid game so make it
+
+look different every single
+
+time and impact effects like see that
+
+little thing playing when I hit a wall
+
+or an
+
+enemy that
+
+makes like bullets stop disappearing
+
+it's like hey something hit here uh and
+
+it's like not a lot of work you can all
+
+add this in in no time at least I can uh
+
+and a little animation when enemies get
+
+hit because like that that red arrow
+
+going back into the player's head that
+
+like that I showed earlier that's all
+
+like feedback like you communicate the
+
+changes the player put into the game and
+
+you know now I see hey this enem is
+
+getting damaged
+
+um and it's just like a white flesh and
+
+and a slightly different bows and I
+
+think their phases disappear which is
+
+kind of
+
+weird um what's
+
+next enemy knockback oh that's another
+
+one of those things that actually can uh
+
+like nobody really notices it but it can
+
+kind of influence gameplay even like you
+
+see how that guy actually fell to the
+
+right now I have a dynamic combat
+
+situation like they're they're flanking
+
+me and basically all I did was move them
+
+back a couple pixels when they get hit
+
+um because like that's what happens when
+
+you get shot in real life
+
+too
+
+um permanence this is something super
+
+important like why leave the [ __ ]
+
+battle empty after it's over like now
+
+I'm here sending hey look I killed 1 two
+
+three four five six seven dudes there
+
+was combat here and like if I return
+
+here later from this great Corridor of
+
+level design I can see oh I already went
+
+to this place I have to go back um or
+
+whatever um that's something that's
+
+super important to us like to put some
+
+kind of sense of previous combat in our
+
+games like not just leave it empty and
+
+and computers are super good nowadays
+
+right you could just put a million
+
+corpses in there and your computer would
+
+be like oh they don't have to disappear
+
+like that stuff is fine nowadays and let
+
+me just move all the way back to nuclear
+
+drone like you see two magots down there
+
+that are still alive but most of it is
+
+just rubble and dead things and it
+
+doesn't do anything to the game but it
+
+just shows you yeah you're
+
+a basically a guy made out of muscles
+
+and you shoot things um and that's also
+
+why in movies shootouts in bars are so
+
+good because every bullet that misses
+
+actually hits a bottle um that kind of
+
+stuff is important like all the props in
+
+Nuclear Throne in this game they with
+
+like cacti and stuff sing in that
+
+they're just there not to influence
+
+anything but when you miss a shot
+
+something actually happens um now I have
+
+to move all the way back to where we
+
+were um but that that sense of
+
+permanence is really
+
+important
+
+um camera lurp like a lurp is something
+
+that I think it means linear
+
+interpolation yeah I got it right um so
+
+now the camera just slightly lags behind
+
+the player and kind of smoothes in I
+
+don't know if you even notice but it
+
+feels better to move around like this
+
+stuff and this
+
+stuff like you that's the thing about
+
+game Fu those are the little details
+
+that you don't really notice but you
+
+feel Ito um but this camera still sucks
+
+like camera work is important the game
+
+is not here to show you the player
+
+because this game is not about the
+
+player this game is about shooting
+
+things and you're shooting things in
+
+front of you so we might as well do this
+
+and like move the camera around a bit um
+
+and show show you what's happening a bit
+
+more tiny thing but it's important like
+
+this camera works so much better than
+
+this little thing and it's just two
+
+steps in my
+
+presentation
+
+um yeah in Loof trousers uh a game
+
+that's coming out sometime in
+
+2017 uh like the camera is super Dynamic
+
+um and it doesn't only follow the player
+
+it also like mooves slightly head where
+
+you're aiming when you're nearing the
+
+water the the camera kind of moves down
+
+and says hey there's water here and all
+
+the bullets are kind of put into this
+
+big bow of mathematics and it calculates
+
+like the center point of all the bullets
+
+and the camera slightly shifts there so
+
+when you're flying you don't really see
+
+that stuff but it's like hey is the
+
+camera slightly moving this way or I
+
+better Dodge and you dodge and then a
+
+bullet flies from off screen and you
+
+don't die and it feels super good um and
+
+it's it's like just spend a lot of time
+
+on that stuff it's really important so
+
+what's next screen shake so this is
+
+something that kind of became a a thing
+
+vamir is known for or something but
+
+that's just because it's like when
+
+someone shows you a game and they ask
+
+how to improve it usually the answer is
+
+a add some screen Shake because nobody
+
+does it and it's super easy and it makes
+
+your game better like see how it's
+
+shaking just a little bit this guy feels
+
+good like he's just shooting and stuff's
+
+happening like this guy is sad this guy
+
+is happy and especially when you shoot
+
+stuff like yeah
+
+yeah see game f that's what what we're
+
+talking about um play your knockback as
+
+well that's also one of those
+
+things now it's also a gameplay mechanic
+
+like I don't have to walk I could play
+
+the game just shooting which means more
+
+use out of my primary way to interact
+
+with the world but also when moving
+
+forward I'm moving slower when I'm
+
+shooting so maybe I should stop shooting
+
+um
+
+if you put a button in a game like a
+
+firing button give someone a reason to
+
+not press it uh even if it's something
+
+tiny like this
+
+knockback um otherwise you might as well
+
+remove the firing button and just have a
+
+game that automatically fires
+
+always uh yeah that's and you get
+
+dangerous situations like this with a
+
+bit of lava and I'm like oh no I have to
+
+fire a bullet no and I can float in
+
+midair uh and then I die that's
+
+cool sleep so this is little command
+
+which basically passes the game for a
+
+couple of milliseconds you could just
+
+code it yourself I use Game maker and
+
+it's called sleep I don't know anything
+
+about programming really um but what it
+
+does it it just pauses the game for a
+
+couple of milliseconds and I use that in
+
+moments of impact so when I hit an enemy
+
+it will pause for 20 milliseconds or
+
+something and your brain won't notice
+
+that but kind of use that time to
+
+process what's happening a bit more so
+
+all the moments that I want to have
+
+impact your brain is like oh yeah I
+
+remember that more because it took
+
+longer but you don't notice and I don't
+
+understand how brains work but I don't
+
+know that's my theory so nobody really
+
+notices it but like I put some tiny
+
+sleeves in there when you hit a PL enemy
+
+and um also when they die and the
+
+difference between
+
+this and this it's like tiny but it it
+
+like you you can feel that stuff and
+
+that's why I uploaded that presentation
+
+even though nobody here is playing it
+
+right now I don't know why probably
+
+because you don't have oh good one
+
+person um but like when you're playing
+
+it two persons yes very good when you
+
+three three people awesome um good
+
+people when you're when you're playing
+
+it like that you actually feel the
+
+difference um and that's kind of what
+
+fuel is about you can't like this is
+
+really stupid why is everybody watching
+
+it why why isn't everybody standing
+
+behind my computer pressing buttons like
+
+that would be way better next year we'll
+
+have 200 keyboards here for everybody
+
+under your
+
+chair um gun delay this is just kind of
+
+a bug that looked cool like my gun is
+
+now lagging behind me so I put it in the
+
+game look like he's carrying
+
+it and now the gun also kicks back like
+
+boom boom
+
+feels more powerful like tiny little
+
+detail and it makes your game better uh
+
+strafing I just at this point while I
+
+was cutting this presentation I was like
+
+hey it feels kind of cool if I can just
+
+kind of walk backwards while shooting
+
+and
+
+then if I flip it changes that way and
+
+that's also a reason to not press the
+
+the firing button which is good even if
+
+it's just like half a second so I can
+
+turn around but that's that's strategy
+
+um more permanence oh yeah I put little
+
+shells in and they stay forever because
+
+computers nowadays can handle shells
+
+that stay forever they don't have to
+
+disappear after all I could just do this
+
+all day just cover the
+
+floor and then later when I'm walking
+
+back here from defeating some boss or
+
+something like oh yeah I shot a lot of
+
+bullets there that was fun and I can
+
+actually count how many bullets I shot
+
+um to check if the achievements were
+
+correct or whatever
+
+um if you're patri you could also add
+
+like physics to the shells and they pile
+
+up that would would be cool and you can
+
+like swim in the
+
+shells someone make that game please
+
+Petri
+
+[Music]
+
+because now there's not much use just
+
+standing here they just end up in the
+
+same spots so I or whatever um more Bas
+
+in the sign effect
+
+effect so this is a funny little story
+
+um
+
+man um I I was talking to uh a guy who
+
+is like senior designer at BioWare now
+
+but he used to work at Raven software M
+
+here he's super cool and he told me that
+
+one time while I was working on some
+
+firstperson shooter they had a gun and
+
+it wasn't very popular and the investors
+
+were like oh man that gun sucks you
+
+should go and fix it like the game play
+
+is bad and he went to his computer he
+
+opened ad desity or something opened the
+
+gunshot sound effect and click like bass
+
+boost 12 dibs and put it back in the
+
+game and he's like all right I fixed the
+
+game play handed the computer to the
+
+investors and they were like oh yeah
+
+that feels good and that stuff is still
+
+in that video game I I think it was like
+
+the the Wolfenstein reboot not the
+
+recent one but the one before that and
+
+it's like one of the most popular game
+
+guns in that game like add more Bas to
+
+your sound effects it's easy and listen
+
+to that and listen to this who wants to
+
+play this raise your hands
+
+see who wants to play this like a couple
+
+of people
+
+see oh and then you can make your
+
+machine gun shoot like this because it's
+
+a video game and that's easy to program
+
+once you have those bullets and the
+
+accuracy thing um I forgot to make the
+
+the gun shoot like three shells so just
+
+imagine it's like a special type of ammo
+
+with three things or something but like
+
+this this makes video gamees better in
+
+nuclear trone the first weapon is a
+
+pistol the second weapon we programmed
+
+was a triple machine gun just because we
+
+had a bullet and we could do that you
+
+know if you're making an action game you
+
+might as well make a proper action
+
+game random explosions I don't know this
+
+doesn't have much to do with gamefield
+
+but I figured I could add like a a 33%
+
+chance all the enemies exploded on death
+
+see and that stuff feels
+
+good even if it makes no sense
+
+oh now we have faster enemies as well
+
+because I I think the game play was
+
+getting a bit easier because of the
+
+random
+
+explosions so now they're faster and it
+
+feels like more action like if you see
+
+this stuff this is like a proper action
+
+game happening here right that that
+
+looks like something that's kind of
+
+promising
+
+[Music]
+
+yeah look at that gun kick like that
+
+stuff is good right
+
+it's just like free pixels in the art is
+
+really bad but it works um more
+
+enemies because they're faster but we
+
+have random explosions and we might as
+
+well make it look even more like an
+
+action game
+
+I yeah get some I I'm I'm just going to
+
+do this all day and stop talking
+
+now all right
+
+oh even higher rate of fire because now
+
+we have more enemies and we might as
+
+well
+
+like because you can and it's easy you
+
+just change the
+
+value um so that camera kick is
+
+something I wanted to add separately but
+
+I forgot about it so I added it in in
+
+this step of the game so I didn't have
+
+to change all the code what are you
+
+doing so I just have to do
+
+this yeah um so that camera kick is a
+
+little trick I figured out while making
+
+Lu risers instead of just having random
+
+shake it also moves the camera back a
+
+little bit like if you look to the right
+
+you can see this oh that's also my kick
+
+back though but basically my it just
+
+moves the camera in the opposite
+
+direction of the direction I'm shooting
+
+in that stuff also feels good and it's
+
+like a little cheat you can use in your
+
+games um after this talk flamb is out of
+
+business because everybody knows all our
+
+secrets uh so all of our games are
+
+cancelled I don't know ramy's probably
+
+not here so he won't get any at
+
+me
+
+um oh yeah this is the the most
+
+important game design lesson I've had um
+
+back in 2005 or something or four I
+
+wanted to make a shoot him up and I
+
+asked Cactus again uh Jonathan s like
+
+one of the guys who made Hotline Miami
+
+which is a game that's super good at
+
+that permanent stuff by the way like you
+
+kill a lot of people you walk to the
+
+next floor and you kill a lot of more
+
+people and then you walk all the way
+
+back through the Sea of corpses and they
+
+actually use that that in a meaningful
+
+way as well it gets you thinking so they
+
+involve like the the
+
+whole um Fel part of the cycle with the
+
+thinking cycle which is super clever um
+
+anyway he told I asked him how do you
+
+make good arcade games and he told me
+
+make really big explosions uh and I've
+
+been working by that lesson ever since
+
+and look at
+
+this like see now the explosions are
+
+better because they're bigger
+
+[Music]
+
+I don't know why why I started out with
+
+this small explosion but look at this
+
+and the explosions are just like a
+
+circle that that flashes from black to
+
+white and it works I
+
+think so that's game Fu um even more
+
+permanence I think here I added like
+
+simple smoke to the explosions so that
+
+after a battle you can kind of see the
+
+smoke fade away and it's like
+
+yeah and you could take this to an
+
+extreme level like this is just
+
+scratching the surface like you could
+
+add Gibbs and heads flying everywhere
+
+and whatever you want like but just work
+
+on that stuff um but there's one thing
+
+missing from this game which is
+
+like game play because I can interact
+
+with the world but the world does not
+
+really interact with me like they're
+
+just kind of
+
+getting shot it's
+
+horrible almost feel sorry for them so
+
+what this game needs is meaning like
+
+whenever you're making a game make sure
+
+that there's
+
+like the things that you want to happen
+
+are in there don't play it as your game
+
+it's like yeah if you hit an enemy just
+
+press restart that stuff sucks like
+
+don't do that program that game over
+
+State add some meaning to your game
+
+which is what I'm doing right now which
+
+is like step number 40 in making
+
+and it's true I was shooting all this
+
+things that just wanted to like kind of
+
+chill and walk around like I wanted that
+
+to be more dramatic though like let me
+
+just try and kill most of them first
+
+because now I have something to fight
+
+for and there's this last guy he was
+
+meant to kill me like and then I could
+
+could do this and like all I just paed
+
+it but did you see how I just like put
+
+the frame rate at 10 frames per second
+
+because you won't notice on a shitty
+
+Beamer and it looks like I program slow
+
+motion
+
+um just do things like
+
+that and then it speeds up again when I
+
+hit the floor and it says you were the
+
+monster all along it should say that um
+
+yeah and that's basically uh how you
+
+make your game feel better let's compare
+
+this
+
+this to
+
+this I can't even strafe like what kind
+
+of shitty game is that and there's no
+
+meaning I'm
+
+just I want to do this like this is what
+
+what video games should be like they
+
+should have meaning and triple machine
+
+guns at least action
+
+games and this guy could be there to to
+
+put a message out to the masses and
+
+that's pretty much all I have to say on
+
+game feel like just fill your games with
+
+love and Tiny details and are there any
+
+applauses or
+
+[Music]
+
+questions thank you young Willam that's
+
+great um anybody from the room questions
+
+yeah
+
+shot
+
+hi hello uh I want to know what's your
+
+view on uh balancing the game like how
+
+many enemies how many ammo how long the
+
+level takes
+
+um yeah about balancing your game like
+
+how many enemies how many how much ammo
+
+um that totally depends on your game
+
+like with Super Crate bux we tried
+
+making a game that didn't even need ammo
+
+so we put boxes everywhere that change a
+
+weapon and that's the only way to
+
+progress through the game um so that
+
+game was automatically balanced and we
+
+didn't have to balance the weapons
+
+because you had to pick them up anyway
+
+and they're all super
+
+unbalanced um I don't know like it
+
+really depends on your game and you have
+
+to kind of trust your initial gut
+
+feeling and then stop playing your game
+
+yourself because you're the worst play
+
+tester in the world because you just are
+
+too close to your game and there are way
+
+more other people than there are you um
+
+so just get those other people and have
+
+them play your game and work with that
+
+just keep
+
+iterating that's my answer I guess cuz
+
+that's an important point because I
+
+guess what you're saying is when is it
+
+too much like that there was you started
+
+with something that wasn't enough and
+
+you've added stuff and added stuff and
+
+added stuff so when is it enough when is
+
+it too much too much actually we had to
+
+put like an option in nuclear drone to
+
+disable the screen Shake because some
+
+people were getting really nauseous okay
+
+and I guess like a warning with screen
+
+Shake is that it gets kind of addictive
+
+and you get used to it and you put a ton
+
+of it in your games and you stop
+
+noticing it and then everybody else
+
+throws up when they play it yeah and
+
+then you do a play test and then you do
+
+a play test you're like oh that's cool
+
+yeah and then and then you keep it and
+
+you don't listen to anybody what anybody
+
+say you should totally like don't don't
+
+put things in your game that hurt people
+
+physically other than that just just
+
+keep adding it until you're out of money
+
+yeah but how much uh like you just said
+
+something really important where after a
+
+while you're the one who designed it so
+
+you don't really see things as well well
+
+as people who haven't played yet yeah
+
+what happens how do you I mean I know
+
+you in our building and you invite
+
+people in in your office and have have
+
+and play has anything fun I mean does
+
+does that have a fundamental impact on
+
+on the game way I was at Brandon Chun
+
+talk before this and he was saying like
+
+you're super close to your game
+
+especially with a small uh
+
+team and it's super hard to look at it
+
+objectively yeah um so you got other
+
+people for that and when you're playing
+
+your game that's I'm just copying his
+
+words now like I copied patri Martin's
+
+talk uh it's really easy um and he was
+
+saying that um now I forgot what he said
+
+actually um he he was saying that when
+
+you're um playing your own game you're
+
+kind of subconsciously avoiding bugs and
+
+like oh yeah there's a problem here but
+
+I'm going to ignore it and yeah this
+
+game is a lot of fun and when someone
+
+else plays it it might turn out they
+
+have no clue how things work or they
+
+totally break your game and it's not fun
+
+for them so that's that weird thing
+
+about games where like how does this
+
+work where like you have this thing and
+
+it doesn't mean anything you need this
+
+person before it starts being something
+
+and there are I don't know like how many
+
+people are there on this planet like a
+
+lot yeah and there's only one of you so
+
+you have to make it the game for them I
+
+guess guess like make the game you want
+
+to make make it fun for you but test it
+
+on them yeah and one of the reasons I
+
+ask you to do this is because I noticed
+
+when you were making Loof throwers you
+
+were spending a lot of time getting the
+
+actual last minute like how fast does it
+
+go left right up down it has this really
+
+it feels very easy it's not as easy as
+
+it feels but it feels great to to to
+
+steer the plane and you spend a lot of
+
+time on that how much time did you spend
+
+on that compared to like the rest of the
+
+process like setting up the game like
+
+there's two sides to that like with L
+
+rers we set out out to make it a game
+
+that feels great to play for everybody
+
+like I give you the computer and you
+
+launch and you start blowing up things
+
+and you feel like oh yeah I'm the
+
+coolest fighter pilot in the world and
+
+that was the goal with that game but
+
+you're a really bad player and your
+
+score sucks but it still feels really
+
+good for you yeah that that worked for
+
+me really well my score sucked but I I
+
+felt like I was really good that's fine
+
+where whereas with superg great box we
+
+had a fight about I said it's way too
+
+hard it's way too hard you're was like
+
+no no it's supposed to be this way yeah
+
+like there's a difference between hard
+
+and short games but that's a whole other
+
+story okay um but
+
+um the the the thing well oh yeah how
+
+much time we how much time compared to
+
+the setting the game up make our games
+
+in a couple of days and then we spend
+
+the year polishing them and that like we
+
+have those basics in there if you look
+
+at our very first prototype of luzes
+
+it's pretty much the same game and it
+
+just lacks a menu and then we spend a
+
+year making a menu because that's no fun
+
+at all like I want to make those effects
+
+that's pretty much how it works and
+
+during that year you have to make that
+
+stupid menu um you spend a lot of time
+
+tweaking the rest and it just keeps
+
+changing and you try to make it feel as
+
+good as it can for you like in a way I
+
+guess the flamber games feel really good
+
+to us mainly like it's kind of my idea
+
+of what feels good like triple machine
+
+guns and shooting lots of things that
+
+flash when you hit them and and randomly
+
+explode um and that's not for everybody
+
+but at least it makes our game super
+
+unique and that's I guess what you call
+
+that flamb beer feel or whatever yeah
+
+and do you think the platform has a lot
+
+of impact on this like if you change
+
+from a PC controlled game to say the
+
+Vita or something the way of input
+
+matters like this guy is using a a game
+
+pad yeah and that changes that purple
+
+arrow and the purple Arrow I don't know
+
+um but it it feels different um but I
+
+don't know other than that comp you guys
+
+have have had other companies build
+
+versions for you or other people um and
+
+sometimes it doesn't really work out
+
+like it it doesn't feel as good as the
+
+original prototype like the original
+
+radical fishing was made in game maker
+
+and then Ramy ported it to flesh and I
+
+still secretly think that the game maker
+
+version is better okay so there's real
+
+subtle things Ry messing up oh that's
+
+Ramy yeah of course anybody else
+
+questions about this yeah go ahead use
+
+feedb like uh
+
+um haptic feedback actually I have never
+
+used that and I kind of wanted in I
+
+think in Lu rer someone else did that um
+
+but yeah that stuff is super cool but I
+
+haven't really worked with it which is
+
+super weird um yeah but I kind of want
+
+to make a computer with a screen that
+
+physically shakes would be cool okay
+
+well we can do a play test with that I
+
+can shake the screen for if you do that
+
+we'll invite you back to uh expl about
+
+that again yeah anybody yeah uh yes I
+
+heard uh the screen shaking was a bug is
+
+that true like what uh buck and Game
+
+maker and uh friend of my
+
+um teacher told me uh he worked with you
+
+and um that the screen shaking was a bug
+
+but you uh keep it in I don't I don't
+
+know about that I've always like there's
+
+this weird thing in in super low
+
+resolution games where making a camera
+
+follow something smoothly is really hard
+
+so it kind of looks like it's shaking
+
+but that's something we don't really
+
+want like all this kind
+
+of see the background color actually
+
+changes but this kind of shake that's
+
+all like hand coated and intentional uh
+
+and it wasn't like an accident I don't
+
+know who invented screen Shake but I
+
+also would like to say that probably
+
+every game would benefit from having
+
+screen Shake even if you're like oh my
+
+puzzle game doesn't need screen Shake
+
+you're
+
+wrong and explosions of course right
+
+right here
+
+yeah do you actually Market games uh
+
+using the screen Shake is this very
+
+prominent in everything you do and do
+
+you put it forward when you release
+
+something or is it something you let
+
+players find out and have them just get
+
+the game because of the gameplay well
+
+the the thing with these things it is if
+
+you just put them in the game and you
+
+put the game out people will be like
+
+yeah this game is fun and it feels good
+
+but they don't know why and they don't
+
+really care about it like if it's not
+
+there they say hey this game sucks um if
+
+it's there they just play and they're
+
+happy and I guess what we do at V what
+
+makes our games kind of different uh oh
+
+I also added like a little clout when
+
+you jump by the way um but what makes
+
+our games kind of different to uh a lot
+
+of other Studios is that we put a lot of
+
+time into these things so we kind of
+
+have to tell people that hey look at
+
+that it it feels good that's the flamb
+
+beer thing yeah marketing
+
+um and Screen Shake is like a super
+
+simple example of that because you I
+
+just spent like 30 minutes just showing
+
+tiny little things that I keep adding
+
+and no player without seeing this
+
+presentation is going to understand that
+
+or feel it or well they feel it but
+
+don't think about it and Screen Shake is
+
+like the most most basic example that's
+
+like the the the one great thing that's
+
+the great thing of these things I don't
+
+know I don't know how to how to say
+
+words uh but screen Shake is like an
+
+easy example of how to make games feel
+
+good great yeah anybody
+
+else no anything about Zambia or about
+
+the Studio's next big secret Project X
+
+or oh that's a good one yeah no no news
+
+are you already working on something
+
+actually we're we're having like super
+
+big news tonight but I I don't think I'm
+
+allowed to talk about that I see so so
+
+keep keep your phones near or something
+
+yeah okay
+
+excellent D Willam thank you so much uh
+
+a warm Applause for this
+
+presentation
+
+and one just one practical question how
+
+did you manage to
+
+skip between slides that you actually
+
+play is this game maker running right
+
+now yeah I programmed this whole
+
+presentation from scratch all right very
+
+nice you want to try it yes I would love
+
+to let me let me put some meaning in
+
+here here okay this is easy mode I'm
+
+going to start the just press this
+
+button that's all you need to do okay
+
+hang on all right do you want me to hold
+
+the microphone and you can tell them
+
+about your feelings oh how I feel ah I
+
+can see you're getting back at me oh
+
+this is before he can die right so
+
+that's kind of nice you press D you get
+
+meaning oh D is meaning yeah okay that
+
+means that if I don't oh my gosh how do
+
+you feel about this that's very
+
+meaningful how you feel about about
+
+shooting those enemies before when they
+
+couldn't even hurt you well it feels
+
+more balanced now but don't you feel
+
+like
+
+guilt for killing them yeah how do you
+
+restart uh you can press s s to reload
+
+this thing okay so this whole
+
+presentation is
+
+available okay we were asking for it can
+
+we go yeah can we go a few slides back
+
+before you death press a a that goes
+
+back so you can download this whole
+
+presentation online uh and shoot things
+
+as well
+
+awesome it feels good right yeah it does
+
+feel very good so so if you press D
+
+again yeah then you go to like the
+
+original version how are you how do you
+
+feel now it's it's very lame
+
+are you are you having fun do you see
+
+promise in this prototype yes would you
+
+like to fund it with the Dutch game
+
+Garden Oh Absolut absolutely I would put
+
+all my money into this cool yeah and um
+
+what is it with zombies they're not
+
+zombies oh okay that's why do you think
+
+they're
+
+zombies are you dodging my questions um
+
+I'm I'm not very good at multitasking
+
+but but um you can't die so oh that's
+
+right I don't have to be afraid of these
+
+guys but why do you why do you think
+
+they're
+
+zombies uh well maybe that's kind of a
+
+cliche but I guess they're more like a
+
+skeletal guy right yeah I don't know
+
+little skulls maybe they're just wearing
+
+musks and they're like trick or treat
+
+did you actually have shooting
+
+them did you actually have Paul Paul
+
+make special Graphics I made all the
+
+graphics oh you did awesome wow that's
+
+my my secret skill I anim made hair is
+
+that your hair yeah I I need a haircut
+
+okay yeah thank you awesome thank you
+
+very much I'm really
+
+
