@@ -21,6 +21,9 @@ export type PlacementResult = {
   board: BoardState
   clearedCellIds: CellId[]
   clearedPatterns: Pattern[]
+  // All cells that became filled as a result of placing the piece
+  // (i.e. the raw footprint of the piece before any clears are applied).
+  placedCellIds: CellId[]
   pointsGained: number
   comboMultiplier: number
   streakMultiplier: number
@@ -260,7 +263,8 @@ export const applyPlacement = (
   if (!canPlace) return null
 
   const board: BoardState = { ...current.board }
-  for (const id of canPlace.targetCellIds) {
+  const placedCellIds = [...canPlace.targetCellIds]
+  for (const id of placedCellIds) {
     board[id] = 'filled'
   }
 
@@ -311,6 +315,7 @@ export const applyPlacement = (
       board,
       clearedCellIds: [],
       clearedPatterns: [],
+      placedCellIds,
       pointsGained: 0,
       comboMultiplier: 1,
       streakMultiplier: 1,
@@ -385,6 +390,7 @@ export const applyPlacement = (
     board,
     clearedCellIds,
     clearedPatterns,
+    placedCellIds,
     pointsGained,
     comboMultiplier,
     streakMultiplier,

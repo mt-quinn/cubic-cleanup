@@ -615,6 +615,11 @@ function App() {
     Record<string, string[]>
   >({})
   const [clearingGoldenCellId, setClearingGoldenCellId] = useState<string | null>(null)
+  const [recentlyPlacedCells, setRecentlyPlacedCells] = useState<string[]>([])
+  const [failedPlacementPieceId, setFailedPlacementPieceId] = useState<string | null>(
+    null,
+  )
+  const [invalidDropCellIds, setInvalidDropCellIds] = useState<string[]>([])
   const [scorePopup, setScorePopup] = useState<string | null>(null)
   const [scorePopupId, setScorePopupId] = useState(0)
   const [showScoring, setShowScoring] = useState(false)
@@ -738,7 +743,11 @@ function App() {
     return bestId
   }
 
-  const placePieceAtCell = (pieceId: string, cellId: string) => {
+  const placePieceAtCell = (
+    pieceId: string,
+    cellId: string,
+    attemptedCellIds?: string[],
+  ) => {
     setGame((current) => {
       if (current.gameOver) return current
       const piece = current.hand.find((p) => p.id === pieceId)
@@ -746,7 +755,19 @@ function App() {
 
       const before = current
       const result = applyPlacement(current, piece, cellId)
-      if (!result) return current
+      if (!result) {
+        setFailedPlacementPieceId(pieceId)
+        // When placement fails, highlight the whole attempted footprint
+        // if the caller provided it; otherwise fall back to the origin cell.
+        setInvalidDropCellIds(
+          attemptedCellIds && attemptedCellIds.length > 0
+            ? attemptedCellIds
+            : [cellId],
+        )
+        return current
+      }
+
+      setRecentlyPlacedCells(result.placedCellIds)
 
       // Build per-cell clearing classes so we can drive different
       // animations for lines vs flowers (center vs ring).
@@ -910,7 +931,16 @@ function App() {
 
   const handleCellClick = (cellId: string) => {
     if (!selectedPieceId) return
-    placePieceAtCell(selectedPieceId, cellId)
+    const piece = selectedPiece
+    const previewForDrop =
+      piece && cellId
+        ? getBestPlacementPreview(cellId, piece, game)
+        : null
+    placePieceAtCell(
+      selectedPieceId,
+      cellId,
+      previewForDrop?.targetIds ?? undefined,
+    )
   }
 
   const resetGame = () => {
@@ -1003,6 +1033,23 @@ function App() {
     }, 600)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
+
+  useEffect(() => {
+    if (recentlyPlacedCells.length === 0) return
+    const timeout = window.setTimeout(() => {
+      setRecentlyPlacedCells([])
+    }, 700)
+    return () => window.clearTimeout(timeout)
+  }, [recentlyPlacedCells])
+
+  useEffect(() => {
+    if (!failedPlacementPieceId && invalidDropCellIds.length === 0) return
+    const timeout = window.setTimeout(() => {
+      setFailedPlacementPieceId(null)
+      setInvalidDropCellIds([])
+    }, 480)
+    return () => window.clearTimeout(timeout)
+  }, [failedPlacementPieceId, invalidDropCellIds])
 
   useEffect(() => {
     if (!goldenPopupCellId) return
@@ -1192,13 +1239,23 @@ function App() {
         )
       }
       const pieceId = dragState.current.pieceId
+      // Compute the full attempted footprint for visual feedback even if
+      // placement turns out to be invalid.
+      let attemptedCellIds: string[] | undefined
+      if (cellId && pieceId) {
+        const piece = game.hand.find((p) => p.id === pieceId) ?? null
+        if (piece) {
+          const previewForDrop = getBestPlacementPreview(cellId, piece, game)
+          attemptedCellIds = previewForDrop?.targetIds
+        }
+      }
       dragState.current.pointerId = null
       dragState.current.pieceId = null
       dragState.current.pointerType = null
       setDraggingPieceId(null)
       setGhost(null)
       if (cellId && pieceId) {
-        placePieceAtCell(pieceId, cellId)
+        placePieceAtCell(pieceId, cellId, attemptedCellIds)
       }
       setHover(null)
     }
@@ -1375,6 +1432,7 @@ function App() {
             ref={svgRef}
             viewBox={`0 0 ${BOARD_LAYOUT.width} ${BOARD_LAYOUT.height}`}
           >
+            {/* Board hull behind everything */}
             {BOARD_OUTLINE_SEGMENTS.map((seg, idx) => (
               <line
                 key={`outline-back-${idx}`}
@@ -1395,109 +1453,171 @@ function App() {
                 className="hexaclear-board-outline-front"
               />
             ))}
-            {BOARD_DEFINITION.cells.map((cell) => {
-              const pos = BOARD_LAYOUT.positions[cell.id]
-              const cx = pos.x + BOARD_LAYOUT.offsetX
-              const cy = pos.y + BOARD_LAYOUT.offsetY
-              const points = buildHexPoints(cx, cy)
+            {(() => {
+              const hasRipple = recentlyPlacedCells.length > 0
+              const rippleDelayById: Record<string, number> = {}
 
-              const isFilledLogical = game.board[cell.id] === 'filled'
-              const isClearing = clearingCells.includes(cell.id)
-              const isFilled = isFilledLogical || isClearing
-              const inPreview =
-                !isClearing &&
-                preview &&
-                preview.targetIds.includes(cell.id)
-              const willClearInPreview =
-                preview && preview.clearedIds.includes(cell.id)
-              const previewValid = preview?.valid ?? false
+              if (hasRipple) {
+                const cellSet = new Set(BOARD_DEFINITION.cells.map((c) => c.id))
+                const visited = new Set<string>()
+                const queue: { id: string; dist: number }[] = []
 
-              const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
-              const isDailyTarget =
-                game.mode === 'daily' && dailyHitsForCell > 0
-              const isGolden =
-                game.mode === 'endless' &&
-                (clearingCells.length > 0
-                  ? clearingGoldenCellId != null &&
-                    clearingGoldenCellId === cell.id
-                  : game.goldenCellId != null &&
-                    game.goldenCellId === cell.id)
+                for (const id of recentlyPlacedCells) {
+                  if (!cellSet.has(id) || visited.has(id)) continue
+                  visited.add(id)
+                  queue.push({ id, dist: 0 })
+                }
 
-              const clearingClasses = clearingClassesByCell[cell.id] ?? []
+                const STEP_MS = 70
 
-              return (
-                <g key={cell.id}>
-                  <polygon
-                    points={points}
+                while (queue.length > 0) {
+                  const { id, dist } = queue.shift()!
+                  rippleDelayById[id] = dist * STEP_MS
+                  const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
+                  if (!cell) continue
+                  for (const dir of directions) {
+                    const neighborId = axialToId(addAxial(cell.coord, dir))
+                    if (!cellSet.has(neighborId) || visited.has(neighborId)) {
+                      continue
+                    }
+                    visited.add(neighborId)
+                    queue.push({ id: neighborId, dist: dist + 1 })
+                  }
+                }
+              }
+
+              return BOARD_DEFINITION.cells.map((cell) => {
+                const pos = BOARD_LAYOUT.positions[cell.id]
+                const cx = pos.x + BOARD_LAYOUT.offsetX
+                const cy = pos.y + BOARD_LAYOUT.offsetY
+                const points = buildHexPoints(cx, cy)
+
+                const isFilledLogical = game.board[cell.id] === 'filled'
+                const isClearing = clearingCells.includes(cell.id)
+                const isFilled = isFilledLogical || isClearing
+                const inPreview =
+                  !isClearing &&
+                  preview &&
+                  preview.targetIds.includes(cell.id)
+                const willClearInPreview =
+                  preview && preview.clearedIds.includes(cell.id)
+                const previewValid = preview?.valid ?? false
+
+                const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
+                const isDailyTarget =
+                  game.mode === 'daily' && dailyHitsForCell > 0
+                const isRecentlyPlaced = recentlyPlacedCells.includes(cell.id)
+                const isInvalidDrop = invalidDropCellIds.includes(cell.id)
+                const isGolden =
+                  game.mode === 'endless' &&
+                  (clearingCells.length > 0
+                    ? clearingGoldenCellId != null &&
+                      clearingGoldenCellId === cell.id
+                    : game.goldenCellId != null &&
+                      game.goldenCellId === cell.id)
+
+                const clearingClasses = clearingClassesByCell[cell.id] ?? []
+
+                let rippleClass = ''
+                let rippleStyle: { animationDelay: string } | undefined
+                if (hasRipple) {
+                  const delay = rippleDelayById[cell.id] ?? 0
+                  rippleClass = 'ripple-active'
+                  rippleStyle = { animationDelay: `${delay}ms` }
+                }
+
+                return (
+                  <g
+                    key={cell.id}
                     className={[
-                      'hexaclear-hex',
-                      isFilled ? 'filled' : 'empty',
-                      isClearing ? 'clearing' : '',
-                      willClearInPreview ? 'preview-clear' : '',
-                      ...clearingClasses,
-                      inPreview
-                        ? previewValid
-                          ? 'preview-valid'
-                          : 'preview-invalid'
-                        : '',
+                      'hexaclear-cell',
+                      isInvalidDrop ? 'invalid-drop' : '',
+                      rippleClass,
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`${
-                      isFilled ? 'Filled' : 'Empty'
-                    } cell at ${cell.coord.q}, ${cell.coord.r}`}
-                    onMouseEnter={() => setHover({ cellId: cell.id })}
-                    onMouseLeave={() => setHover(null)}
-                    onClick={() => handleCellClick(cell.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleCellClick(cell.id)
-                      }
-                    }}
-                  />
-                  {!isFilledLogical && !inPreview && !willClearInPreview && (
-                    <SlotGeometry cx={cx} cy={cy} />
-                  )}
-                  {isFilled && (
-                    <CubeLines
-                      cx={cx}
-                      cy={cy}
-                      variant={
-                        isDailyTarget
-                          ? 'dailyTarget'
-                          : isGolden
-                          ? 'golden'
-                          : 'normal'
-                      }
-                      dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
-                      extraClasses={clearingClasses}
+                    style={rippleStyle}
+                  >
+                    <polygon
+                      points={points}
+                      className={[
+                        'hexaclear-hex',
+                        isFilled ? 'filled' : 'empty',
+                        isClearing ? 'clearing' : '',
+                        isInvalidDrop ? 'invalid-drop' : '',
+                        willClearInPreview ? 'preview-clear' : '',
+                        ...clearingClasses,
+                        inPreview
+                          ? previewValid
+                            ? 'preview-valid'
+                            : 'preview-invalid'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={rippleStyle}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${
+                        isFilled ? 'Filled' : 'Empty'
+                      } cell at ${cell.coord.q}, ${cell.coord.r}`}
+                      onMouseEnter={() => setHover({ cellId: cell.id })}
+                      onMouseLeave={() => setHover(null)}
+                      onClick={() => handleCellClick(cell.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleCellClick(cell.id)
+                        }
+                      }}
                     />
-                  )}
-                  {game.mode === 'endless' &&
-                    goldenPopupCellId === cell.id && (
+                    {!isFilledLogical && !inPreview && !willClearInPreview && (
+                      <SlotGeometry cx={cx} cy={cy} />
+                    )}
+                    {isFilled && !isRecentlyPlaced && (
+                      <CubeLines
+                        cx={cx}
+                        cy={cy}
+                        variant={
+                          isDailyTarget
+                            ? 'dailyTarget'
+                            : isGolden
+                            ? 'golden'
+                            : 'normal'
+                        }
+                        dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                        extraClasses={[
+                          ...clearingClasses,
+                          isInvalidDrop ? 'invalid-drop' : '',
+                        ].filter(Boolean)}
+                      />
+                    )}
+                    {game.mode === 'endless' &&
+                      goldenPopupCellId === cell.id && (
+                        <text
+                          x={cx}
+                          y={cy - HEX_SIZE * 0.5}
+                          className="hexaclear-golden-popup"
+                        >
+                          +10
+                        </text>
+                      )}
+                    {DEBUG_SHOW_COORDS && (
                       <text
                         x={cx}
-                        y={cy - HEX_SIZE * 0.5}
-                        className="hexaclear-golden-popup"
+                        y={cy + 4}
+                        className="hexaclear-debug-label"
                       >
-                        +10
+                        {cell.coord.q},{cell.coord.r}
                       </text>
                     )}
-                  {DEBUG_SHOW_COORDS && (
-                    <text
-                      x={cx}
-                      y={cy + 4}
-                      className="hexaclear-debug-label"
-                    >
-                      {cell.coord.q},{cell.coord.r}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
+                  </g>
+                )
+              })
+            })()}
+            {/* Rosette boundaries should sit above the static board but below
+                the final cube pop overlay so the highlight never hides the
+                animation. */}
             {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
               <line
                 key={idx}
@@ -1508,12 +1628,56 @@ function App() {
                 className="hexaclear-flower-boundary"
               />
             ))}
+
             {preview && selectedPiece && hover?.cellId && !preview.valid && (
               <PlacementGhost
                 originCellId={hover.cellId}
                 piece={selectedPiece}
                 valid={false}
               />
+            )}
+
+            {/* Final overlay: any just-placed cubes get a second rendering on
+                top of everything else so the pop animation can never be
+                obscured by grid lines or rosette markers. */}
+            {recentlyPlacedCells.length > 0 && (
+              <g className="hexaclear-placed-overlay">
+                {recentlyPlacedCells.map((id) => {
+                  const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
+                  if (!cell) return null
+                  const pos = BOARD_LAYOUT.positions[cell.id]
+                  const cx = pos.x + BOARD_LAYOUT.offsetX
+                  const cy = pos.y + BOARD_LAYOUT.offsetY
+                  const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
+                  const isDailyTarget =
+                    game.mode === 'daily' && dailyHitsForCell > 0
+                  const isGolden =
+                    game.mode === 'endless' &&
+                    ((clearingCells.length > 0 &&
+                      clearingGoldenCellId != null &&
+                      clearingGoldenCellId === cell.id) ||
+                      (clearingCells.length === 0 &&
+                        game.goldenCellId != null &&
+                        game.goldenCellId === cell.id))
+                  if (game.board[cell.id] !== 'filled') return null
+                  return (
+                    <CubeLines
+                      key={`placed-overlay-${cell.id}`}
+                      cx={cx}
+                      cy={cy}
+                      variant={
+                        isDailyTarget
+                          ? 'dailyTarget'
+                          : isGolden
+                          ? 'golden'
+                          : 'normal'
+                      }
+                      dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                      extraClasses={['placed-impact']}
+                    />
+                  )
+                })}
+              </g>
             )}
           </svg>
           <div className="hexaclear-board-hud">
@@ -1936,58 +2100,61 @@ function App() {
               !!piece && selectedPieceId === piece.id
             const isDragging = !!piece && draggingPieceId === piece.id
             const isPlayable = !!piece && playablePieceIds.has(piece.id)
+            const isFailedDrop =
+              !!piece && failedPlacementPieceId === piece.id
 
             return (
-            <button
-              key={slotIndex}
-              className={[
-                'hexaclear-piece-button',
-                isSelected ? 'selected' : '',
-                isDragging ? 'dragging' : '',
-                piece && !isPlayable ? 'unplayable' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              draggable={false}
-              onDragStart={(e) => e.preventDefault()}
-              aria-label={
-                piece
-                  ? `${piece.shape.size}-cube piece`
-                  : 'Empty hand slot'
-              }
-              onClick={() => {
-                if (!piece) return
-                setSelectedPieceId(
-                  selectedPieceId === piece.id ? null : piece.id,
-                )
-                setHover(null)
-              }}
-              onPointerDown={(e) => {
-                if (!piece) return
-                e.preventDefault()
-                dragState.current = {
-                  pieceId: piece.id,
-                  pointerId: e.pointerId,
-                  pointerType: e.pointerType || null,
+              <button
+                key={slotIndex}
+                className={[
+                  'hexaclear-piece-button',
+                  isSelected ? 'selected' : '',
+                  isDragging ? 'dragging' : '',
+                  piece && !isPlayable ? 'unplayable' : '',
+                  isFailedDrop ? 'failed-drop' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                aria-label={
+                  piece
+                    ? `${piece.shape.size}-cube piece`
+                    : 'Empty hand slot'
                 }
-                setSelectedPieceId(piece.id)
-                setDraggingPieceId(piece.id)
-                const wrapper = boardWrapperRef.current
-                if (wrapper) {
-                  const rect = wrapper.getBoundingClientRect()
-                  setGhost({
-                    piece,
-                    x: (e.clientX - rect.left) / scale,
-                    y: (e.clientY - rect.top) / scale,
-                  })
-                }
-                triggerGrabHaptic()
-              }}
-            >
-              {piece && !isDragging && (
-                <PiecePreview shape={piece.shape} mode="hand" />
-              )}
-            </button>
+                onClick={() => {
+                  if (!piece) return
+                  setSelectedPieceId(
+                    selectedPieceId === piece.id ? null : piece.id,
+                  )
+                  setHover(null)
+                }}
+                onPointerDown={(e) => {
+                  if (!piece) return
+                  e.preventDefault()
+                  dragState.current = {
+                    pieceId: piece.id,
+                    pointerId: e.pointerId,
+                    pointerType: e.pointerType || null,
+                  }
+                  setSelectedPieceId(piece.id)
+                  setDraggingPieceId(piece.id)
+                  const wrapper = boardWrapperRef.current
+                  if (wrapper) {
+                    const rect = wrapper.getBoundingClientRect()
+                    setGhost({
+                      piece,
+                      x: (e.clientX - rect.left) / scale,
+                      y: (e.clientY - rect.top) / scale,
+                    })
+                  }
+                  triggerGrabHaptic()
+                }}
+              >
+                {piece && !isDragging && (
+                  <PiecePreview shape={piece.shape} mode="hand" />
+                )}
+              </button>
             )
           })}
         </section>

@@ -360,6 +360,90 @@ body {
   stroke: #94633a;
 }
 
+/* JUST-PLACED IMPACT: cubes snap in clearly oversized, then quickly settle
+   back to their regular size for a crisp "click into place" feel. */
+.hexaclear-hex-cube {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.hexaclear-hex-cube.placed-impact {
+  animation: hexaclear-placed-pop 200ms linear both;
+}
+
+@keyframes hexaclear-placed-pop {
+  0% {
+    transform: scale(1.2);
+  }
+  80% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* BOARD RIPPLE: subtle pulse that propagates from the placement cluster out
+   across the board. Each cell group animates with its own delay so both the
+   slot and any cube inside it participate. */
+.hexaclear-cell.ripple-active {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: hexaclear-board-ripple;
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.16, 0.8, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes hexaclear-board-ripple {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.06);
+  }
+  70% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* INVALID DROP FEEDBACK: when a piece is released over an illegal cell,
+   briefly flash that cell and shake the hand card so the failure feels
+   physical rather than silent. Apply at multiple levels so the glow is
+   always visible above the slot geometry. */
+.hexaclear-cell.invalid-drop,
+.hexaclear-hex.invalid-drop,
+.hexaclear-hex-cube.invalid-drop {
+  animation: hexaclear-invalid-flash 420ms ease-out both;
+}
+
+@keyframes hexaclear-invalid-flash {
+  0% {
+    fill: rgba(189, 68, 68, 0.0);
+    stroke: #ffe0d5;
+    filter:
+      drop-shadow(0 0 0 rgba(255, 150, 140, 0))
+      brightness(1);
+  }
+  40% {
+    fill: rgba(189, 68, 68, 0.0);
+    stroke: #ffb3a3;
+    filter:
+      drop-shadow(0 0 16px rgba(255, 120, 120, 0.95))
+      brightness(1.08);
+  }
+  100% {
+    fill: transparent;
+    stroke: #94633a;
+    filter:
+      drop-shadow(0 0 0 rgba(0, 0, 0, 0))
+      brightness(1);
+  }
+}
+
 /* LINE CLEARS: cubes shrink straight into the center of their hex in a
    quick wave down the line. While clearing, hide the board hex itself so
    there’s no flat background plate behind the cubes. */
@@ -710,6 +794,29 @@ body {
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.25),
     0 6px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* Hand-piece error shake for failed drops. */
+.hexaclear-piece-button.failed-drop {
+  animation: hexaclear-piece-failed-shake 190ms ease-out;
+}
+
+@keyframes hexaclear-piece-failed-shake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 
 .hexaclear-golden-popup {
