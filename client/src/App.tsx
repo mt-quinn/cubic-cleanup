@@ -5,7 +5,7 @@ import {
   canPlacePiece,
   createInitialGameState,
   createDailyGameState,
-  dealHand,
+  dealPlayableHand,
   hasAnyValidMove,
 } from './game/gameLogic'
 import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
@@ -810,12 +810,7 @@ function App() {
       const isThirdPieceThisHand = remainingHand.length === 0
 
       if (isThirdPieceThisHand) {
-        newHand = dealHand()
-        for (let i = 0; i < 3; i++) {
-          updatedSlots[i] = newHand[i]?.id ?? null
-        }
-      } else if (remainingHand.length === 0) {
-        newHand = dealHand()
+        newHand = dealPlayableHand(result.board)
         for (let i = 0; i < 3; i++) {
           updatedSlots[i] = newHand[i]?.id ?? null
         }
@@ -1422,8 +1417,11 @@ function App() {
                 game.mode === 'daily' && dailyHitsForCell > 0
               const isGolden =
                 game.mode === 'endless' &&
-                ((game.goldenCellId != null && game.goldenCellId === cell.id) ||
-                  (clearingGoldenCellId != null && clearingGoldenCellId === cell.id))
+                (clearingCells.length > 0
+                  ? clearingGoldenCellId != null &&
+                    clearingGoldenCellId === cell.id
+                  : game.goldenCellId != null &&
+                    game.goldenCellId === cell.id)
 
               const clearingClasses = clearingClassesByCell[cell.id] ?? []
 

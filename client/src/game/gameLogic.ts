@@ -424,11 +424,33 @@ export const hasAnyValidMove = (board: BoardState, hand: Hand): boolean => {
   return false
 }
 
+// Deal a new 3-piece hand that is guaranteed (under normal circumstances)
+// to contain at least one playable piece for the given board state. We
+// reuse the existing hasAnyValidMove path so the definition of "playable"
+// exactly matches our real move rules.
+export const dealPlayableHand = (
+  board: BoardState,
+  maxAttempts = 30,
+): Hand => {
+  let hand = dealHand()
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (hasAnyValidMove(board, hand)) {
+      return hand
+    }
+    hand = dealHand()
+  }
+  // In principle we should never get here (as long as there is at least
+  // one empty cell on the board and our piece set includes a single-cube
+  // piece), but fall back to the last hand to avoid an infinite loop if
+  // something goes wrong.
+  return hand
+}
+
 export const createInitialGameState = (): GameState => {
   const board = createEmptyBoard()
-  const hand = dealHand()
   // Spawn the initial golden cube for endless mode.
   const goldenCellId = spawnGoldenCell(board)
+  const hand = dealPlayableHand(board)
   return {
     mode: 'endless',
     board,
@@ -524,7 +546,7 @@ export const createDailyGameState = (): GameState => {
     }
   }
 
-  const hand = dealHand()
+  const hand = dealPlayableHand(board)
 
   return {
     mode: 'daily',
