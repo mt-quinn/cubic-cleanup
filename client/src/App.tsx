@@ -673,6 +673,8 @@ function App() {
   )
   const [goldenPopupCellId, setGoldenPopupCellId] = useState<string | null>(null)
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
+  const [dailyHitPulseCells, setDailyHitPulseCells] = useState<string[]>([])
+  const [rippleCells, setRippleCells] = useState<string[]>([])
   const dailyCubesRemaining = useMemo(() => {
     if (game.mode !== 'daily') return 0
     let count = 0
@@ -767,7 +769,34 @@ function App() {
         return current
       }
 
-      setRecentlyPlacedCells(result.placedCellIds)
+      // For VFX, only run the placement "pop" and board ripple on the portion
+      // of the piece that is NOT participating in a clear. Any cells that are
+      // part of a clear should only show the clear animation, never the
+      // placement animation.
+      const clearedSet =
+        result.clearedCellIds.length > 0
+          ? new Set(result.clearedCellIds)
+          : null
+      const nonClearingPlacedIds =
+        clearedSet === null
+          ? result.placedCellIds
+          : result.placedCellIds.filter((id) => !clearedSet.has(id))
+
+      setRecentlyPlacedCells(nonClearingPlacedIds)
+      setRippleCells(nonClearingPlacedIds)
+      setRippleCells(result.placedCellIds)
+      if (current.mode === 'daily' && result.clearedPatterns.length > 0) {
+        const pulse: string[] = []
+        for (const [cellIdKey, after] of Object.entries(result.dailyHits)) {
+          const before = current.dailyHits[cellIdKey] ?? 0
+          if (before > 0 && after > 0 && after < before) {
+            pulse.push(cellIdKey)
+          }
+        }
+        if (pulse.length > 0) {
+          setDailyHitPulseCells(pulse)
+        }
+      }
 
       // Build per-cell clearing classes so we can drive different
       // animations for lines vs flowers (center vs ring).
@@ -778,12 +807,11 @@ function App() {
             pattern.cellIds.forEach((id, idx) => {
               // In daily mode, don't animate numbered cubes that won't
               // actually disappear (still have hits remaining after clear).
-              if (
-                current.mode === 'daily' &&
-                result.dailyHits[id] !== undefined &&
-                result.dailyHits[id] > 0
-              ) {
-                return
+              if (current.mode === 'daily') {
+                const hitsAfter = result.dailyHits[id]
+                if (hitsAfter !== undefined && hitsAfter > 0) {
+                  return
+                }
               }
               const classes = (nextClearingClasses[id] ||= [])
               classes.push('clearing-line', `clearing-line-step-${idx}`)
@@ -795,12 +823,11 @@ function App() {
             for (const id of pattern.cellIds) {
               // In daily mode, don't animate numbered cubes that won't
               // actually disappear (still have hits remaining after clear).
-              if (
-                current.mode === 'daily' &&
-                result.dailyHits[id] !== undefined &&
-                result.dailyHits[id] > 0
-              ) {
-                continue
+              if (current.mode === 'daily') {
+                const hitsAfter = result.dailyHits[id]
+                if (hitsAfter !== undefined && hitsAfter > 0) {
+                  continue
+                }
               }
               const role =
                 centerIdForPattern && id === centerIdForPattern
@@ -1038,9 +1065,31 @@ function App() {
     if (recentlyPlacedCells.length === 0) return
     const timeout = window.setTimeout(() => {
       setRecentlyPlacedCells([])
-    }, 700)
+    }, 220)
     return () => window.clearTimeout(timeout)
   }, [recentlyPlacedCells])
+
+  useEffect(() => {
+    if (dailyHitPulseCells.length === 0) return
+    const timeout = window.setTimeout(() => {
+      setDailyHitPulseCells([])
+    }, 260)
+    return () => window.clearTimeout(timeout)
+  }, [dailyHitPulseCells])
+
+  useEffect(() => {
+    if (rippleCells.length === 0) return
+    const baseDelayMs = 220
+    const waveDurationMs = 260
+    const extraPerRingMs = 70
+    // Rough upper bound on ring count for our compact board.
+    const maxRings = 6
+    const total = baseDelayMs + waveDurationMs + extraPerRingMs * maxRings
+    const timeout = window.setTimeout(() => {
+      setRippleCells([])
+    }, total)
+    return () => window.clearTimeout(timeout)
+  }, [rippleCells])
 
   useEffect(() => {
     if (!failedPlacementPieceId && invalidDropCellIds.length === 0) return
@@ -1454,7 +1503,7 @@ function App() {
               />
             ))}
             {(() => {
-              const hasRipple = recentlyPlacedCells.length > 0
+              const hasRipple = rippleCells.length > 0
               const rippleDelayById: Record<string, number> = {}
 
               if (hasRipple) {
@@ -1462,7 +1511,7 @@ function App() {
                 const visited = new Set<string>()
                 const queue: { id: string; dist: number }[] = []
 
-                for (const id of recentlyPlacedCells) {
+                for (const id of rippleCells) {
                   if (!cellSet.has(id) || visited.has(id)) continue
                   visited.add(id)
                   queue.push({ id, dist: 0 })
@@ -1506,6 +1555,7 @@ function App() {
                 const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
                 const isDailyTarget =
                   game.mode === 'daily' && dailyHitsForCell > 0
+                const isDailyHitPulsing = dailyHitPulseCells.includes(cell.id)
                 const isRecentlyPlaced = recentlyPlacedCells.includes(cell.id)
                 const isInvalidDrop = invalidDropCellIds.includes(cell.id)
                 const isGolden =
@@ -1521,9 +1571,12 @@ function App() {
                 let rippleClass = ''
                 let rippleStyle: { animationDelay: string } | undefined
                 if (hasRipple) {
-                  const delay = rippleDelayById[cell.id] ?? 0
+                  const baseDelayMs = 220 // start just after cube pop-in finishes
+                  const ringDelay = rippleDelayById[cell.id] ?? 0
                   rippleClass = 'ripple-active'
-                  rippleStyle = { animationDelay: `${delay}ms` }
+                  rippleStyle = {
+                    animationDelay: `${baseDelayMs + ringDelay}ms`,
+                  }
                 }
 
                 return (
@@ -1589,6 +1642,9 @@ function App() {
                         extraClasses={[
                           ...clearingClasses,
                           isInvalidDrop ? 'invalid-drop' : '',
+                          isDailyTarget && isDailyHitPulsing
+                            ? 'daily-hit-pulse'
+                            : '',
                         ].filter(Boolean)}
                       />
                     )}
@@ -1602,6 +1658,8 @@ function App() {
                           +10
                         </text>
                       )}
+                    {/* Ruby capture uses the same clear animation as other cubes;
+                        only the +10 popup is special. */}
                     {DEBUG_SHOW_COORDS && (
                       <text
                         x={cx}
@@ -1620,7 +1678,17 @@ function App() {
                 animation. */}
             {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
               <line
-                key={idx}
+                key={`flower-back-${idx}`}
+                x1={seg.x1}
+                y1={seg.y1}
+                x2={seg.x2}
+                y2={seg.y2}
+                className="hexaclear-flower-boundary-back"
+              />
+            ))}
+            {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
+              <line
+                key={`flower-front-${idx}`}
                 x1={seg.x1}
                 y1={seg.y1}
                 x2={seg.x2}
@@ -1636,47 +1704,46 @@ function App() {
                 valid={false}
               />
             )}
-
-            {/* Final overlay: any just-placed cubes get a second rendering on
-                top of everything else so the pop animation can never be
-                obscured by grid lines or rosette markers. */}
+            {/* Final overlay: animate the whole placed shape as a unit while it
+                "locks in" to the board. */}
             {recentlyPlacedCells.length > 0 && (
-              <g className="hexaclear-placed-overlay">
-                {recentlyPlacedCells.map((id) => {
-                  const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
-                  if (!cell) return null
-                  const pos = BOARD_LAYOUT.positions[cell.id]
-                  const cx = pos.x + BOARD_LAYOUT.offsetX
-                  const cy = pos.y + BOARD_LAYOUT.offsetY
-                  const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
-                  const isDailyTarget =
-                    game.mode === 'daily' && dailyHitsForCell > 0
-                  const isGolden =
-                    game.mode === 'endless' &&
-                    ((clearingCells.length > 0 &&
-                      clearingGoldenCellId != null &&
-                      clearingGoldenCellId === cell.id) ||
-                      (clearingCells.length === 0 &&
-                        game.goldenCellId != null &&
-                        game.goldenCellId === cell.id))
-                  if (game.board[cell.id] !== 'filled') return null
-                  return (
-                    <CubeLines
-                      key={`placed-overlay-${cell.id}`}
-                      cx={cx}
-                      cy={cy}
-                      variant={
-                        isDailyTarget
-                          ? 'dailyTarget'
-                          : isGolden
-                          ? 'golden'
-                          : 'normal'
-                      }
-                      dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
-                      extraClasses={['placed-impact']}
-                    />
-                  )
-                })}
+              <g className="hexaclear-placed-overlay placed-impact">
+                {(() => {
+                  return recentlyPlacedCells.map((id) => {
+                    const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
+                    if (!cell) return null
+                    const pos = BOARD_LAYOUT.positions[cell.id]
+                    const cx = pos.x + BOARD_LAYOUT.offsetX
+                    const cy = pos.y + BOARD_LAYOUT.offsetY
+                    const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
+                    const isDailyTarget =
+                      game.mode === 'daily' && dailyHitsForCell > 0
+                    const isGolden =
+                      game.mode === 'endless' &&
+                      ((clearingCells.length > 0 &&
+                        clearingGoldenCellId != null &&
+                        clearingGoldenCellId === cell.id) ||
+                        (clearingCells.length === 0 &&
+                          game.goldenCellId != null &&
+                          game.goldenCellId === cell.id))
+                    if (game.board[cell.id] !== 'filled') return null
+                    return (
+                      <CubeLines
+                        key={`placed-overlay-${cell.id}`}
+                        cx={cx}
+                        cy={cy}
+                        variant={
+                          isDailyTarget
+                            ? 'dailyTarget'
+                            : isGolden
+                            ? 'golden'
+                            : 'normal'
+                        }
+                        dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                      />
+                    )
+                  })
+                })()}
               </g>
             )}
           </svg>

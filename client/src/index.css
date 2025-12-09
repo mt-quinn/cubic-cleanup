@@ -274,9 +274,23 @@ body {
   stroke: #94633a;
 }
 
+.hexaclear-flower-boundary-back {
+  /* Dark underlay to give the rosette outline strong depth. */
+  stroke: rgba(90, 50, 8, 0.95);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.75));
+}
+
 .hexaclear-flower-boundary {
-  stroke: #ffb84a;
-  stroke-width: 3;
+  /* Rosette highlight: bright yellow face on top of the darker underlay so it
+     reads as a single beveled band even when the board is full. */
+  stroke: #ffe5a8;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 
@@ -308,7 +322,7 @@ body {
 }
 
 .hexaclear-board-outline-front {
-  stroke: #ffcf8a;
+  stroke: #008762;
   stroke-width: 4;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
@@ -360,53 +374,76 @@ body {
   stroke: #94633a;
 }
 
-/* JUST-PLACED IMPACT: cubes snap in clearly oversized, then quickly settle
-   back to their regular size for a crisp "click into place" feel. */
-.hexaclear-hex-cube {
+/* JUST-PLACED IMPACT: the newly placed shape briefly "locks in" as a whole,
+   scaling up from slightly smaller to its final size without breaking the
+   adjacency between its hexes. */
+.hexaclear-placed-overlay {
   transform-box: fill-box;
   transform-origin: center;
 }
 
-.hexaclear-hex-cube.placed-impact {
-  animation: hexaclear-placed-pop 200ms linear both;
+.hexaclear-placed-overlay.placed-impact {
+  animation: hexaclear-placed-pop 200ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
 @keyframes hexaclear-placed-pop {
   0% {
-    transform: scale(1.2);
+    transform: scale(0.85);
   }
-  80% {
-    transform: scale(1.2);
+  70% {
+    transform: scale(1.08);
   }
   100% {
     transform: scale(1);
   }
 }
 
-/* BOARD RIPPLE: subtle pulse that propagates from the placement cluster out
-   across the board. Each cell group animates with its own delay so both the
-   slot and any cube inside it participate. */
-.hexaclear-cell.ripple-active {
-  transform-box: fill-box;
-  transform-origin: center;
+/* DAILY HIT PULSE: when a numbered daily cube is hit but not cleared, give the
+   cube a quick nudge so the decrement feels impactful. */
+.hexaclear-hex-cube.daily-target.daily-hit-pulse {
+  animation: hexaclear-daily-hit-pulse 220ms ease-out both;
+}
+
+@keyframes hexaclear-daily-hit-pulse {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    transform: translateY(-3px) scale(1.06);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Ruby uses the same clear animation as other cubes; only +10 popup is special. */
+
+/* BOARD RIPPLE: colored pulse that propagates from the placement cluster out
+   across the board. Only the hex grid lines are affected; slots and cubes stay
+   fixed in place. */
+.hexaclear-cell.ripple-active .hexaclear-hex {
   animation-name: hexaclear-board-ripple;
-  animation-duration: 350ms;
-  animation-timing-function: cubic-bezier(0.16, 0.8, 0.3, 1);
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
   animation-fill-mode: both;
 }
 
 @keyframes hexaclear-board-ripple {
   0% {
-    transform: scale(1);
+    stroke: #94633a;
+    stroke-width: 2.6;
   }
   35% {
-    transform: scale(1.06);
+    stroke: #ffcf73;
+    stroke-width: 2.9;
   }
-  70% {
-    transform: scale(1.02);
+  75% {
+    stroke: #d9a45c;
+    stroke-width: 2.7;
   }
   100% {
-    transform: scale(1);
+    stroke: #94633a;
+    stroke-width: 2.6;
   }
 }
 
