@@ -1409,7 +1409,7 @@ function App() {
   useEffect(() => {
     if (scoreParticles.length === 0) return
     
-    // Celebration happens when the particle reaches the score counter
+    // Celebration happens just before particle reaches HUD (at 85% of animation)
     const particleDelay = scoreParticles[0]?.delay ?? 0
     const animationDuration = 1400
     const celebrationTime = particleDelay + animationDuration * 0.85

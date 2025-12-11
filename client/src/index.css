@@ -1040,10 +1040,7 @@ button {
   font-family: 'Shrikhand', cursive;
   font-size: 2.8rem;
   font-weight: 700;
-  color: #ffe9b3;
-  text-shadow:
-    0 0 12px rgba(255, 233, 179, 0.9),
-    0 3px 6px rgba(0, 0, 0, 0.9);
+  color: #fff9e6;
   white-space: nowrap;
   line-height: 1;
 }
@@ -1073,13 +1070,13 @@ button {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-  80% {
+  85% {
     opacity: 1;
-    transform: translate(calc(-50% + var(--particle-delta-x)), calc(-50% + var(--particle-delta-y))) scale(0.9);
+    transform: translate(calc(-50% + var(--particle-delta-x) * 0.92), calc(-50% + var(--particle-delta-y) * 0.92)) scale(0.85);
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--particle-delta-x)), calc(-50% + var(--particle-delta-y))) scale(0.5);
+    transform: translate(calc(-50% + var(--particle-delta-x) * 0.95), calc(-50% + var(--particle-delta-y) * 0.95)) scale(0.6);
   }
 }
 
