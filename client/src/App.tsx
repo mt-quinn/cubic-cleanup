@@ -6,6 +6,7 @@ import {
   createInitialGameState,
   createDailyGameState,
   dealPlayableHand,
+  dealDailyHand,
   hasAnyValidMove,
 } from './game/gameLogic'
 import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
@@ -868,9 +869,16 @@ function App() {
       let gameOver = false
 
       const isThirdPieceThisHand = remainingHand.length === 0
+      let nextHandDealCount = current.dailyHandDealCount
 
       if (isThirdPieceThisHand) {
-        newHand = dealPlayableHand(result.board)
+        // In daily mode, use deterministic hand dealing based on seed
+        if (current.mode === 'daily' && current.dailySeed != null) {
+          nextHandDealCount = (current.dailyHandDealCount ?? 0) + 1
+          newHand = dealDailyHand(result.board, current.dailySeed, nextHandDealCount)
+        } else {
+          newHand = dealPlayableHand(result.board)
+        }
         for (let i = 0; i < 3; i++) {
           updatedSlots[i] = newHand[i]?.id ?? null
         }
@@ -1057,6 +1065,7 @@ function App() {
         dailyTotalHits: result.dailyTotalHits,
         dailyRemainingHits: result.dailyRemainingHits,
         dailyCompleted: result.dailyCompleted,
+        dailyHandDealCount: nextHandDealCount,
         goldenCellId: result.goldenCellId,
       }
     })

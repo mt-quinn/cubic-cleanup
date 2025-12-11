@@ -1077,7 +1077,7 @@ body {
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
-}
+  }
 
 .hexaclear-highscores .name {
   opacity: 0.9;
@@ -1127,7 +1127,7 @@ body {
 .hexaclear-piece-button.selected {
   border-color: #ffd57b;
   box-shadow: 0 0 0 1px rgba(255, 213, 123, 0.7);
-}
+  }
 
 .hexaclear-piece-button.unplayable {
   opacity: 0.45;
@@ -1146,7 +1146,7 @@ body {
   height: 100%;
 }
 
-button {
+  button {
   font-family: inherit;
 }
 
@@ -1227,7 +1227,7 @@ button {
   letter-spacing: 0.08em;
   opacity: 0.95;
   margin-top: 0.3rem;
-}
+  }
 
 
 @keyframes hexaclear-score-particle-fly {
