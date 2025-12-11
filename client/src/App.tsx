@@ -277,43 +277,13 @@ const CubeLines = ({
           </text>
         )}
         {variant === 'dailyTarget' && typeof dailyHits === 'number' && (
-          <>
-            {/* Top face number */}
-            <text
-              x={topCenter.x + TOP_DX}
-              y={topCenter.y + TOP_DY}
-              className="hexaclear-daily-number daily-number-top"
-              transform={`rotate(${TOP_ANGLE} ${topCenter.x + TOP_DX} ${
-                topCenter.y + TOP_DY
-              })`}
-            >
-              {dailyHits}
-            </text>
-            {/* Right (darkest) face: baseline follows the shared edge with
-                the top/lightest face. */}
-            <text
-              x={rightCenter.x + RIGHT_DX}
-              y={rightCenter.y + RIGHT_DY}
-              className="hexaclear-daily-number daily-number-right"
-              transform={`rotate(${
-                rightSharedAngle + RIGHT_ANGLE_OFFSET
-              } ${rightCenter.x + RIGHT_DX} ${rightCenter.y + RIGHT_DY})`}
-            >
-              {dailyHits}
-            </text>
-            {/* Left (second-lightest) face: baseline is opposite (rotated
-                90° from) its shared edge with the top face. */}
-            <text
-              x={leftCenter.x + LEFT_DX}
-              y={leftCenter.y + LEFT_DY}
-              className="hexaclear-daily-number daily-number-left"
-              transform={`rotate(${
-                leftSharedAngle + 90 + LEFT_ANGLE_OFFSET
-              } ${leftCenter.x + LEFT_DX} ${leftCenter.y + LEFT_DY})`}
-            >
-              {dailyHits}
-            </text>
-          </>
+          <text
+            x={cx}
+            y={cy + 3}
+            className="hexaclear-daily-number-centered"
+          >
+            {dailyHits}
+          </text>
         )}
       </g>
     </g>
@@ -1210,7 +1180,22 @@ function App() {
           const endX = (buttonRect.left + buttonRect.width / 2 - boardRect.left) / scale
           const endY = (buttonRect.top + buttonRect.height / 2 - boardRect.top) / scale
           
-          // Set up animation
+          // Restore game state immediately so pieces reappear
+          setUndoStack(remaining)
+          setGoldenPopupCellId(null)
+          setClearingCells([])
+          setClearingGoldenCellId(null)
+          setScorePopup(null)
+          setGame((current) => {
+            const restoredMoves =
+              current.mode === 'daily' ? current.moves : previous.moves
+            return {
+              ...previous,
+              moves: restoredMoves,
+            }
+          })
+          
+          // Set up animation (visual only - state already restored)
           setUndoAnimation({
             piece: restoredPiece,
             startX,
@@ -1220,21 +1205,8 @@ function App() {
             cellIds: cellsToRemove,
           })
           
-          // Restore state after animation completes
+          // Clear animation state after animation completes
           setTimeout(() => {
-            setUndoStack(remaining)
-            setGoldenPopupCellId(null)
-            setClearingCells([])
-            setClearingGoldenCellId(null)
-            setScorePopup(null)
-            setGame((current) => {
-              const restoredMoves =
-                current.mode === 'daily' ? current.moves : previous.moves
-              return {
-                ...previous,
-                moves: restoredMoves,
-              }
-            })
             setSelectedPieceId(null)
             setHover(null)
             setUndoAnimation(null)
@@ -1861,7 +1833,8 @@ function App() {
                 const isFilledLogical = game.board[cell.id] === 'filled'
                 const isClearing = clearingCells.includes(cell.id)
                 const isUndoing = undoAnimation?.cellIds.includes(cell.id) ?? false
-                const isFilled = (isFilledLogical || isClearing) && !isUndoing
+                // Don't hide pieces during undo - they should reappear immediately
+                const isFilled = isFilledLogical || isClearing
                 const inPreview =
                   !isClearing &&
                   preview &&
@@ -1928,10 +1901,10 @@ function App() {
                         }
                       }}
                     />
-                    {(!isFilledLogical || isUndoing) && !inPreview && !willClearInPreview && (
+                    {!isFilledLogical && !inPreview && !willClearInPreview && (
                       <SlotGeometry cx={cx} cy={cy} />
                     )}
-                    {isFilled && !isRecentlyPlaced && (
+                    {(isFilled || (isDailyTarget && isDailyHitPulsing)) && !isRecentlyPlaced && (
                       <CubeLines
                         cx={cx}
                         cy={cy}
@@ -1944,7 +1917,8 @@ function App() {
                         }
                         dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
                         extraClasses={[
-                          ...clearingClasses,
+                          // Don't apply clearing classes to daily cubes that are just being decremented
+                          ...(isDailyTarget && isDailyHitPulsing ? [] : clearingClasses),
                           isInvalidDrop ? 'invalid-drop' : '',
                           isDailyTarget && isDailyHitPulsing
                             ? 'daily-hit-pulse'
