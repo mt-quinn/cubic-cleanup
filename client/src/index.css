@@ -1011,3 +1011,48 @@ button {
   }
 }
 
+
+/* Thin circular ring ripple: overlay of hex edges clipped by a circular
+   mask. The underlying board lines stay static; only this overlay is
+   revealed where the ring passes. */
+.hexaclear-board-ripple-overlay .hexaclear-hex.ripple-overlay {
+  fill: none;
+  stroke: #ffe5a8;
+  stroke-width: 3.4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.hexaclear-board-ripple-overlay.soft .hexaclear-hex.ripple-overlay {
+  stroke: #d7b773;
+}
+
+.hexaclear-ripple-ring {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 18;
+  stroke-linecap: round;
+}
+
+
+/* Reflected clear ripple: dimmer, thinner inward wave that bounces back from
+   the board hull. This is a per-cell edge effect, seeded at the hull cells
+   when the main clear ring reaches them, then propagated inward via BFS. */
+.hexaclear-cell.bounce-wave .hexaclear-hex {
+  animation: hexaclear-bounce-ripple 260ms ease-out both;
+}
+
+@keyframes hexaclear-bounce-ripple {
+  0% {
+    stroke: #d3b26f;
+    stroke-width: 2.3;
+  }
+  45% {
+    stroke: #f0cc7c;
+    stroke-width: 2.5;
+  }
+  100% {
+    stroke: #94633a;
+    stroke-width: 2.6;
+  }
+}

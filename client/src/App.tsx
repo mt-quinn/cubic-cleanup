@@ -68,6 +68,8 @@ const buildLayout = () => {
 }
 
 const BOARD_LAYOUT = buildLayout()
+const BOARD_RIPPLE_RADIUS =
+  Math.max(BOARD_LAYOUT.width, BOARD_LAYOUT.height) * 0.7
 
 type Segment = { x1: number; y1: number; x2: number; y2: number }
 
@@ -675,6 +677,12 @@ function App() {
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
   const [dailyHitPulseCells, setDailyHitPulseCells] = useState<string[]>([])
   const [rippleCells, setRippleCells] = useState<string[]>([])
+  const [rippleIsClear, setRippleIsClear] = useState(false)
+  const [rippleCenter, setRippleCenter] = useState<{ x: number; y: number } | null>(null)
+  const [rippleToken, setRippleToken] = useState(0)
+  const rippleRadiusRef = useRef(0)
+  const rippleMaxRadiusRef = useRef(BOARD_RIPPLE_RADIUS * 2)
+  const CLEAR_RIPPLE_DURATION_MS = 1350
   const dailyCubesRemaining = useMemo(() => {
     if (game.mode !== 'daily') return 0
     let count = 0
@@ -769,10 +777,11 @@ function App() {
         return current
       }
 
-      // For VFX, only run the placement "pop" and board ripple on the portion
-      // of the piece that is NOT participating in a clear. Any cells that are
-      // part of a clear should only show the clear animation, never the
-      // placement animation.
+      // For VFX, only run the placement "pop" on the portion of the piece
+      // that is NOT participating in a clear. Any cells that are part of a
+      // clear should only show the clear animation, never the placement
+      // animation. The board ripple, however, should always originate from
+      // the full placed footprint.
       const clearedSet =
         result.clearedCellIds.length > 0
           ? new Set(result.clearedCellIds)
@@ -783,8 +792,51 @@ function App() {
           : result.placedCellIds.filter((id) => !clearedSet.has(id))
 
       setRecentlyPlacedCells(nonClearingPlacedIds)
-      setRippleCells(nonClearingPlacedIds)
+
+      // Mark whether this placement caused a clear so we can choose between
+      // different ripple styling, and compute the ripple's origin as the
+      // centroid of the *visible* placed footprint in board coordinates.
+      const causedClear = result.clearedPatterns.length > 0
+      setRippleIsClear(causedClear)
       setRippleCells(result.placedCellIds)
+
+      const rippleFootprint =
+        nonClearingPlacedIds.length > 0
+          ? nonClearingPlacedIds
+          : result.placedCellIds
+
+      if (rippleFootprint.length > 0) {
+        let sumX = 0
+        let sumY = 0
+        for (const id of rippleFootprint) {
+          const pos = BOARD_LAYOUT.positions[id]
+          sumX += pos.x + BOARD_LAYOUT.offsetX
+          sumY += pos.y + BOARD_LAYOUT.offsetY
+        }
+        const cx = sumX / rippleFootprint.length
+        const cy = sumY / rippleFootprint.length
+        setRippleCenter({ x: cx, y: cy })
+        setRippleToken((t) => t + 1)
+        rippleRadiusRef.current = 0
+        // Compute how far this ring needs to travel: distance from the
+        // centroid to the furthest board cell center, plus a small margin
+        // so the wave fully exits the board before being cleared.
+        let maxDistSq = 0
+        for (const cell of BOARD_DEFINITION.cells) {
+          const pos = BOARD_LAYOUT.positions[cell.id]
+          const x = pos.x + BOARD_LAYOUT.offsetX
+          const y = pos.y + BOARD_LAYOUT.offsetY
+          const dx = x - cx
+          const dy = y - cy
+          const distSq = dx * dx + dy * dy
+          if (distSq > maxDistSq) {
+            maxDistSq = distSq
+          }
+        }
+        const margin = HEX_SIZE * 1.4
+        const maxRadius = Math.sqrt(maxDistSq) + margin
+        rippleMaxRadiusRef.current = maxRadius
+      }
       if (current.mode === 'daily' && result.clearedPatterns.length > 0) {
         const pulse: string[] = []
         for (const [cellIdKey, after] of Object.entries(result.dailyHits)) {
@@ -1077,19 +1129,54 @@ function App() {
     return () => window.clearTimeout(timeout)
   }, [dailyHitPulseCells])
 
+  // Drive the ripple radius over time so the circular wave emanates smoothly
+  // from the computed center across the full board. Clears move more slowly
+  // than non-clearing placements for extra weight. We animate the SVG circle's
+  // radius directly via requestAnimationFrame to avoid forcing React to
+  // re-render the whole tree every frame.
   useEffect(() => {
-    if (rippleCells.length === 0) return
-    const baseDelayMs = 220
-    const waveDurationMs = 260
-    const extraPerRingMs = 70
-    // Rough upper bound on ring count for our compact board.
-    const maxRings = 6
-    const total = baseDelayMs + waveDurationMs + extraPerRingMs * maxRings
-    const timeout = window.setTimeout(() => {
+    if (!rippleCenter || rippleCells.length === 0) return
+
+    const durationMs = rippleIsClear ? CLEAR_RIPPLE_DURATION_MS : 900
+    const maxRadius = rippleMaxRadiusRef.current
+    const start = performance.now()
+    let frame: number
+
+    const svg = svgRef.current
+    if (!svg) return
+    const circle = svg.querySelector(
+      '.hexaclear-ripple-ring',
+    ) as SVGCircleElement | null
+    if (!circle) return
+
+    rippleRadiusRef.current = 0
+    circle.setAttribute('r', '0')
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs)
+      const r = t * maxRadius
+      rippleRadiusRef.current = r
+      circle.setAttribute('r', String(r))
+      if (t < 1) {
+        frame = window.requestAnimationFrame(step)
+      }
+    }
+
+    frame = window.requestAnimationFrame(step)
+
+    // Clear ripple state once the animation has had time to fully traverse
+    // the board, without needing another React-driven effect.
+    const clearTimeoutId = window.setTimeout(() => {
       setRippleCells([])
-    }, total)
-    return () => window.clearTimeout(timeout)
-  }, [rippleCells])
+      setRippleCenter(null)
+      rippleRadiusRef.current = 0
+    }, durationMs + 32)
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      window.clearTimeout(clearTimeoutId)
+    }
+  }, [rippleCenter, rippleToken, rippleCells.length, rippleIsClear])
 
   useEffect(() => {
     if (!failedPlacementPieceId && invalidDropCellIds.length === 0) return
@@ -1481,6 +1568,36 @@ function App() {
             ref={svgRef}
             viewBox={`0 0 ${BOARD_LAYOUT.width} ${BOARD_LAYOUT.height}`}
           >
+            <defs>
+              {rippleCells.length > 0 && rippleCenter && (
+                <mask
+                  id="hexaclear-ripple-mask"
+                  maskUnits="userSpaceOnUse"
+                  maskContentUnits="userSpaceOnUse"
+                >
+                  <rect
+                    x={0}
+                    y={0}
+                    width={BOARD_LAYOUT.width}
+                    height={BOARD_LAYOUT.height}
+                    fill="black"
+                  />
+                  <circle
+                    key={rippleToken}
+                    className={[
+                      'hexaclear-ripple-ring',
+                      rippleIsClear ? 'clear' : 'soft',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    cx={rippleCenter.x}
+                    cy={rippleCenter.y}
+                    r={0}
+                  />
+                </mask>
+              )}
+            </defs>
+
             {/* Board hull behind everything */}
             {BOARD_OUTLINE_SEGMENTS.map((seg, idx) => (
               <line
@@ -1502,39 +1619,8 @@ function App() {
                 className="hexaclear-board-outline-front"
               />
             ))}
+
             {(() => {
-              const hasRipple = rippleCells.length > 0
-              const rippleDelayById: Record<string, number> = {}
-
-              if (hasRipple) {
-                const cellSet = new Set(BOARD_DEFINITION.cells.map((c) => c.id))
-                const visited = new Set<string>()
-                const queue: { id: string; dist: number }[] = []
-
-                for (const id of rippleCells) {
-                  if (!cellSet.has(id) || visited.has(id)) continue
-                  visited.add(id)
-                  queue.push({ id, dist: 0 })
-                }
-
-                const STEP_MS = 70
-
-                while (queue.length > 0) {
-                  const { id, dist } = queue.shift()!
-                  rippleDelayById[id] = dist * STEP_MS
-                  const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
-                  if (!cell) continue
-                  for (const dir of directions) {
-                    const neighborId = axialToId(addAxial(cell.coord, dir))
-                    if (!cellSet.has(neighborId) || visited.has(neighborId)) {
-                      continue
-                    }
-                    visited.add(neighborId)
-                    queue.push({ id: neighborId, dist: dist + 1 })
-                  }
-                }
-              }
-
               return BOARD_DEFINITION.cells.map((cell) => {
                 const pos = BOARD_LAYOUT.positions[cell.id]
                 const cx = pos.x + BOARD_LAYOUT.offsetX
@@ -1568,28 +1654,15 @@ function App() {
 
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
-                let rippleClass = ''
-                let rippleStyle: { animationDelay: string } | undefined
-                if (hasRipple) {
-                  const baseDelayMs = 220 // start just after cube pop-in finishes
-                  const ringDelay = rippleDelayById[cell.id] ?? 0
-                  rippleClass = 'ripple-active'
-                  rippleStyle = {
-                    animationDelay: `${baseDelayMs + ringDelay}ms`,
-                  }
-                }
-
                 return (
                   <g
                     key={cell.id}
                     className={[
                       'hexaclear-cell',
                       isInvalidDrop ? 'invalid-drop' : '',
-                      rippleClass,
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    style={rippleStyle}
                   >
                     <polygon
                       points={points}
@@ -1608,7 +1681,6 @@ function App() {
                       ]
                         .filter(Boolean)
                         .join(' ')}
-                      style={rippleStyle}
                       role="button"
                       tabIndex={0}
                       aria-label={`${
@@ -1673,6 +1745,32 @@ function App() {
                 )
               })
             })()}
+
+            {rippleCells.length > 0 && rippleCenter && (
+              <g
+                className={[
+                  'hexaclear-board-ripple-overlay',
+                  rippleIsClear ? 'clear' : 'soft',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                mask="url(#hexaclear-ripple-mask)"
+              >
+                {BOARD_DEFINITION.cells.map((cell) => {
+                  const pos = BOARD_LAYOUT.positions[cell.id]
+                  const cx = pos.x + BOARD_LAYOUT.offsetX
+                  const cy = pos.y + BOARD_LAYOUT.offsetY
+                  const points = buildHexPoints(cx, cy)
+                  return (
+                    <polygon
+                      key={`ripple-overlay-${cell.id}`}
+                      points={points}
+                      className="hexaclear-hex ripple-overlay"
+                    />
+                  )
+                })}
+              </g>
+            )}
             {/* Rosette boundaries should sit above the static board but below
                 the final cube pop overlay so the highlight never hides the
                 animation. */}
