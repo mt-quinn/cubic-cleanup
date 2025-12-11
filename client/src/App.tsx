@@ -641,7 +641,6 @@ function App() {
       type: 'base' | 'combo' | 'streak' | 'piece'
     }>
   >([])
-  const [pendingScoreUpdate, setPendingScoreUpdate] = useState<number | null>(null)
   const [showScoring, setShowScoring] = useState(false)
   const [showHighScores, setShowHighScores] = useState(false)
   const [highScores, setHighScores] = useState<HighScoreEntry[]>(() =>
@@ -978,11 +977,6 @@ function App() {
           const scoreCounterEl = document.querySelector('.board-hud-block.right .value')
           const boardWrapper = boardWrapperRef.current
           if (scoreCounterEl && boardWrapper) {
-            const counterRect = scoreCounterEl.getBoundingClientRect()
-            const boardRect = boardWrapper.getBoundingClientRect()
-            const endX = (counterRect.left + counterRect.width / 2 - boardRect.left) / scale
-            const endY = (counterRect.top + counterRect.height / 2 - boardRect.top) / scale
-            
             // Calculate centroid of all cleared patterns for start position
             let sumX = 0
             let sumY = 0
@@ -1186,7 +1180,6 @@ function App() {
     
     // Find which piece was added back to the hand
     const currentHandIds = new Set(game.hand.map((p) => p.id))
-    const previousHandIds = new Set(previous.hand.map((p) => p.id))
     const restoredPieceId = previous.hand.find((p) => !currentHandIds.has(p.id))?.id
     
     if (cellsToRemove.length > 0 && restoredPieceId) {
@@ -1429,7 +1422,6 @@ function App() {
           ...current,
           score: pendingScore,
         }))
-        setPendingScoreUpdate(null)
         pendingScoreRef.current = null
       }
       
