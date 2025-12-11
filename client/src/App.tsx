@@ -249,69 +249,73 @@ const CubeLines = ({
 
   return (
     <g className={cubeClassName}>
-      {/* right face */}
-      <polygon
-        className="cube-face cube-right"
-        points={`${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`}
-      />
-      {/* left face */}
-      <polygon
-        className="cube-face cube-left"
-        points={`${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`}
-      />
-      {/* top face drawn last so it's not partially occluded */}
-      <polygon
-        className="cube-face cube-top"
-        points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
-      />
-      {variant === 'golden' && (
-        <text
-          x={cx}
-          y={cy + 3}
-          className="hexaclear-gem-label"
-        >
-          +10
-        </text>
-      )}
-      {variant === 'dailyTarget' && typeof dailyHits === 'number' && (
-        <>
-          {/* Top face number */}
+      {/* Inner wrapper so we can apply a unified wiggle/rotation to the cube
+          without fighting the parent scale transform on the whole piece. */}
+      <g className="hexaclear-cube-wiggle-wrap">
+        {/* right face */}
+        <polygon
+          className="cube-face cube-right"
+          points={`${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`}
+        />
+        {/* left face */}
+        <polygon
+          className="cube-face cube-left"
+          points={`${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`}
+        />
+        {/* top face drawn last so it's not partially occluded */}
+        <polygon
+          className="cube-face cube-top"
+          points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
+        />
+        {variant === 'golden' && (
           <text
-            x={topCenter.x + TOP_DX}
-            y={topCenter.y + TOP_DY}
-            className="hexaclear-daily-number daily-number-top"
-            transform={`rotate(${TOP_ANGLE} ${topCenter.x + TOP_DX} ${
-              topCenter.y + TOP_DY
-            })`}
+            x={cx}
+            y={cy + 3}
+            className="hexaclear-gem-label"
           >
-            {dailyHits}
+            +10
           </text>
-          {/* Right (darkest) face: baseline follows the shared edge with
-              the top/lightest face. */}
-          <text
-            x={rightCenter.x + RIGHT_DX}
-            y={rightCenter.y + RIGHT_DY}
-            className="hexaclear-daily-number daily-number-right"
-            transform={`rotate(${
-              rightSharedAngle + RIGHT_ANGLE_OFFSET
-            } ${rightCenter.x + RIGHT_DX} ${rightCenter.y + RIGHT_DY})`}
-          >
-            {dailyHits}
-          </text>
-          {/* Left (second-lightest) face: baseline is opposite (rotated
-              90° from) its shared edge with the top face. */}
-          <text
-            x={leftCenter.x + LEFT_DX}
-            y={leftCenter.y + LEFT_DY}
-            className="hexaclear-daily-number daily-number-left"
-            transform={`rotate(${
-              leftSharedAngle + 90 + LEFT_ANGLE_OFFSET
-            } ${leftCenter.x + LEFT_DX} ${leftCenter.y + LEFT_DY})`}
-          >
-            {dailyHits}
-          </text>
-        </>
-      )}
+        )}
+        {variant === 'dailyTarget' && typeof dailyHits === 'number' && (
+          <>
+            {/* Top face number */}
+            <text
+              x={topCenter.x + TOP_DX}
+              y={topCenter.y + TOP_DY}
+              className="hexaclear-daily-number daily-number-top"
+              transform={`rotate(${TOP_ANGLE} ${topCenter.x + TOP_DX} ${
+                topCenter.y + TOP_DY
+              })`}
+            >
+              {dailyHits}
+            </text>
+            {/* Right (darkest) face: baseline follows the shared edge with
+                the top/lightest face. */}
+            <text
+              x={rightCenter.x + RIGHT_DX}
+              y={rightCenter.y + RIGHT_DY}
+              className="hexaclear-daily-number daily-number-right"
+              transform={`rotate(${
+                rightSharedAngle + RIGHT_ANGLE_OFFSET
+              } ${rightCenter.x + RIGHT_DX} ${rightCenter.y + RIGHT_DY})`}
+            >
+              {dailyHits}
+            </text>
+            {/* Left (second-lightest) face: baseline is opposite (rotated
+                90° from) its shared edge with the top face. */}
+            <text
+              x={leftCenter.x + LEFT_DX}
+              y={leftCenter.y + LEFT_DY}
+              className="hexaclear-daily-number daily-number-left"
+              transform={`rotate(${
+                leftSharedAngle + 90 + LEFT_ANGLE_OFFSET
+              } ${leftCenter.x + LEFT_DX} ${leftCenter.y + LEFT_DY})`}
+            >
+              {dailyHits}
+            </text>
+          </>
+        )}
+      </g>
     </g>
   )
 }
@@ -692,6 +696,15 @@ function App() {
     return count
   }, [game.mode, game.dailyHits])
   const [undoStack, setUndoStack] = useState<GameState[]>([])
+  const [undoAnimation, setUndoAnimation] = useState<{
+    piece: ActivePiece
+    startX: number
+    startY: number
+    endX: number
+    endY: number
+    cellIds: string[]
+  } | null>(null)
+  const handButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
     return game.hand.find((p) => p.id === selectedPieceId) ?? null
@@ -1047,6 +1060,83 @@ function App() {
     if (undoStack.length === 0) return
     const previous = undoStack[undoStack.length - 1]
     const remaining = undoStack.slice(0, -1)
+    
+    // Find cells that are currently filled but will be empty after undo
+    const cellsToRemove: string[] = []
+    for (const cellId in game.board) {
+      if (game.board[cellId] === 'filled' && previous.board[cellId] !== 'filled') {
+        cellsToRemove.push(cellId)
+      }
+    }
+    
+    // Find which piece was added back to the hand
+    const currentHandIds = new Set(game.hand.map((p) => p.id))
+    const previousHandIds = new Set(previous.hand.map((p) => p.id))
+    const restoredPieceId = previous.hand.find((p) => !currentHandIds.has(p.id))?.id
+    
+    if (cellsToRemove.length > 0 && restoredPieceId) {
+      // Calculate centroid of cells being removed (board position)
+      let sumX = 0
+      let sumY = 0
+      for (const cellId of cellsToRemove) {
+        const cell = BOARD_DEFINITION.cells.find((c) => c.id === cellId)
+        if (cell) {
+          const pos = BOARD_LAYOUT.positions[cell.id]
+          sumX += pos.x + BOARD_LAYOUT.offsetX
+          sumY += pos.y + BOARD_LAYOUT.offsetY
+        }
+      }
+      const startX = sumX / cellsToRemove.length
+      const startY = sumY / cellsToRemove.length
+      
+      // Find which slot the piece will occupy in the hand
+      const slotIndex = previous.handSlots.findIndex((id) => id === restoredPieceId)
+      const restoredPiece = previous.hand.find((p) => p.id === restoredPieceId)
+      
+      if (slotIndex >= 0 && restoredPiece && boardWrapperRef.current) {
+        // Get the hand button's position
+        const handButton = handButtonRefs.current[slotIndex]
+        if (handButton) {
+          const boardRect = boardWrapperRef.current.getBoundingClientRect()
+          const buttonRect = handButton.getBoundingClientRect()
+          const endX = (buttonRect.left + buttonRect.width / 2 - boardRect.left) / scale
+          const endY = (buttonRect.top + buttonRect.height / 2 - boardRect.top) / scale
+          
+          // Set up animation
+          setUndoAnimation({
+            piece: restoredPiece,
+            startX,
+            startY,
+            endX,
+            endY,
+            cellIds: cellsToRemove,
+          })
+          
+          // Restore state after animation completes
+          setTimeout(() => {
+            setUndoStack(remaining)
+            setGoldenPopupCellId(null)
+            setClearingCells([])
+            setClearingGoldenCellId(null)
+            setScorePopup(null)
+            setGame((current) => {
+              const restoredMoves =
+                current.mode === 'daily' ? current.moves : previous.moves
+              return {
+                ...previous,
+                moves: restoredMoves,
+              }
+            })
+            setSelectedPieceId(null)
+            setHover(null)
+            setUndoAnimation(null)
+          }, 350) // Match animation duration
+          return
+        }
+      }
+    }
+    
+    // Fallback: instant undo if we can't animate
     setUndoStack(remaining)
     setGoldenPopupCellId(null)
     setClearingCells([])
@@ -1629,7 +1719,8 @@ function App() {
 
                 const isFilledLogical = game.board[cell.id] === 'filled'
                 const isClearing = clearingCells.includes(cell.id)
-                const isFilled = isFilledLogical || isClearing
+                const isUndoing = undoAnimation?.cellIds.includes(cell.id) ?? false
+                const isFilled = (isFilledLogical || isClearing) && !isUndoing
                 const inPreview =
                   !isClearing &&
                   preview &&
@@ -1696,7 +1787,7 @@ function App() {
                         }
                       }}
                     />
-                    {!isFilledLogical && !inPreview && !willClearInPreview && (
+                    {(!isFilledLogical || isUndoing) && !inPreview && !willClearInPreview && (
                       <SlotGeometry cx={cx} cy={cy} />
                     )}
                     {isFilled && !isRecentlyPlaced && (
@@ -1929,6 +2020,19 @@ function App() {
               }}
             >
               <PiecePreview shape={ghost.piece.shape} mode="board" />
+            </div>
+          )}
+          {undoAnimation && (
+            <div
+              className="hexaclear-undo-animation"
+              style={{
+                left: undoAnimation.startX,
+                top: undoAnimation.startY,
+                '--undo-delta-x': `${undoAnimation.endX - undoAnimation.startX}px`,
+                '--undo-delta-y': `${undoAnimation.endY - undoAnimation.startY}px`,
+              } as React.CSSProperties & { '--undo-delta-x': string; '--undo-delta-y': string }}
+            >
+              <PiecePreview shape={undoAnimation.piece.shape} mode="board" />
             </div>
           )}
           {scorePopup && game.mode === 'endless' && (
@@ -2301,6 +2405,9 @@ function App() {
             return (
               <button
                 key={slotIndex}
+                ref={(el) => {
+                  handButtonRefs.current[slotIndex] = el
+                }}
                 className={[
                   'hexaclear-piece-button',
                   isSelected ? 'selected' : '',

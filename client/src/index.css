@@ -585,7 +585,10 @@ body {
 .hexaclear-hex.preview-clear + .hexaclear-hex-cube {
   transform-box: fill-box;
   transform-origin: center;
-  transform: scale(0.80);
+  /* Ease into the smaller state with wiggle; snapping back to full size when
+     the preview-clear flag is removed (rule no longer applies). */
+  animation: hexaclear-preview-clear-scale-in 200ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards,
+             hexaclear-cube-wiggle 120ms ease-in-out infinite alternate 200ms;
 }
 
 /* And apply the same motion to the "ghost" preview hexes that both
@@ -593,24 +596,28 @@ body {
 .hexaclear-hex.preview-clear.preview-valid {
   transform-box: fill-box;
   transform-origin: center;
-  transform: scale(0.80);
+  animation: hexaclear-preview-clear-scale-in 200ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards,
+             hexaclear-cube-wiggle 120ms ease-in-out infinite alternate 200ms;
 }
 
-@keyframes hexaclear-cube-wiggle {
+/* Scale-in animation: smoothly shrink to 0.8 scale. */
+@keyframes hexaclear-preview-clear-scale-in {
   0% {
-    transform: scale(0.9) rotate(-3deg);
-  }
-  25% {
-    transform: scale(0.91) rotate(0deg);
-  }
-  50% {
-    transform: scale(0.92) rotate(3deg);
-  }
-  75% {
-    transform: scale(0.91) rotate(0deg);
+    transform: scale(1) rotate(0deg);
   }
   100% {
-    transform: scale(0.9) rotate(-3deg);
+    transform: scale(0.80) rotate(0deg);
+  }
+}
+
+/* iOS-style homescreen wiggle: pure rotation around center, no translation.
+   This runs after the scale-in completes, combining both transforms. */
+@keyframes hexaclear-cube-wiggle {
+  0% {
+    transform: scale(0.80) rotate(-1.8deg);
+  }
+  100% {
+    transform: scale(0.80) rotate(1.8deg);
   }
 }
 
@@ -768,7 +775,8 @@ body {
   filter: none;
 }
 
-.hexaclear-hex-cube .cube-face {
+.hexaclear-hex-cube .cube-face,
+.hexaclear-cube-wiggle-wrap {
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -817,6 +825,25 @@ body {
   pointer-events: none;
   z-index: 10;
   opacity: 0.6;
+}
+
+.hexaclear-undo-animation {
+  position: absolute;
+  pointer-events: none;
+  z-index: 12;
+  transform-origin: center;
+  animation: hexaclear-undo-fly 350ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes hexaclear-undo-fly {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--undo-delta-x), var(--undo-delta-y)) translate(-50%, -50%) scale(0.4);
+    opacity: 0.8;
+  }
 }
 
 .hexaclear-undo-button {
