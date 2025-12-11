@@ -1018,6 +1018,94 @@ button {
   }
 }
 
+/* Score particles: individual numbers that flow from cleared patterns to score counter */
+.hexaclear-score-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.hexaclear-score-particle {
+  position: absolute;
+  transform-origin: center;
+  animation: hexaclear-score-particle-fly 1400ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.hexaclear-score-particle-value {
+  font-family: 'Shrikhand', cursive;
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: #ffe9b3;
+  text-shadow:
+    0 0 12px rgba(255, 233, 179, 0.9),
+    0 3px 6px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.hexaclear-score-particle-label {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #d9a45c;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.95;
+  margin-top: 0.3rem;
+}
+
+
+@keyframes hexaclear-score-particle-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--particle-delta-x)), calc(-50% + var(--particle-delta-y))) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--particle-delta-x)), calc(-50% + var(--particle-delta-y))) scale(0.5);
+  }
+}
+
+/* Score counter celebration when particles merge */
+.board-hud-block.right .value {
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.board-hud-block.right .value.score-celebrate {
+  animation: hexaclear-score-counter-pop 400ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@keyframes hexaclear-score-counter-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+    filter: brightness(1.3) drop-shadow(0 0 12px rgba(255, 233, 179, 0.8));
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1) drop-shadow(0 0 0 rgba(0, 0, 0, 0));
+  }
+}
+
 @keyframes hexaclear-golden-popup-fade {
   0% {
     opacity: 0;

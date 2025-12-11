@@ -628,6 +628,20 @@ function App() {
   const [invalidDropCellIds, setInvalidDropCellIds] = useState<string[]>([])
   const [scorePopup, setScorePopup] = useState<string | null>(null)
   const [scorePopupId, setScorePopupId] = useState(0)
+  const [scoreParticles, setScoreParticles] = useState<
+    Array<{
+      id: string
+      value: number
+      label?: string
+      startX: number
+      startY: number
+      deltaX: number
+      deltaY: number
+      delay: number
+      type: 'base' | 'combo' | 'streak' | 'piece'
+    }>
+  >([])
+  const [pendingScoreUpdate, setPendingScoreUpdate] = useState<number | null>(null)
   const [showScoring, setShowScoring] = useState(false)
   const [showHighScores, setShowHighScores] = useState(false)
   const [highScores, setHighScores] = useState<HighScoreEntry[]>(() =>
@@ -718,6 +732,8 @@ function App() {
     pointerId: number | null
     pointerType: string | null
   }>({ pieceId: null, pointerId: null, pointerType: null })
+  const pendingScoreRef = useRef<number | null>(null)
+  const particleCreationRef = useRef<boolean>(false)
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
   const scale = 1
   const [ghost, setGhost] = useState<{
@@ -944,6 +960,8 @@ function App() {
       // Score is only surfaced in endless mode. We keep it updated
       // internally so we don't have to special-case game logic.
       let finalScore = current.score
+      let shouldDelayScoreUpdate = false
+      
       if (current.mode === 'endless') {
         const newScore = current.score + result.pointsGained
         const flatPoints = piece.shape.cells.length
@@ -952,13 +970,107 @@ function App() {
         if (result.clearedPatterns.length > 0) {
           setClearingCells(result.clearedCellIds)
           setClearingGoldenCellId(current.goldenCellId)
-          const totalClears = result.clearedPatterns.length
-          const popupText =
-            totalClears === 1
-              ? `Clear · +${result.pointsGained}`
-              : `${totalClears} clears · +${result.pointsGained}`
-          setScorePopup(popupText)
-          setScorePopupId((id) => id + 1)
+          
+          // Calculate total score for this move (pointsGained + piece points)
+          const totalScore = result.pointsGained + piece.shape.cells.length
+          
+          // Get score counter position
+          const scoreCounterEl = document.querySelector('.board-hud-block.right .value')
+          const boardWrapper = boardWrapperRef.current
+          if (scoreCounterEl && boardWrapper) {
+            const counterRect = scoreCounterEl.getBoundingClientRect()
+            const boardRect = boardWrapper.getBoundingClientRect()
+            const endX = (counterRect.left + counterRect.width / 2 - boardRect.left) / scale
+            const endY = (counterRect.top + counterRect.height / 2 - boardRect.top) / scale
+            
+            // Calculate centroid of all cleared patterns for start position
+            let sumX = 0
+            let sumY = 0
+            let count = 0
+            for (const pattern of result.clearedPatterns) {
+              for (const cellId of pattern.cellIds) {
+                const cell = BOARD_DEFINITION.cells.find((c) => c.id === cellId)
+                if (cell) {
+                  const pos = BOARD_LAYOUT.positions[cell.id]
+                  sumX += pos.x + BOARD_LAYOUT.offsetX
+                  sumY += pos.y + BOARD_LAYOUT.offsetY
+                  count++
+                }
+              }
+            }
+            
+            if (count > 0) {
+              const startX = sumX / count
+              const startY = sumY / count
+              
+              // Mark that we should delay score update
+              shouldDelayScoreUpdate = true
+              
+              // Store pending score update in ref (available synchronously)
+              pendingScoreRef.current = finalScore
+              
+              // Prevent multiple particle creations
+              if (!particleCreationRef.current) {
+                particleCreationRef.current = true
+                
+                // Defer particle creation until after React has rendered and DOM is updated
+                // Use requestAnimationFrame to ensure DOM is fully updated
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    // Recalculate positions now that DOM is updated
+                    const scoreCounterEl = document.querySelector('.board-hud-block.right .value')
+                    const boardWrapper = boardWrapperRef.current
+                    if (scoreCounterEl && boardWrapper) {
+                      const counterRect = scoreCounterEl.getBoundingClientRect()
+                      const boardRect = boardWrapper.getBoundingClientRect()
+                      const updatedEndX = (counterRect.left + counterRect.width / 2 - boardRect.left) / scale
+                      const updatedEndY = (counterRect.top + counterRect.height / 2 - boardRect.top) / scale
+                      
+                      // Calculate delta once and store it to prevent recalculation on re-render
+                      const deltaX = updatedEndX - startX
+                      const deltaY = updatedEndY - startY
+                      
+                      // Set particle with correct coordinates (only once)
+                      const particleId = `score-${Date.now()}`
+                      setScoreParticles([
+                        {
+                          id: particleId,
+                          value: totalScore,
+                          startX,
+                          startY,
+                          deltaX,
+                          deltaY,
+                          delay: 0, // Start immediately since we already waited
+                          type: 'base',
+                        },
+                      ])
+                      
+                      // Clear particles after animation completes
+                      setTimeout(() => {
+                        setScoreParticles([])
+                        pendingScoreRef.current = null
+                        particleCreationRef.current = false
+                      }, 1400 + 200)
+                    } else {
+                      particleCreationRef.current = false
+                    }
+                  })
+                })
+              }
+              
+              // Don't update score yet - wait for particle to arrive
+              finalScore = current.score
+            }
+          } else {
+            // Fallback to old popup if we can't get positions
+            const totalClears = result.clearedPatterns.length
+            const popupText =
+              totalClears === 1
+                ? `Clear · +${result.pointsGained}`
+                : `${totalClears} clears · +${result.pointsGained}`
+            setScorePopup(popupText)
+            setScorePopupId((id) => id + 1)
+          }
         }
 
         setBestScore((prev) => {
@@ -1003,10 +1115,13 @@ function App() {
 
       setSelectedPieceId(null)
 
+      // If we're delaying score update (waiting for particle), don't update score yet
+      const scoreToUse = shouldDelayScoreUpdate ? current.score : finalScore
+      
       return {
         ...current,
         board: result.board,
-        score: finalScore,
+        score: scoreToUse,
         streak: result.clearedPatterns.length > 0 ? newStreak : 0,
         hand: newHand,
         handSlots: updatedSlots,
@@ -1296,6 +1411,39 @@ function App() {
     }, 2600)
     return () => window.clearTimeout(timeout)
   }, [scorePopup, scorePopupId])
+
+  // Trigger score counter celebration and update score when particle merges
+  useEffect(() => {
+    if (scoreParticles.length === 0) return
+    
+    // Celebration happens when the particle reaches the score counter
+    const particleDelay = scoreParticles[0]?.delay ?? 0
+    const animationDuration = 1400
+    const celebrationTime = particleDelay + animationDuration * 0.85
+    
+    const timeout = setTimeout(() => {
+      // Update score at the same time as celebration
+      const pendingScore = pendingScoreRef.current
+      if (pendingScore !== null) {
+        setGame((current) => ({
+          ...current,
+          score: pendingScore,
+        }))
+        setPendingScoreUpdate(null)
+        pendingScoreRef.current = null
+      }
+      
+      const scoreCounter = document.querySelector('.board-hud-block.right .value')
+      if (scoreCounter) {
+        scoreCounter.classList.add('score-celebrate')
+        setTimeout(() => {
+          scoreCounter.classList.remove('score-celebrate')
+        }, 400)
+      }
+    }, celebrationTime)
+    
+    return () => clearTimeout(timeout)
+  }, [scoreParticles])
 
   useEffect(() => {
     if (!game.gameOver) return
@@ -2037,6 +2185,35 @@ function App() {
           )}
           {scorePopup && game.mode === 'endless' && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
+          )}
+          {scoreParticles.length > 0 && game.mode === 'endless' && (
+            <div className="hexaclear-score-particles">
+              {scoreParticles.map((particle) => (
+                <div
+                  key={particle.id}
+                  className={`hexaclear-score-particle hexaclear-score-particle-${particle.type}`}
+                  style={{
+                    left: particle.startX,
+                    top: particle.startY,
+                    '--particle-delta-x': `${particle.deltaX}px`,
+                    '--particle-delta-y': `${particle.deltaY}px`,
+                    animationDelay: `${particle.delay}ms`,
+                  } as React.CSSProperties & {
+                    '--particle-delta-x': string
+                    '--particle-delta-y': string
+                  }}
+                >
+                  <span className="hexaclear-score-particle-value">
+                    +{particle.value}
+                  </span>
+                  {particle.label && (
+                    <span className="hexaclear-score-particle-label">
+                      {particle.label}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
           {game.gameOver && game.mode === 'endless' && (
             <div className="hexaclear-overlay">
