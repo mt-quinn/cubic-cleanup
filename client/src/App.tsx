@@ -207,44 +207,6 @@ const CubeLines = ({
     variantClass += ' golden'
   }
 
-  // Face centers for placing embossed numbers on each visible face.
-  const rightCenter = {
-    x: (cx + v1.x + v2.x + v3.x) / 4,
-    y: (cy + v1.y + v2.y + v3.y) / 4,
-  }
-  const leftCenter = {
-    x: (cx + v3.x + v4.x + v5.x) / 4,
-    y: (cy + v3.y + v4.y + v5.y) / 4,
-  }
-  const topCenter = {
-    x: (cx + v5.x + v0.x + v1.x) / 4,
-    y: (cy + v5.y + v0.y + v1.y) / 4,
-  }
-
-  // Angles of the shared "spine" edges between the top face and each
-  // side face (center → vertex), so we can orient baselines relative to
-  // those like a real d6. With our pointy-top hex layout:
-  // - v1 is the shared edge direction to the darker right face
-  // - v5 is the shared edge direction to the mid-tone left face
-  const rightSharedAngle =
-    (Math.atan2(v1.y - cy, v1.x - cx) * 180) / Math.PI
-  const leftSharedAngle =
-    (Math.atan2(v5.y - cy, v5.x - cx) * 180) / Math.PI
-
-  // Final, hand-tuned offsets for daily-mode digits, derived from the
-  // in-game debug sliders.
-  const TOP_DX = 0.2
-  const TOP_DY = 1.8
-  const TOP_ANGLE = 13
-
-  const RIGHT_DX = 0.4
-  const RIGHT_DY = -0.4
-  const RIGHT_ANGLE_OFFSET = 93
-
-  const LEFT_DX = 0.6
-  const LEFT_DY = -0.2
-  const LEFT_ANGLE_OFFSET = -105
-
   const cubeClassName = [variantClass, ...extraClasses].join(' ')
 
   return (
@@ -1832,7 +1794,6 @@ function App() {
 
                 const isFilledLogical = game.board[cell.id] === 'filled'
                 const isClearing = clearingCells.includes(cell.id)
-                const isUndoing = undoAnimation?.cellIds.includes(cell.id) ?? false
                 // Don't hide pieces during undo - they should reappear immediately
                 const isFilled = isFilledLogical || isClearing
                 const inPreview =
