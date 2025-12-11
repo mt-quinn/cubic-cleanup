@@ -1799,6 +1799,7 @@ function App() {
             viewBox={`0 0 ${BOARD_LAYOUT.width} ${BOARD_LAYOUT.height}`}
           >
             <defs>
+              
               {rippleCells.length > 0 && rippleCenter && (
                 <mask
                   id="hexaclear-ripple-mask"
@@ -2045,16 +2046,18 @@ function App() {
                 className="hexaclear-flower-boundary-back"
               />
             ))}
-            {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
-              <line
-                key={`flower-front-${idx}`}
-                x1={seg.x1}
-                y1={seg.y1}
-                x2={seg.x2}
-                y2={seg.y2}
-                className="hexaclear-flower-boundary"
-              />
-            ))}
+            <g className="hexaclear-flower-boundary-group">
+              {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
+                <line
+                  key={`flower-front-${idx}`}
+                  x1={seg.x1}
+                  y1={seg.y1}
+                  x2={seg.x2}
+                  y2={seg.y2}
+                  className="hexaclear-flower-boundary"
+                />
+              ))}
+            </g>
 
             {preview && selectedPiece && hover?.cellId && !preview.valid && (
               <PlacementGhost

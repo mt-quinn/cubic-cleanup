@@ -275,23 +275,154 @@ body {
 }
 
 .hexaclear-flower-boundary-back {
-  /* Dark underlay to give the rosette outline strong depth. */
+  /* Dark base stroke - creates depth contrast */
   stroke: rgba(90, 50, 8, 0.95);
-  stroke-width: 6;
+  stroke-width: 5.2;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.75));
 }
 
 .hexaclear-flower-boundary {
-  /* Rosette highlight: bright yellow face on top of the darker underlay so it
-     reads as a single beveled band even when the board is full. */
-  stroke: #ffe5a8;
+  /* Orange color: R:255 G:125 B:0, Brightness:67%, Saturation:105%, Opacity:100% */
+  /* Calculated: R:175 G:83 B:0 */
+  stroke: rgb(175, 83, 0);
   stroke-width: 3.4;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+}
+
+.hexaclear-flower-boundary-group {
+  /* Drop shadow applied to entire group for contiguous appearance */
+  filter: drop-shadow(0 2px 1.5px rgba(0, 0, 0, 0.75));
+}
+
+/* Debug Modal Styles */
+.hexaclear-debug-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.hexaclear-debug-modal-overlay > * {
+  pointer-events: auto;
+}
+
+.hexaclear-debug-modal {
+  background: #2f1a0f;
+  border: 2px solid #94633a;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+}
+
+.hexaclear-debug-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #94633a;
+  padding-bottom: 0.5rem;
+}
+
+.hexaclear-debug-modal-header h2 {
+  margin: 0;
+  color: #fff7eb;
+  font-size: 1.2rem;
+}
+
+.hexaclear-debug-modal-header button {
+  background: none;
+  border: none;
+  color: #fff7eb;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hexaclear-debug-modal-header button:hover {
+  color: #ffc469;
+}
+
+.hexaclear-debug-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hexaclear-debug-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.hexaclear-debug-slider label {
+  color: #fff7eb;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.hexaclear-debug-slider input[type="range"] {
+  width: 100%;
+  height: 6px;
+  background: #402214;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.hexaclear-debug-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #ffc469;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.hexaclear-debug-slider input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #ffc469;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.hexaclear-debug-values {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #94633a;
+}
+
+.hexaclear-debug-values h3 {
+  margin: 0 0 0.5rem 0;
+  color: #fff7eb;
+  font-size: 1rem;
+}
+
+.hexaclear-debug-values p {
+  margin: 0.25rem 0;
+  color: #ffe5a8;
+  font-family: monospace;
+  font-size: 0.9rem;
 }
 
 .hexaclear-debug-label {
@@ -1041,6 +1172,10 @@ button {
   font-size: 2.8rem;
   font-weight: 700;
   color: #fff9e6;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.8),
+    0 0 4px rgba(0, 0, 0, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   line-height: 1;
 }
