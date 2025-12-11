@@ -454,30 +454,34 @@ body {
 .hexaclear-cell.invalid-drop,
 .hexaclear-hex.invalid-drop,
 .hexaclear-hex-cube.invalid-drop {
-  animation: hexaclear-invalid-flash 420ms ease-out both;
+  animation: hexaclear-invalid-flash 520ms ease-out both;
 }
 
 @keyframes hexaclear-invalid-flash {
   0% {
-    fill: rgba(189, 68, 68, 0.0);
-    stroke: #ffe0d5;
-    filter:
-      drop-shadow(0 0 0 rgba(255, 150, 140, 0))
-      brightness(1);
+    /* start from normal board stroke so the pop feels like a discrete oops */
+    stroke: #94633a;
+    stroke-width: 2.6;
   }
-  40% {
-    fill: rgba(189, 68, 68, 0.0);
-    stroke: #ffb3a3;
-    filter:
-      drop-shadow(0 0 16px rgba(255, 120, 120, 0.95))
-      brightness(1.08);
+  18% {
+    /* first snap to bright red */
+    stroke: #ff4040;
+    stroke-width: 4;
+  }
+  36% {
+    /* snap back to normal */
+    stroke: #94633a;
+    stroke-width: 2.6;
+  }
+  54% {
+    /* second quick red snap */
+    stroke: #ff4040;
+    stroke-width: 4;
   }
   100% {
-    fill: transparent;
+    /* settle back to normal board stroke */
     stroke: #94633a;
-    filter:
-      drop-shadow(0 0 0 rgba(0, 0, 0, 0))
-      brightness(1);
+    stroke-width: 2.6;
   }
 }
 
@@ -1056,3 +1060,15 @@ button {
     stroke-width: 2.6;
   }
 }
+
+.hexaclear-invalid-ghost {
+  position: absolute;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.hexaclear-invalid-ghost .hexaclear-hex-cube .cube-face {
+  /* Off-board invalid ghost: show only the cube edges, no filled faces. */
+  fill: none;
+}
+

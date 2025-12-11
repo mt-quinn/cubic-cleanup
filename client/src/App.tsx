@@ -1746,6 +1746,36 @@ function App() {
               })
             })()}
 
+            {/* Off-board invalid placement flash: show the attempted shape
+                even when part of it falls outside the board. */}
+            {invalidDropCellIds.length > 0 && (
+              <g className="hexaclear-invalid-ghost">
+                {invalidDropCellIds.map((id) => {
+                  const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
+                  if (cell) {
+                    // On-board cells are already flashing via invalid-drop.
+                    return null
+                  }
+                  const [qStr, rStr] = id.split(',')
+                  const q = Number(qStr)
+                  const r = Number(rStr)
+                  if (!Number.isFinite(q) || !Number.isFinite(r)) return null
+                  const { x, y } = axialToPixel(q, r)
+                  const cx = x + BOARD_LAYOUT.offsetX
+                  const cy = y + BOARD_LAYOUT.offsetY
+                  return (
+                    <CubeLines
+                      key={`invalid-ghost-${id}`}
+                      cx={cx}
+                      cy={cy}
+                      variant="normal"
+                      extraClasses={['invalid-drop']}
+                    />
+                  )
+                })}
+              </g>
+            )}
+
             {rippleCells.length > 0 && rippleCenter && (
               <g
                 className={[
