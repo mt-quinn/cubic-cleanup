@@ -542,8 +542,8 @@ export const createDailyGameState = (): GameState => {
       const idx = Math.floor(random() * available.length)
       const cellId = available.splice(idx, 1)[0]!
 
-      // Each numbered hex starts with 2–4 hits.
-      const value = 2 + Math.floor(random() * 3)
+      // Each numbered hex starts with 2–3 hits.
+      const value = 2 + Math.floor(random() * 2)
 
       const previous = dailyHits[cellId] ?? 0
       const next = previous + value
