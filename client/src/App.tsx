@@ -674,8 +674,14 @@ function App() {
     pointerId: number | null
     pointerType: string | null
   }>({ pieceId: null, pointerId: null, pointerType: null })
-  const pendingScoreRef = useRef<number | null>(null)
-  const particleCreationRef = useRef<boolean>(false)
+  // React dev StrictMode can invoke state updater functions twice; we use these
+  // refs to ensure we don't schedule merge-time score increments twice.
+  const placementActionIdRef = useRef(0)
+  const lastScheduledScoreParticleActionIdRef = useRef<number | null>(null)
+  // Used to ignore timeouts scheduled by particles from a previous run/mode.
+  const scoreParticleGenerationRef = useRef(0)
+  // Used to avoid removing the celebrate class too early when celebrations overlap.
+  const scoreCelebrateTokenRef = useRef(0)
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
   const scale = 1
   const [ghost, setGhost] = useState<{
@@ -729,6 +735,7 @@ function App() {
     cellId: string,
     attemptedCellIds?: string[],
   ) => {
+    const actionId = (placementActionIdRef.current += 1)
     setGame((current) => {
       if (current.gameOver) return current
       const piece = current.hand.find((p) => p.id === pieceId)
@@ -961,58 +968,92 @@ function App() {
               
               // Mark that we should delay score update
               shouldDelayScoreUpdate = true
-              
-              // Store pending score update in ref (available synchronously)
-              pendingScoreRef.current = finalScore
-              
-              // Prevent multiple particle creations
-              if (!particleCreationRef.current) {
-                particleCreationRef.current = true
-                
-                // Defer particle creation until after React has rendered and DOM is updated
-                // Use requestAnimationFrame to ensure DOM is fully updated
+
+              const generationAtStart = scoreParticleGenerationRef.current
+              const animationDurationMs = 1400
+              const mergeTimeMs = Math.round(animationDurationMs * 0.85)
+
+              // Defer particle creation until after React has rendered and DOM is updated.
+              // Use requestAnimationFrame to ensure DOM is fully updated.
+              requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                  requestAnimationFrame(() => {
-                    // Recalculate positions now that DOM is updated
-                    const scoreCounterEl = document.querySelector('.board-hud-block.right .value')
-                    const boardWrapper = boardWrapperRef.current
-                    if (scoreCounterEl && boardWrapper) {
-                      const counterRect = scoreCounterEl.getBoundingClientRect()
-                      const boardRect = boardWrapper.getBoundingClientRect()
-                      const updatedEndX = (counterRect.left + counterRect.width / 2 - boardRect.left) / scale
-                      const updatedEndY = (counterRect.top + counterRect.height / 2 - boardRect.top) / scale
-                      
-                      // Calculate delta once and store it to prevent recalculation on re-render
-                      const deltaX = updatedEndX - startX
-                      const deltaY = updatedEndY - startY
-                      
-                      // Set particle with correct coordinates (only once)
-                      const particleId = `score-${Date.now()}`
-                      setScoreParticles([
-                        {
-                          id: particleId,
-                          value: totalScore,
-                          startX,
-                          startY,
-                          deltaX,
-                          deltaY,
-                          delay: 0, // Start immediately since we already waited
-                          type: 'base',
-                        },
-                      ])
-                      
-                      // Clear particles after animation completes
-                      setTimeout(() => {
-                        setScoreParticles([])
-                        pendingScoreRef.current = null
-                        particleCreationRef.current = false
-                      }, 1400 + 200)
-                    } else {
-                      particleCreationRef.current = false
-                    }
-                  })
+                  if (scoreParticleGenerationRef.current !== generationAtStart) return
+                  // In dev StrictMode the updater function can be invoked twice; avoid
+                  // scheduling a duplicate particle+merge for the same move.
+                  if (lastScheduledScoreParticleActionIdRef.current === actionId) return
+                  lastScheduledScoreParticleActionIdRef.current = actionId
+                  // Recalculate positions now that DOM is updated
+                  const scoreCounterEl = document.querySelector(
+                    '.board-hud-block.right .value',
+                  )
+                  const boardWrapper = boardWrapperRef.current
+                  if (scoreCounterEl && boardWrapper) {
+                    const counterRect = scoreCounterEl.getBoundingClientRect()
+                    const boardRect = boardWrapper.getBoundingClientRect()
+                    const updatedEndX =
+                      (counterRect.left + counterRect.width / 2 - boardRect.left) /
+                      scale
+                    const updatedEndY =
+                      (counterRect.top + counterRect.height / 2 - boardRect.top) /
+                      scale
+
+                    // Calculate delta once and store it to prevent recalculation on re-render
+                    const deltaX = updatedEndX - startX
+                    const deltaY = updatedEndY - startY
+
+                    // Create a particle for this scoring event (overlap is OK).
+                    const particleId = `score-${Date.now()}-${Math.random()
+                      .toString(16)
+                      .slice(2)}`
+                    setScoreParticles((prev) => [
+                      ...prev,
+                      {
+                        id: particleId,
+                        value: totalScore,
+                        startX,
+                        startY,
+                        deltaX,
+                        deltaY,
+                        delay: 0,
+                        type: 'base',
+                      },
+                    ])
+
+                    // Update displayed score and trigger celebration near "merge" time.
+                    window.setTimeout(() => {
+                      if (scoreParticleGenerationRef.current !== generationAtStart) return
+                      setGame((currentGame) => {
+                        if (currentGame.mode !== 'endless') return currentGame
+                        return {
+                          ...currentGame,
+                          score: currentGame.score + totalScore,
+                        }
+                      })
+
+                      const scoreCounter = document.querySelector(
+                        '.board-hud-block.right .value',
+                      )
+                      if (scoreCounter) {
+                        scoreCelebrateTokenRef.current += 1
+                        const token = scoreCelebrateTokenRef.current
+                        scoreCounter.classList.add('score-celebrate')
+                        window.setTimeout(() => {
+                          if (scoreCelebrateTokenRef.current !== token) return
+                          scoreCounter.classList.remove('score-celebrate')
+                        }, 400)
+                      }
+                    }, mergeTimeMs)
+
+                    // Remove just this particle after animation completes.
+                    window.setTimeout(() => {
+                      if (scoreParticleGenerationRef.current !== generationAtStart) return
+                      setScoreParticles((prev) =>
+                        prev.filter((p) => p.id !== particleId),
+                      )
+                    }, animationDurationMs + 200)
+                  }
                 })
-              }
+              })
               
               // Don't update score yet - wait for particle to arrive
               finalScore = current.score
@@ -1108,6 +1149,9 @@ function App() {
   }
 
   const resetGame = () => {
+    scoreParticleGenerationRef.current += 1
+    lastScheduledScoreParticleActionIdRef.current = null
+    setScoreParticles([])
     if (game.mode === 'daily') {
       const next = createDailyGameState()
       setGame(next)
@@ -1378,38 +1422,6 @@ function App() {
     }, 2600)
     return () => window.clearTimeout(timeout)
   }, [scorePopup, scorePopupId])
-
-  // Trigger score counter celebration and update score when particle merges
-  useEffect(() => {
-    if (scoreParticles.length === 0) return
-    
-    // Celebration happens just before particle reaches HUD (at 85% of animation)
-    const particleDelay = scoreParticles[0]?.delay ?? 0
-    const animationDuration = 1400
-    const celebrationTime = particleDelay + animationDuration * 0.85
-    
-    const timeout = setTimeout(() => {
-      // Update score at the same time as celebration
-      const pendingScore = pendingScoreRef.current
-      if (pendingScore !== null) {
-        setGame((current) => ({
-          ...current,
-          score: pendingScore,
-        }))
-        pendingScoreRef.current = null
-      }
-      
-      const scoreCounter = document.querySelector('.board-hud-block.right .value')
-      if (scoreCounter) {
-        scoreCounter.classList.add('score-celebrate')
-        setTimeout(() => {
-          scoreCounter.classList.remove('score-celebrate')
-        }, 400)
-      }
-    }, celebrationTime)
-    
-    return () => clearTimeout(timeout)
-  }, [scoreParticles])
 
   useEffect(() => {
     if (!game.gameOver) return
@@ -2100,7 +2112,10 @@ function App() {
                     </span>
                   ) : (
                     <span className="value">
-                       {dailyCubesRemaining} Cubes Remain
+                       {dailyCubesRemaining}{' '}
+                      {dailyCubesRemaining === 1
+                        ? 'Cube Remains'
+                        : 'Cubes Remain'}
                     </span>
                   )}
       </div>
