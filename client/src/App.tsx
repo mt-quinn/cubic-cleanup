@@ -388,6 +388,8 @@ type DailyHighScoreEntry = {
   date: number
 }
 
+const DAILY_PLAYER_RUNS_PREFIX = 'cubic-daily-runs-'
+
 const loadHighScores = (): HighScoreEntry[] => {
   try {
     const raw = window.localStorage.getItem('cubic-highscores')
@@ -428,6 +430,23 @@ const loadDailyHighScores = (): DailyHighScoreEntry[] => {
   }
 }
 
+const loadDailyRunsForDateKey = (dateKey: string): DailyHighScoreEntry[] => {
+  try {
+    const raw = window.localStorage.getItem(`${DAILY_PLAYER_RUNS_PREFIX}${dateKey}`)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as DailyHighScoreEntry[]
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (e) =>
+        typeof e.name === 'string' &&
+        typeof e.moves === 'number' &&
+        typeof e.date === 'number',
+    )
+  } catch {
+    return []
+  }
+}
+
 const qualifiesForHighScore = (
   score: number,
   entries: HighScoreEntry[],
@@ -439,19 +458,6 @@ const qualifiesForHighScore = (
   )
   const last = sorted[sorted.length - 1]
   return score > last.score
-}
-
-const qualifiesForDailyHighScore = (
-  moves: number,
-  entries: DailyHighScoreEntry[],
-): boolean => {
-  if (moves <= 0) return false
-  if (entries.length < 5) return true
-  const sorted = [...entries].sort(
-    (a, b) => a.moves - b.moves || a.date - b.date,
-  )
-  const last = sorted[sorted.length - 1]
-  return moves < last.moves
 }
 
 const getTodayKey = (): string => {
@@ -596,6 +602,7 @@ function App() {
   const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
     () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
   )
+  const [dailyRunsToken, setDailyRunsToken] = useState(0)
   const [pendingDailyHighScore, setPendingDailyHighScore] = useState(false)
   const [pendingDailyMoves, setPendingDailyMoves] = useState<number | null>(
     null,
@@ -648,6 +655,18 @@ function App() {
     }
     return count
   }, [game.mode, game.dailyHits])
+
+  const todayPlayerDailyRuns = useMemo(() => {
+    if (typeof window === 'undefined') return []
+    const name = playerName.trim()
+    if (!name) return []
+    const todayKey = getTodayKey()
+    const runs = loadDailyRunsForDateKey(todayKey)
+    return runs
+      .filter((r) => r.name === name && r.moves > 0)
+      .sort((a, b) => a.moves - b.moves || a.date - b.date)
+      .slice(0, 5)
+  }, [playerName, dailyRunsToken])
   const [undoStack, setUndoStack] = useState<GameState[]>([])
   const [undoAnimation, setUndoAnimation] = useState<{
     piece: ActivePiece
@@ -1429,10 +1448,8 @@ function App() {
     if (game.mode === 'daily' && game.dailyCompleted) {
       const moves = game.moves
       setPendingDailyMoves(moves)
-      setPendingDailyHighScore(
-        !dailyHighScoreSaved &&
-          qualifiesForDailyHighScore(moves, dailyHighScores),
-      )
+      // For daily mode, always allow the player to log today's result.
+      setPendingDailyHighScore(!dailyHighScoreSaved)
 
       // Track the best (lowest) move count for today's daily puzzle,
       // independent of the global daily high score table.
@@ -1535,8 +1552,16 @@ function App() {
         'cubic-daily-highscores',
         JSON.stringify(next),
       )
+      const todayKey = getTodayKey()
+      const existingRuns = loadDailyRunsForDateKey(todayKey)
+      const nextRuns = [...existingRuns, entry].slice(-50)
+      window.localStorage.setItem(
+        `${DAILY_PLAYER_RUNS_PREFIX}${todayKey}`,
+        JSON.stringify(nextRuns),
+      )
       window.localStorage.setItem('cubic-player-name', name)
     }
+    setDailyRunsToken((t) => t + 1)
     setPendingDailyHighScore(false)
     setDailyHighScoreSaved(true)
   }
@@ -1549,8 +1574,10 @@ function App() {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('cubic-highscores')
       window.localStorage.removeItem('cubic-daily-highscores')
+      window.localStorage.removeItem(`${DAILY_PLAYER_RUNS_PREFIX}${getTodayKey()}`)
     }
     setDailyHighScores([])
+    setDailyRunsToken((t) => t + 1)
     setPendingDailyHighScore(false)
     setPendingDailyMoves(null)
     setDailyHighScoreSaved(false)
@@ -2298,16 +2325,11 @@ function App() {
                     </button>
                   </div>
                 )}
-                {dailyHighScores.length > 0 && (
+                {todayPlayerDailyRuns.length > 0 && (
                   <div className="score">
-                    <p>Best daily runs (fewest moves):</p>
+                    <p>Your best finishes today (fewest moves):</p>
                     <ol className="hexaclear-highscores">
-                      {dailyHighScores
-                        .slice()
-                        .sort(
-                          (a, b) => a.moves - b.moves || a.date - b.date,
-                        )
-                        .map((entry, idx) => {
+                      {todayPlayerDailyRuns.map((entry, idx) => {
                           const isRecent =
                             dailyHighScoreSaved &&
                             lastSavedDailyHighScoreDate !== null &&
@@ -2317,9 +2339,8 @@ function App() {
                               key={entry.date + entry.name + idx}
                               className={isRecent ? 'recent' : undefined}
                             >
-                              <span className="name">{entry.name}</span>
                               <span className="value">
-                                {entry.moves} moves
+                                {entry.moves} {entry.moves === 1 ? 'move' : 'moves'}
                               </span>
                             </li>
                           )
