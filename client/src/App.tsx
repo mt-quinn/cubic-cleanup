@@ -554,6 +554,13 @@ function App() {
     Record<string, string[]>
   >({})
   const [clearingGoldenCellId, setClearingGoldenCellId] = useState<string | null>(null)
+  // If the ruby (golden cube) respawns onto an empty cell, game logic marks that
+  // destination cell as filled immediately. During the clear animation we keep
+  // the ruby highlight on the *previous* cell, so we hide the destination cube
+  // until the clear animation finishes to avoid a brief "normal cube" flash.
+  const [pendingGoldenSpawnCellId, setPendingGoldenSpawnCellId] = useState<
+    string | null
+  >(null)
   const [recentlyPlacedCells, setRecentlyPlacedCells] = useState<string[]>([])
   const [failedPlacementPieceId, setFailedPlacementPieceId] = useState<string | null>(
     null,
@@ -650,6 +657,9 @@ function App() {
     endY: number
     cellIds: string[]
   } | null>(null)
+  const [pendingUndoRestoreSlotIndex, setPendingUndoRestoreSlotIndex] = useState<
+    number | null
+  >(null)
   const handButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
@@ -736,6 +746,18 @@ function App() {
             : [cellId],
         )
         return current
+      }
+
+      if (
+        current.mode === 'endless' &&
+        result.goldenCleared &&
+        result.goldenCellId &&
+        before.board[result.goldenCellId] === 'empty' &&
+        !result.placedCellIds.includes(result.goldenCellId)
+      ) {
+        setPendingGoldenSpawnCellId(result.goldenCellId)
+      } else {
+        setPendingGoldenSpawnCellId(null)
       }
 
       // For VFX, only run the placement "pop" on the portion of the piece
@@ -1100,9 +1122,12 @@ function App() {
     setSelectedPieceId(null)
     setHover(null)
     setUndoStack([])
+    setUndoAnimation(null)
+    setPendingUndoRestoreSlotIndex(null)
     setGoldenPopupCellId(null)
     setClearingCells([])
     setClearingGoldenCellId(null)
+    setPendingGoldenSpawnCellId(null)
     setScorePopup(null)
   }
 
@@ -1153,9 +1178,11 @@ function App() {
           
           // Restore game state immediately so pieces reappear
           setUndoStack(remaining)
+          setPendingUndoRestoreSlotIndex(slotIndex)
           setGoldenPopupCellId(null)
           setClearingCells([])
           setClearingGoldenCellId(null)
+          setPendingGoldenSpawnCellId(null)
           setScorePopup(null)
           setGame((current) => {
             const restoredMoves =
@@ -1181,6 +1208,7 @@ function App() {
             setSelectedPieceId(null)
             setHover(null)
             setUndoAnimation(null)
+            setPendingUndoRestoreSlotIndex(null)
           }, 350) // Match animation duration
           return
         }
@@ -1189,9 +1217,11 @@ function App() {
     
     // Fallback: instant undo if we can't animate
     setUndoStack(remaining)
+    setPendingUndoRestoreSlotIndex(null)
     setGoldenPopupCellId(null)
     setClearingCells([])
     setClearingGoldenCellId(null)
+    setPendingGoldenSpawnCellId(null)
     setScorePopup(null)
     setGame((current) => {
       const restoredMoves =
@@ -1250,6 +1280,7 @@ function App() {
       setClearingCells([])
       setClearingClassesByCell({})
       setClearingGoldenCellId(null)
+      setPendingGoldenSpawnCellId(null)
     }, 600)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
@@ -1803,8 +1834,14 @@ function App() {
 
                 const isFilledLogical = game.board[cell.id] === 'filled'
                 const isClearing = clearingCells.includes(cell.id)
+                const isPendingGoldenSpawn =
+                  game.mode === 'endless' &&
+                  clearingCells.length > 0 &&
+                  pendingGoldenSpawnCellId != null &&
+                  pendingGoldenSpawnCellId === cell.id
                 // Don't hide pieces during undo - they should reappear immediately
-                const isFilled = isFilledLogical || isClearing
+                const isFilledVisible = isFilledLogical && !isPendingGoldenSpawn
+                const isFilled = isFilledVisible || isClearing
                 const inPreview =
                   !isClearing &&
                   preview &&
@@ -1871,7 +1908,7 @@ function App() {
                         }
                       }}
                     />
-                    {!isFilledLogical && !inPreview && !willClearInPreview && (
+                    {!isFilledVisible && !inPreview && !willClearInPreview && (
                       <SlotGeometry cx={cx} cy={cy} />
                     )}
                     {(isFilled || (isDailyTarget && isDailyHitPulsing)) && !isRecentlyPlaced && (
@@ -2511,12 +2548,19 @@ function App() {
         <section className="hexaclear-hand">
           {game.handSlots.map((pieceId, slotIndex) => {
             const piece = game.hand.find((p) => p.id === pieceId) ?? null
+            const isHiddenByUndo =
+              undoAnimation != null &&
+              pendingUndoRestoreSlotIndex != null &&
+              pendingUndoRestoreSlotIndex === slotIndex
+            const displayPiece = isHiddenByUndo ? null : piece
             const isSelected =
-              !!piece && selectedPieceId === piece.id
-            const isDragging = !!piece && draggingPieceId === piece.id
-            const isPlayable = !!piece && playablePieceIds.has(piece.id)
+              !!displayPiece && selectedPieceId === displayPiece.id
+            const isDragging =
+              !!displayPiece && draggingPieceId === displayPiece.id
+            const isPlayable =
+              !!displayPiece && playablePieceIds.has(displayPiece.id)
             const isFailedDrop =
-              !!piece && failedPlacementPieceId === piece.id
+              !!displayPiece && failedPlacementPieceId === displayPiece.id
 
             return (
               <button
@@ -2536,32 +2580,32 @@ function App() {
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 aria-label={
-                  piece
-                    ? `${piece.shape.size}-cube piece`
+                  displayPiece
+                    ? `${displayPiece.shape.size}-cube piece`
                     : 'Empty hand slot'
                 }
                 onClick={() => {
-                  if (!piece) return
+                  if (!displayPiece) return
                   setSelectedPieceId(
-                    selectedPieceId === piece.id ? null : piece.id,
+                    selectedPieceId === displayPiece.id ? null : displayPiece.id,
                   )
                   setHover(null)
                 }}
                 onPointerDown={(e) => {
-                  if (!piece) return
+                  if (!displayPiece) return
                   e.preventDefault()
                   dragState.current = {
-                    pieceId: piece.id,
+                    pieceId: displayPiece.id,
                     pointerId: e.pointerId,
                     pointerType: e.pointerType || null,
                   }
-                  setSelectedPieceId(piece.id)
-                  setDraggingPieceId(piece.id)
+                  setSelectedPieceId(displayPiece.id)
+                  setDraggingPieceId(displayPiece.id)
                   const wrapper = boardWrapperRef.current
                   if (wrapper) {
                     const rect = wrapper.getBoundingClientRect()
                     setGhost({
-                      piece,
+                      piece: displayPiece,
                       x: (e.clientX - rect.left) / scale,
                       y: (e.clientY - rect.top) / scale,
                     })
@@ -2569,8 +2613,8 @@ function App() {
                   triggerGrabHaptic()
                 }}
               >
-                {piece && !isDragging && (
-                  <PiecePreview shape={piece.shape} mode="hand" />
+                {displayPiece && !isDragging && (
+                  <PiecePreview shape={displayPiece.shape} mode="hand" />
                 )}
               </button>
             )
