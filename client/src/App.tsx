@@ -554,6 +554,21 @@ const triggerGrabHaptic = () => {
 
 function App() {
   const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
+  // True iff the player committed to a session this load — either by having
+  // an in-progress game restored from storage, or by explicitly starting /
+  // resetting a run from the menu, or by placing their first piece. Once
+  // true, never flips back. Drives whether the menu shows the prominent
+  // "New Game" button (only on a true cold-boot with no in-progress save)
+  // versus the normal Restart-run + Resume pause menu.
+  //
+  // Note: the persist effect writes the initial empty game to storage on
+  // first render, so we can't gate on "key exists in localStorage" — that
+  // would trip on the second visit even if the player never engaged. We
+  // instead inspect the loaded game's actual state.
+  const [hasStartedSession, setHasStartedSession] = useState<boolean>(() => {
+    const initial = loadInitialGameFromStorage()
+    return initial.moves > 0 || initial.gameOver
+  })
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null)
   const [hover, setHover] = useState<HoverInfo>(null)
   const [clearingCells, setClearingCells] = useState<string[]>([])
@@ -1433,6 +1448,12 @@ function App() {
   )
 
   useEffect(() => {
+    if (game.moves > 0) {
+      setHasStartedSession(true)
+    }
+  }, [game.moves])
+
+  useEffect(() => {
     if (clearingCells.length === 0) return
     const timeout = window.setTimeout(() => {
       setClearingCells([])
@@ -1960,6 +1981,7 @@ function App() {
                     .join(' ')}
                   onClick={() => {
                     if (game.mode !== 'endless') {
+                      playUiClick()
                       toggleDailyMode()
                     }
                   }}
@@ -1976,6 +1998,7 @@ function App() {
                     .join(' ')}
                   onClick={() => {
                     if (game.mode !== 'daily') {
+                      playUiClick()
                       toggleDailyMode()
                     }
                   }}
@@ -2404,7 +2427,10 @@ function App() {
             <button
               type="button"
               className="hexaclear-undo-button"
-              onClick={handleUndo}
+              onClick={() => {
+                playUiClick()
+                handleUndo()
+              }}
             >
               Undo
         </button>
@@ -2482,7 +2508,10 @@ function App() {
                     />
                     <button
                       type="button"
-                      onClick={handleSaveHighScore}
+                      onClick={() => {
+                        playUiClick()
+                        handleSaveHighScore()
+                      }}
                       style={{ marginTop: '0.5rem' }}
                     >
                       Save score
@@ -2520,13 +2549,23 @@ function App() {
                 {undoStack.length > 0 && !highScoreSaved && (
                   <button
                     type="button"
-                    onClick={handleUndo}
+                    onClick={() => {
+                      playUiClick()
+                      handleUndo()
+                    }}
                     style={{ marginBottom: '0.5rem' }}
                   >
                     Undo last move
                   </button>
                 )}
-                <button onClick={resetGame}>Play again</button>
+                <button
+                  onClick={() => {
+                    playUiClick()
+                    resetGame()
+                  }}
+                >
+                  Play again
+                </button>
               </div>
             </div>
           )}
@@ -2551,7 +2590,10 @@ function App() {
                     />
                     <button
                       type="button"
-                      onClick={handleSaveDailyHighScore}
+                      onClick={() => {
+                        playUiClick()
+                        handleSaveDailyHighScore()
+                      }}
                       style={{ marginTop: '0.5rem' }}
                     >
                       Save daily result
@@ -2584,7 +2626,10 @@ function App() {
                 {undoStack.length > 0 && !dailyHighScoreSaved && (
                   <button
                     type="button"
-                    onClick={handleUndo}
+                    onClick={() => {
+                      playUiClick()
+                      handleUndo()
+                    }}
                     style={{ marginBottom: '0.5rem' }}
                   >
                     Undo last move
@@ -2593,6 +2638,7 @@ function App() {
                 <button
                   type="button"
                   onClick={() => {
+                    playUiClick()
                     const next = createDailyGameState()
                     setGame(next)
                     setSavedDailyGame(next)
@@ -2673,6 +2719,7 @@ function App() {
                     className="hexaclear-menu-link"
                     onClick={() => {
                       unlockAudioOnGesture()
+                      playUiClick()
                       setShowMenu(false)
                       setShowScoring(true)
                     }}
@@ -2687,6 +2734,7 @@ function App() {
                     className="hexaclear-menu-link"
                     onClick={() => {
                       unlockAudioOnGesture()
+                      playUiClick()
                       setShowMenu(false)
                       setShowHighScores(true)
                     }}
@@ -2695,29 +2743,48 @@ function App() {
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  className="hexaclear-menu-restart-link"
-                  onClick={() => {
-                    unlockAudioOnGesture()
-                    setShowMenu(false)
-                    resetGame()
-                  }}
-                >
-                  Restart run
-                </button>
+                  {hasStartedSession ? (
+                  <>
+                    <button
+                      type="button"
+                      className="hexaclear-menu-restart-link"
+                      onClick={() => {
+                        unlockAudioOnGesture()
+                        playUiClick()
+                        setShowMenu(false)
+                        resetGame()
+                      }}
+                    >
+                      Restart run
+                    </button>
 
-                <button
-                  type="button"
-                  className="hexaclear-reset"
-                  onClick={() => {
-                    unlockAudioOnGesture()
-                    playUiClick()
-                    setShowMenu(false)
-                  }}
-                >
-                  Resume
-                </button>
+                    <button
+                      type="button"
+                      className="hexaclear-reset"
+                      onClick={() => {
+                        unlockAudioOnGesture()
+                        playUiClick()
+                        setShowMenu(false)
+                      }}
+                    >
+                      Resume
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="hexaclear-menu-new-game"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setHasStartedSession(true)
+                      setShowMenu(false)
+                      resetGame()
+                    }}
+                  >
+                    New Game
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -2947,6 +3014,7 @@ function App() {
                         className="hexaclear-scores-date-step"
                         aria-label="Previous day"
                         onClick={() => {
+                          playUiClick()
                           setDailyScoresDateKey((prev) =>
                             shiftDateKey(prev || getTodayKey(), -1),
                           )
@@ -2962,6 +3030,7 @@ function App() {
                         className="hexaclear-scores-date-step"
                         aria-label="Next day"
                         onClick={() => {
+                          playUiClick()
                           const today = getTodayKey()
                           setDailyScoresDateKey((prev) => {
                             const next = shiftDateKey(prev || today, 1)
@@ -3017,7 +3086,10 @@ function App() {
                       <button
                         type="button"
                         className="hexaclear-menu-link hexaclear-scores-today-link"
-                        onClick={() => setDailyScoresDateKey(todayKey)}
+                        onClick={() => {
+                          playUiClick()
+                          setDailyScoresDateKey(todayKey)
+                        }}
                       >
                         Jump to today
                       </button>
@@ -3028,7 +3100,10 @@ function App() {
                     <button
                       type="button"
                       className="hexaclear-menu-restart-link"
-                      onClick={() => setShowResetConfirm(true)}
+                      onClick={() => {
+                        playUiClick()
+                        setShowResetConfirm(true)
+                      }}
                     >
                       Reset hiscores
                     </button>
@@ -3041,7 +3116,10 @@ function App() {
                         <button
                           type="button"
                           className="hexaclear-menu-restart-link"
-                          onClick={handleResetHighScores}
+                          onClick={() => {
+                            playUiClick()
+                            handleResetHighScores()
+                          }}
                         >
                           Yes, reset
                         </button>
@@ -3054,7 +3132,10 @@ function App() {
                         <button
                           type="button"
                           className="hexaclear-menu-link"
-                          onClick={() => setShowResetConfirm(false)}
+                          onClick={() => {
+                            playUiClick()
+                            setShowResetConfirm(false)
+                          }}
                         >
                           Cancel
                         </button>

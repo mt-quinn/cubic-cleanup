@@ -1195,15 +1195,25 @@ body {
     drop-shadow(0 0 8px rgba(255, 120, 160, 0.65));
 }
 
+/* The +10 label sits on the ruby's bright pink top face. To make the
+   text read as "punched through to a lighter material beneath", we
+   use the same dual-offset trick as .daily-number-top:
+     - Light cream fill = the brighter material showing through.
+     - Dark drop-shadow at bottom-right = the cut edge of the punch
+       in shadow (light comes from upper-left).
+     - Light drop-shadow at top-left = the cut edge catching direct
+       light, sealing the recessed illusion. */
 .hexaclear-gem-label {
   font-family: 'Nunito', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 0.8rem;
-  fill: #fff7f2;
-  stroke: rgba(110, 30, 30, 0.95);
-  stroke-width: 0.4px;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  fill: #fff6dc;
   text-anchor: middle;
-  paint-order: stroke;
+  filter:
+    drop-shadow(0.55px 0.8px 0 rgba(15, 2, 8, 1))
+    drop-shadow(-0.4px -0.5px 0 rgba(255, 230, 240, 0.6));
 }
 .hexaclear-hex-cube.daily-target .cube-top {
   fill: #e8e8e8; /* bright chrome highlight */
@@ -1843,6 +1853,42 @@ body {
   align-self: center;
   margin-top: 0.35rem;
   min-width: 7rem;
+}
+
+/* Larger primary CTA used when no run is in progress — replaces the
+   Restart-run link + Resume button pair so the player has a single,
+   confident "New Game" target. Same gold gradient as Resume but wider,
+   taller, and louder typography to claim its prominence. */
+.hexaclear-menu-card > .hexaclear-menu-new-game {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 205, 143, 0.85);
+  background: linear-gradient(135deg, #f7b35a, #f37a3b);
+  color: #3a1204;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  transition: transform 80ms ease-out, filter 120ms ease-out;
+}
+
+.hexaclear-menu-card > .hexaclear-menu-new-game:hover {
+  filter: brightness(1.06);
+}
+
+.hexaclear-menu-card > .hexaclear-menu-new-game:active {
+  transform: scale(0.97);
 }
 
 /* Single cohesive settings group — no inset card, just a vertical
