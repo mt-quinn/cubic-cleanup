@@ -20,6 +20,7 @@ import {
   playClickUp,
   playError,
   playGameOver,
+  playUiClick,
   setMasterVolume,
   setMuted,
   unlockAudioOnGesture,
@@ -1935,7 +1936,10 @@ function App() {
                 <button
                   type="button"
                   className="hexaclear-menu-button"
-                  onClick={() => setShowMenu(true)}
+                  onClick={() => {
+                    playUiClick()
+                    setShowMenu(true)
+                  }}
                 >
                   <span className="hexaclear-menu-button-icon" aria-hidden="true">
                     ⚙️
@@ -2641,6 +2645,10 @@ function App() {
                         const next = e.target.checked
                         setAudioMutedState(next)
                         setMuted(next)
+                        // After mute state is updated:
+                        //   unmuting -> click is now audible (signals "audio back")
+                        //   muting   -> click is silenced (visual change confirms it)
+                        playUiClick()
                       }}
                     />
                   </label>
@@ -2651,7 +2659,10 @@ function App() {
                     <input
                       type="checkbox"
                       checked={reducedMotion}
-                      onChange={(e) => setReducedMotion(e.target.checked)}
+                      onChange={(e) => {
+                        setReducedMotion(e.target.checked)
+                        playUiClick()
+                      }}
                     />
                   </label>
                 </div>
@@ -2701,6 +2712,7 @@ function App() {
                   className="hexaclear-reset"
                   onClick={() => {
                     unlockAudioOnGesture()
+                    playUiClick()
                     setShowMenu(false)
                   }}
                 >
@@ -2849,6 +2861,7 @@ function App() {
                   type="button"
                   className="hexaclear-reset"
                   onClick={() => {
+                    playUiClick()
                     setShowScoring(false)
                     setShowMenu(true)
                   }}
@@ -3053,6 +3066,7 @@ function App() {
                     type="button"
                     className="hexaclear-reset"
                     onClick={() => {
+                      playUiClick()
                       setShowHighScores(false)
                       setShowMenu(true)
                     }}

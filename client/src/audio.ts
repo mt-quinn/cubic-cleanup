@@ -214,6 +214,39 @@ export const playClickUp = () => playOneShot('clickUp')
 export const playError = () => playOneShot('error')
 export const playGameOver = () => playOneShot('gameOver')
 
+// UI click: click_down immediately followed by click_up, scheduled
+// so click_up begins exactly when click_down ends. We use the
+// AudioContext clock for sample-accurate placement instead of
+// setTimeout so the two clips sit tightly back-to-back without
+// audible overlap or gap.
+export const playUiClick = () => {
+  if (muted) return
+  const ctx = audioContext
+  if (!ctx || !masterGainNode) return
+  if (ctx.state !== 'running') return
+  const downBuf = buffers.clickDown
+  const upBuf = buffers.clickUp
+  if (!downBuf || !upBuf) return
+  try {
+    const now = ctx.currentTime
+    const downSrc = ctx.createBufferSource()
+    downSrc.buffer = downBuf
+    const downGain = ctx.createGain()
+    downGain.gain.value = VOLUMES.clickDown
+    downSrc.connect(downGain).connect(masterGainNode)
+    downSrc.start(now)
+
+    const upSrc = ctx.createBufferSource()
+    upSrc.buffer = upBuf
+    const upGain = ctx.createGain()
+    upGain.gain.value = VOLUMES.clickUp
+    upSrc.connect(upGain).connect(masterGainNode)
+    upSrc.start(now + downBuf.duration)
+  } catch {
+    // Ignore — playback is best-effort.
+  }
+}
+
 // Play the SFX for the Nth consecutive clearing placement, capping at
 // clear_7.wav for the 7th and beyond. `streakIndex` is 1-based: 1 means
 // the first clear in a run, 2 the second, etc.
