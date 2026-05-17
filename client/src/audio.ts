@@ -49,6 +49,51 @@ const VOLUMES: Record<SoundKey, number> = {
 let elements: Partial<Record<SoundKey, HTMLAudioElement>> = {}
 let primed = false
 
+const LS_VOLUME_KEY = 'cubic-master-volume'
+const LS_MUTED_KEY = 'cubic-muted'
+
+const readInitialVolume = (): number => {
+  if (typeof window === 'undefined') return 1
+  const raw = window.localStorage.getItem(LS_VOLUME_KEY)
+  if (raw === null) return 1
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return 1
+  return Math.max(0, Math.min(1, n))
+}
+
+const readInitialMuted = (): boolean => {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(LS_MUTED_KEY) === 'true'
+}
+
+let masterVolume = readInitialVolume()
+let muted = readInitialMuted()
+
+export const getMasterVolume = (): number => masterVolume
+export const getMuted = (): boolean => muted
+
+export const setMasterVolume = (next: number): void => {
+  masterVolume = Math.max(0, Math.min(1, next))
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(LS_VOLUME_KEY, String(masterVolume))
+    } catch {
+      // Best-effort persistence.
+    }
+  }
+}
+
+export const setMuted = (next: boolean): void => {
+  muted = next
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(LS_MUTED_KEY, next ? 'true' : 'false')
+    } catch {
+      // Best-effort persistence.
+    }
+  }
+}
+
 const ensureElements = () => {
   if (typeof window === 'undefined') return
   for (const key of Object.keys(SOURCES) as SoundKey[]) {
@@ -95,9 +140,13 @@ export const unlockAudioOnGesture = () => {
 }
 
 const playOneShot = (key: SoundKey) => {
+  if (muted) return
   ensureElements()
   const audio = elements[key]
   if (!audio) return
+  // Apply per-clip base volume × master volume right before play so the
+  // user's volume slider takes effect immediately on the next sound.
+  audio.volume = Math.max(0, Math.min(1, VOLUMES[key] * masterVolume))
   try {
     audio.currentTime = 0
     const result = audio.play()

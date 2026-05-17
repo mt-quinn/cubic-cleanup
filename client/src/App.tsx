@@ -13,11 +13,15 @@ import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { Axial } from './game/hexTypes'
 import {
+  getMasterVolume,
+  getMuted,
   playClearForStreakIndex,
   playClickDown,
   playClickUp,
   playError,
   playGameOver,
+  setMasterVolume,
+  setMuted,
   unlockAudioOnGesture,
 } from './audio'
 import { WebHaptics } from 'web-haptics'
@@ -629,6 +633,13 @@ function App() {
     number | null
   >(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [volume, setVolumeState] = useState<number>(() => getMasterVolume())
+  const [audioMuted, setAudioMutedState] = useState<boolean>(() => getMuted())
+  const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('cubic-reduced-motion') === 'true'
+  })
   const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
     () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
   )
@@ -1484,6 +1495,21 @@ function App() {
     return () => window.clearTimeout(tid)
   }, [rubyBurst])
 
+  // Persist the reduced-motion preference so the toggle sticks across
+  // sessions. The actual visual gating happens via a class on the root
+  // viewport element.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        'cubic-reduced-motion',
+        reducedMotion ? 'true' : 'false',
+      )
+    } catch {
+      // Best-effort persistence.
+    }
+  }, [reducedMotion])
+
   // Game-over wind-down: when the run ends, give the board a beat to
   // desaturate and let the unplayable hand shake before the modal slams
   // in. Plays game_over.wav at the start of the wind-down.
@@ -1882,6 +1908,7 @@ function App() {
       className={[
         'cubic-viewport',
         hitstop ? 'hitstop' : '',
+        reducedMotion ? 'reduced-motion' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -1905,6 +1932,14 @@ function App() {
                 : bestScore ?? '—'}
             </span>
           </div>
+          <button
+            type="button"
+            className="hexaclear-menu-button"
+            onClick={() => setShowMenu(true)}
+            aria-label="Open menu"
+          >
+            ☰
+          </button>
         </div>
         <div className="hexaclear-header-controls">
           <div className="hexaclear-mode-toggle">
@@ -1941,29 +1976,13 @@ function App() {
               Daily
             </button>
           </div>
-          <div className="hexaclear-header-buttons">
-            <button
-              className="hexaclear-reset"
-              type="button"
-              onClick={resetGame}
-            >
-              Restart
-            </button>
-            <button
-              className="hexaclear-reset"
-              type="button"
-              onClick={() => setShowScoring(true)}
-            >
-              Scoring
-            </button>
-            <button
-              className="hexaclear-reset"
-              type="button"
-              onClick={() => setShowHighScores(true)}
-            >
-              Scores
-            </button>
-          </div>
+          <button
+            className="hexaclear-reset"
+            type="button"
+            onClick={resetGame}
+          >
+            Restart
+          </button>
         </div>
       </header>
 
@@ -2588,6 +2607,92 @@ function App() {
                 >
                   Retry today&apos;s puzzle
         </button>
+              </div>
+            </div>
+          )}
+          {showMenu && (
+            <div className="hexaclear-overlay">
+              <div className="hexaclear-overlay-card hexaclear-menu-card">
+                <div className="title">Menu</div>
+
+                <div className="hexaclear-menu-section">
+                  <div className="hexaclear-menu-section-label">Audio</div>
+                  <label className="hexaclear-menu-row">
+                    <span>Mute</span>
+                    <input
+                      type="checkbox"
+                      checked={audioMuted}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setAudioMutedState(next)
+                        setMuted(next)
+                      }}
+                    />
+                  </label>
+                  <label className="hexaclear-menu-row">
+                    <span>Volume</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={Math.round(volume * 100)}
+                      disabled={audioMuted}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) / 100
+                        setVolumeState(v)
+                        setMasterVolume(v)
+                      }}
+                      aria-label="Volume"
+                    />
+                    <span className="hexaclear-menu-row-readout">
+                      {Math.round(volume * 100)}%
+                    </span>
+                  </label>
+                </div>
+
+                <div className="hexaclear-menu-section">
+                  <div className="hexaclear-menu-section-label">Display</div>
+                  <label className="hexaclear-menu-row">
+                    <span>Reduced motion</span>
+                    <input
+                      type="checkbox"
+                      checked={reducedMotion}
+                      onChange={(e) => setReducedMotion(e.target.checked)}
+                    />
+                  </label>
+                </div>
+
+                <div className="hexaclear-menu-section">
+                  <div className="hexaclear-menu-section-label">Info</div>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-action"
+                    onClick={() => {
+                      setShowMenu(false)
+                      setShowScoring(true)
+                    }}
+                  >
+                    How to score
+                  </button>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-action"
+                    onClick={() => {
+                      setShowMenu(false)
+                      setShowHighScores(true)
+                    }}
+                  >
+                    High scores
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMenu(false)}
+                >
+                  Close
+                </button>
               </div>
             </div>
           )}
