@@ -5,18 +5,42 @@
 // start from inside a non-gesture event handler) is allowed on iOS
 // Safari and other mobile browsers with strict autoplay policies.
 
-type SoundKey = 'clickDown' | 'clickUp' | 'scrolling'
+type SoundKey =
+  | 'clickDown'
+  | 'clickUp'
+  | 'scrolling'
+  | 'clear1'
+  | 'clear2'
+  | 'clear3'
+  | 'clear4'
+  | 'clear5'
+  | 'clear6'
+  | 'clear7'
 
 const SOURCES: Record<SoundKey, string> = {
   clickDown: '/click_down.wav',
   clickUp: '/click_up.wav',
   scrolling: '/scrolling.wav',
+  clear1: '/clear_1.wav',
+  clear2: '/clear_2.wav',
+  clear3: '/clear_3.wav',
+  clear4: '/clear_4.wav',
+  clear5: '/clear_5.wav',
+  clear6: '/clear_6.wav',
+  clear7: '/clear_7.wav',
 }
 
 const VOLUMES: Record<SoundKey, number> = {
   clickDown: 0.7,
   clickUp: 0.7,
   scrolling: 0.45,
+  clear1: 0.85,
+  clear2: 0.85,
+  clear3: 0.85,
+  clear4: 0.85,
+  clear5: 0.85,
+  clear6: 0.85,
+  clear7: 0.85,
 }
 
 let elements: Partial<Record<SoundKey, HTMLAudioElement>> = {}
@@ -87,6 +111,14 @@ const playOneShot = (key: SoundKey) => {
 
 export const playClickDown = () => playOneShot('clickDown')
 export const playClickUp = () => playOneShot('clickUp')
+
+// Play the SFX for the Nth consecutive clearing placement, capping at
+// clear_7.wav for the 7th and beyond. `streakIndex` is 1-based: 1 means
+// the first clear in a row, 2 the second, etc.
+export const playClearForStreakIndex = (streakIndex: number) => {
+  const clamped = Math.max(1, Math.min(7, Math.floor(streakIndex)))
+  playOneShot(`clear${clamped}` as SoundKey)
+}
 
 export const startScrollingLoop = () => {
   ensureElements()

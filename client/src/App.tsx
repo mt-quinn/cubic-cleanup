@@ -13,6 +13,7 @@ import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { Axial } from './game/hexTypes'
 import {
+  playClearForStreakIndex,
   playClickDown,
   playClickUp,
   startScrollingLoop,
@@ -1127,6 +1128,14 @@ function App() {
       }
 
       triggerHaptics(result.clearedPatterns.length > 0)
+
+      // Each consecutive clearing placement steps through clear_1..clear_7,
+      // capped at clear_7 thereafter. A non-clearing placement resets
+      // current.streak to 0 in game state, so the next clear after that
+      // naturally lands back on clear_1.
+      if (result.clearedPatterns.length > 0) {
+        playClearForStreakIndex(current.streak + 1)
+      }
 
       const newMoves = current.moves + 1
 
