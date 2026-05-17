@@ -633,7 +633,10 @@ function App() {
     number | null
   >(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
+  // Open the menu on load. The first gesture the player makes is
+  // dismissing the menu, which gives us a clean moment to prime the
+  // audio elements without that priming colliding with gameplay sounds.
+  const [showMenu, setShowMenu] = useState(true)
   const [volume, setVolumeState] = useState<number>(() => getMasterVolume())
   const [audioMuted, setAudioMutedState] = useState<boolean>(() => getMuted())
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
@@ -1920,26 +1923,27 @@ function App() {
       <header className="hexaclear-header">
         <div className="hexaclear-header-main">
           <div className="hexaclear-title">Cubic Cleanup</div>
-          <div className="hexaclear-best-banner">
-            <span className="label">
-              {game.mode === 'daily' ? 'Best (today)' : 'Best'}
-            </span>
-            <span className="value">
-              {game.mode === 'daily'
-                ? todayDailyBestMoves !== null
-                  ? todayDailyBestMoves
-                  : '—'
-                : bestScore ?? '—'}
-            </span>
+          <div className="hexaclear-header-main-right">
+            <div className="hexaclear-best-banner">
+              <span className="label">
+                {game.mode === 'daily' ? 'Best (today)' : 'Best'}
+              </span>
+              <span className="value">
+                {game.mode === 'daily'
+                  ? todayDailyBestMoves !== null
+                    ? todayDailyBestMoves
+                    : '—'
+                  : bestScore ?? '—'}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="hexaclear-menu-button"
+              onClick={() => setShowMenu(true)}
+            >
+              Menu
+            </button>
           </div>
-          <button
-            type="button"
-            className="hexaclear-menu-button"
-            onClick={() => setShowMenu(true)}
-            aria-label="Open menu"
-          >
-            ☰
-          </button>
         </div>
         <div className="hexaclear-header-controls">
           <div className="hexaclear-mode-toggle">
@@ -2669,6 +2673,7 @@ function App() {
                     type="button"
                     className="hexaclear-menu-action"
                     onClick={() => {
+                      unlockAudioOnGesture()
                       setShowMenu(false)
                       setShowScoring(true)
                     }}
@@ -2679,6 +2684,7 @@ function App() {
                     type="button"
                     className="hexaclear-menu-action"
                     onClick={() => {
+                      unlockAudioOnGesture()
                       setShowMenu(false)
                       setShowHighScores(true)
                     }}
@@ -2689,7 +2695,10 @@ function App() {
 
                 <button
                   type="button"
-                  onClick={() => setShowMenu(false)}
+                  onClick={() => {
+                    unlockAudioOnGesture()
+                    setShowMenu(false)
+                  }}
                 >
                   Close
                 </button>

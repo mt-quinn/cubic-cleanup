@@ -116,6 +116,12 @@ export const unlockAudioOnGesture = () => {
   for (const key of Object.keys(elements) as SoundKey[]) {
     const audio = elements[key]
     if (!audio) continue
+    // Mute the element during priming so the brief window between
+    // play() and the pause() that follows the play promise resolving
+    // doesn't emit an audible "chord" of every sound at once on iOS
+    // Safari and similar mobile browsers. We restore the muted flag
+    // after pausing.
+    audio.muted = true
     try {
       const result = audio.play()
       if (result && typeof result.then === 'function') {
@@ -123,8 +129,10 @@ export const unlockAudioOnGesture = () => {
           .then(() => {
             audio.pause()
             audio.currentTime = 0
+            audio.muted = false
           })
           .catch(() => {
+            audio.muted = false
             // Some browsers reject the priming play; that's fine — the
             // real call from inside the same gesture below will still
             // work for one-shots.
@@ -132,8 +140,10 @@ export const unlockAudioOnGesture = () => {
       } else {
         audio.pause()
         audio.currentTime = 0
+        audio.muted = false
       }
     } catch {
+      audio.muted = false
       // Ignore: priming is best-effort.
     }
   }
