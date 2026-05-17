@@ -1,9 +1,17 @@
-// Lightweight SFX manager. Uses HTMLAudioElement so we can rely on
-// browser-managed decoding, looping, and pause/resume. The first user
-// gesture that plays a sound also "primes" every audio element so that
-// later playback (including the looped scrolling sound, which we may
-// start from inside a non-gesture event handler) is allowed on iOS
-// Safari and other mobile browsers with strict autoplay policies.
+// Web Audio-based SFX manager.
+//
+// Why not HTMLAudioElement: a single <audio> element can only play one
+// instance at a time. When the game fires several SFX close together
+// (e.g. click_up + clear_3 + clear_4 during a combo), retriggers race
+// the previous play and browsers handle it inconsistently — some drop
+// the sound silently, others throw, others delay buffering. The result
+// is the "1 in 4 sounds don't play" symptom and an audible action→sound
+// latency.
+//
+// Web Audio fixes both: each sample is decoded once into an AudioBuffer,
+// and every play creates a new AudioBufferSourceNode. Sources are
+// throwaway, plays freely overlap, there's no Promise to reject, and
+// scheduling latency is essentially the audio device's frame size.
 
 type SoundKey =
   | 'clickDown'
@@ -46,9 +54,6 @@ const VOLUMES: Record<SoundKey, number> = {
   gameOver: 0.85,
 }
 
-let elements: Partial<Record<SoundKey, HTMLAudioElement>> = {}
-let primed = false
-
 const LS_VOLUME_KEY = 'cubic-master-volume'
 const LS_MUTED_KEY = 'cubic-muted'
 
@@ -72,8 +77,90 @@ let muted = readInitialMuted()
 export const getMasterVolume = (): number => masterVolume
 export const getMuted = (): boolean => muted
 
+let audioContext: AudioContext | null = null
+let masterGainNode: GainNode | null = null
+const buffers: Partial<Record<SoundKey, AudioBuffer>> = {}
+let buffersStartedLoading = false
+
+const computeMasterGainValue = (): number => (muted ? 0 : masterVolume)
+
+const ensureContext = (): AudioContext | null => {
+  if (typeof window === 'undefined') return null
+  if (audioContext) return audioContext
+  const Ctor =
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext
+  if (!Ctor) return null
+  try {
+    const ctx = new Ctor()
+    audioContext = ctx
+    masterGainNode = ctx.createGain()
+    masterGainNode.gain.value = computeMasterGainValue()
+    masterGainNode.connect(ctx.destination)
+    return ctx
+  } catch {
+    return null
+  }
+}
+
+// Kick off fetch + decodeAudioData for every sample. Buffers populate as
+// they finish; until a buffer is ready, plays for that key no-op silently.
+// In practice the WAV files are tiny and decoding is comfortably done
+// before the player dismisses the start-up menu.
+const loadAllBuffers = () => {
+  if (buffersStartedLoading) return
+  const ctx = ensureContext()
+  if (!ctx) return
+  buffersStartedLoading = true
+  for (const key of Object.keys(SOURCES) as SoundKey[]) {
+    fetch(SOURCES[key])
+      .then((res) => res.arrayBuffer())
+      .then(
+        (arr) =>
+          // decodeAudioData has both a Promise-returning and callback-
+          // based form; modern browsers support the Promise form.
+          new Promise<AudioBuffer>((resolve, reject) =>
+            ctx.decodeAudioData(arr, resolve, reject),
+          ),
+      )
+      .then((buf) => {
+        buffers[key] = buf
+      })
+      .catch(() => {
+        // Best-effort: if this clip fails to load, plays for that key
+        // will silently no-op. Other clips are unaffected.
+      })
+  }
+}
+
+// Must be called from inside a user gesture so the AudioContext can move
+// out of the "suspended" state. Subsequent plays from non-gesture code
+// (pointermove, timer callbacks, etc.) are then permitted.
+export const unlockAudioOnGesture = () => {
+  const ctx = ensureContext()
+  if (!ctx) return
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {
+      // Ignore — user can try again on next gesture.
+    })
+  }
+  loadAllBuffers()
+}
+
 export const setMasterVolume = (next: number): void => {
   masterVolume = Math.max(0, Math.min(1, next))
+  if (masterGainNode && audioContext) {
+    // Smooth the change slightly to avoid a click when the slider
+    // sweeps quickly. setTargetAtTime is appropriate for live drags
+    // because it merges instead of stacking like linearRampTo would.
+    masterGainNode.gain.setTargetAtTime(
+      computeMasterGainValue(),
+      audioContext.currentTime,
+      0.01,
+    )
+  }
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem(LS_VOLUME_KEY, String(masterVolume))
@@ -85,6 +172,13 @@ export const setMasterVolume = (next: number): void => {
 
 export const setMuted = (next: boolean): void => {
   muted = next
+  if (masterGainNode && audioContext) {
+    masterGainNode.gain.setTargetAtTime(
+      computeMasterGainValue(),
+      audioContext.currentTime,
+      0.005,
+    )
+  }
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem(LS_MUTED_KEY, next ? 'true' : 'false')
@@ -94,77 +188,24 @@ export const setMuted = (next: boolean): void => {
   }
 }
 
-const ensureElements = () => {
-  if (typeof window === 'undefined') return
-  for (const key of Object.keys(SOURCES) as SoundKey[]) {
-    if (elements[key]) continue
-    const audio = new Audio(SOURCES[key])
-    audio.preload = 'auto'
-    audio.volume = VOLUMES[key]
-    elements[key] = audio
-  }
-}
-
-// Must be called from inside a user gesture (touchstart, pointerdown,
-// click, etc.) on the first interaction. Plays + pauses each clip so
-// the browser marks it as "user-initiated" and lets us trigger it later
-// from non-gesture code paths.
-export const unlockAudioOnGesture = () => {
-  ensureElements()
-  if (primed) return
-  primed = true
-  for (const key of Object.keys(elements) as SoundKey[]) {
-    const audio = elements[key]
-    if (!audio) continue
-    // Mute the element during priming so the brief window between
-    // play() and the pause() that follows the play promise resolving
-    // doesn't emit an audible "chord" of every sound at once on iOS
-    // Safari and similar mobile browsers. We restore the muted flag
-    // after pausing.
-    audio.muted = true
-    try {
-      const result = audio.play()
-      if (result && typeof result.then === 'function') {
-        result
-          .then(() => {
-            audio.pause()
-            audio.currentTime = 0
-            audio.muted = false
-          })
-          .catch(() => {
-            audio.muted = false
-            // Some browsers reject the priming play; that's fine — the
-            // real call from inside the same gesture below will still
-            // work for one-shots.
-          })
-      } else {
-        audio.pause()
-        audio.currentTime = 0
-        audio.muted = false
-      }
-    } catch {
-      audio.muted = false
-      // Ignore: priming is best-effort.
-    }
-  }
-}
-
 const playOneShot = (key: SoundKey) => {
   if (muted) return
-  ensureElements()
-  const audio = elements[key]
-  if (!audio) return
-  // Apply per-clip base volume × master volume right before play so the
-  // user's volume slider takes effect immediately on the next sound.
-  audio.volume = Math.max(0, Math.min(1, VOLUMES[key] * masterVolume))
+  const ctx = audioContext
+  if (!ctx || !masterGainNode) return
+  // If the user gesture hasn't unlocked the context yet, bail rather
+  // than try to start a source that the browser would silently mute.
+  if (ctx.state !== 'running') return
+  const buf = buffers[key]
+  if (!buf) return
   try {
-    audio.currentTime = 0
-    const result = audio.play()
-    if (result && typeof result.catch === 'function') {
-      result.catch(() => {})
-    }
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const clipGain = ctx.createGain()
+    clipGain.gain.value = VOLUMES[key]
+    src.connect(clipGain).connect(masterGainNode)
+    src.start(0)
   } catch {
-    // Ignore.
+    // Ignore — playback is best-effort.
   }
 }
 
@@ -175,7 +216,7 @@ export const playGameOver = () => playOneShot('gameOver')
 
 // Play the SFX for the Nth consecutive clearing placement, capping at
 // clear_7.wav for the 7th and beyond. `streakIndex` is 1-based: 1 means
-// the first clear in a row, 2 the second, etc.
+// the first clear in a run, 2 the second, etc.
 export const playClearForStreakIndex = (streakIndex: number) => {
   const clamped = Math.max(1, Math.min(7, Math.floor(streakIndex)))
   playOneShot(`clear${clamped}` as SoundKey)
