@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Monoton&family=Nunito:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Monoton&family=Nunito:wght@400;600;700;800&display=swap');
 
 :root {
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
@@ -425,7 +425,8 @@ body {
 }
 
 .hexaclear-board-hud .board-hud-block {
-  font-family: 'Monoton', system-ui, sans-serif;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 700;
   color: #fff7eb;
   text-shadow: 0 3px 6px rgba(0, 0, 0, 0.7);
 }
@@ -1195,7 +1196,8 @@ body {
 }
 
 .hexaclear-gem-label {
-  font-family: 'Monoton', system-ui, sans-serif;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
   font-size: 0.8rem;
   fill: #fff7f2;
   stroke: rgba(110, 30, 30, 0.95);
@@ -1359,7 +1361,8 @@ body {
 }
 
 .hexaclear-golden-popup {
-  font-family: 'Monoton', system-ui, sans-serif;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
   font-size: 0.9rem;
   fill: #ffe9b3;
   stroke: rgba(110, 60, 20, 0.9);
@@ -1597,9 +1600,9 @@ body {
 }
 
 .hexaclear-score-particle-value {
-  font-family: 'Monoton', system-ui, sans-serif;
+  font-family: 'Nunito', system-ui, sans-serif;
   font-size: 2.8rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #fff9e6;
   text-shadow:
     0 0 2px rgba(0, 0, 0, 0.8),
