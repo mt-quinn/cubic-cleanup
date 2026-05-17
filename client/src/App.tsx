@@ -1937,7 +1937,10 @@ function App() {
                   className="hexaclear-menu-button"
                   onClick={() => setShowMenu(true)}
                 >
-                  Menu
+                  <span className="hexaclear-menu-button-icon" aria-hidden="true">
+                    ⚙️
+                  </span>
+                  <span className="hexaclear-menu-button-label">Menu</span>
                 </button>
               </div>
             </div>

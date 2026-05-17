@@ -1757,6 +1757,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Same gap as the Best banner uses between its label and value, so
+     icon + word read as a matched pair to "BEST 8". */
+  gap: 0.35rem;
   box-sizing: border-box;
   min-height: 2rem;
   border-radius: 999px;
@@ -1775,6 +1778,20 @@ body {
     0 0 0 1px rgba(0, 0, 0, 0.2),
     0 6px 14px rgba(0, 0, 0, 0.45);
   transition: transform 80ms ease-out, background 120ms ease-out;
+}
+
+/* Gear glyph sized to match the Best banner's score number so the two
+   pills carry the same visual weight side by side. */
+.hexaclear-menu-button-icon {
+  font-size: 1rem;
+  line-height: 1;
+  /* The text-presentation gear glyph (⚙ U+2699) sits a bit above the
+     baseline; nudge down so it optically centers with the label. */
+  transform: translateY(0.05em);
+}
+
+.hexaclear-menu-button-label {
+  /* Inherit the button's uppercase/letter-spacing treatment. */
 }
 
 .hexaclear-menu-button:hover {
