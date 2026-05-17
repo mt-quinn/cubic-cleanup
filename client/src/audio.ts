@@ -8,7 +8,6 @@
 type SoundKey =
   | 'clickDown'
   | 'clickUp'
-  | 'scrolling'
   | 'clear1'
   | 'clear2'
   | 'clear3'
@@ -22,7 +21,6 @@ type SoundKey =
 const SOURCES: Record<SoundKey, string> = {
   clickDown: '/click_down.wav',
   clickUp: '/click_up.wav',
-  scrolling: '/scrolling.wav',
   clear1: '/clear_1.wav',
   clear2: '/clear_2.wav',
   clear3: '/clear_3.wav',
@@ -37,7 +35,6 @@ const SOURCES: Record<SoundKey, string> = {
 const VOLUMES: Record<SoundKey, number> = {
   clickDown: 0.7,
   clickUp: 0.7,
-  scrolling: 0.45,
   clear1: 0.85,
   clear2: 0.85,
   clear3: 0.85,
@@ -59,9 +56,6 @@ const ensureElements = () => {
     const audio = new Audio(SOURCES[key])
     audio.preload = 'auto'
     audio.volume = VOLUMES[key]
-    if (key === 'scrolling') {
-      audio.loop = true
-    }
     elements[key] = audio
   }
 }
@@ -126,31 +120,4 @@ export const playGameOver = () => playOneShot('gameOver')
 export const playClearForStreakIndex = (streakIndex: number) => {
   const clamped = Math.max(1, Math.min(7, Math.floor(streakIndex)))
   playOneShot(`clear${clamped}` as SoundKey)
-}
-
-export const startScrollingLoop = () => {
-  ensureElements()
-  const audio = elements.scrolling
-  if (!audio) return
-  if (!audio.paused) return
-  try {
-    const result = audio.play()
-    if (result && typeof result.catch === 'function') {
-      result.catch(() => {})
-    }
-  } catch {
-    // Ignore.
-  }
-}
-
-export const stopScrollingLoop = () => {
-  const audio = elements.scrolling
-  if (!audio) return
-  if (audio.paused) return
-  try {
-    audio.pause()
-    audio.currentTime = 0
-  } catch {
-    // Ignore.
-  }
 }

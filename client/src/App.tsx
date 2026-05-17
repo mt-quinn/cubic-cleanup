@@ -18,8 +18,6 @@ import {
   playClickUp,
   playError,
   playGameOver,
-  startScrollingLoop,
-  stopScrollingLoop,
   unlockAudioOnGesture,
 } from './audio'
 import { WebHaptics } from 'web-haptics'
@@ -725,11 +723,6 @@ function App() {
     pointerId: number | null
     pointerType: string | null
   }>({ pieceId: null, pointerId: null, pointerType: null })
-  // Tracks the last raw pointer position during a drag so we can detect
-  // "is the piece actually moving right now?" and gate the scrolling SFX
-  // on it (we want the loop only while the piece is in motion).
-  const lastDragPointRef = useRef<{ x: number; y: number } | null>(null)
-  const scrollingIdleTimeoutRef = useRef<number | null>(null)
   // React dev StrictMode can invoke state updater functions twice; we use these
   // refs to ensure we don't schedule merge-time score increments twice.
   const placementActionIdRef = useRef(0)
@@ -1753,24 +1746,6 @@ function App() {
       const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
 
-      // Drive the scrolling SFX from raw pointer motion: only play it
-      // while the pointer is actually moving, with a short idle timeout
-      // so single-frame jitter doesn't constantly retrigger it.
-      const last = lastDragPointRef.current
-      const moved =
-        !last || Math.hypot(clientX - last.x, clientY - last.y) >= 1
-      lastDragPointRef.current = { x: clientX, y: clientY }
-      if (moved) {
-        startScrollingLoop()
-        if (scrollingIdleTimeoutRef.current !== null) {
-          window.clearTimeout(scrollingIdleTimeoutRef.current)
-        }
-        scrollingIdleTimeoutRef.current = window.setTimeout(() => {
-          stopScrollingLoop()
-          scrollingIdleTimeoutRef.current = null
-        }, 90)
-      }
-
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
       const cellId = findClosestCellIdFromClientPoint(
@@ -1812,15 +1787,8 @@ function App() {
       setDraggingPieceId(null)
       setGhost(null)
 
-      // Stop the drag-motion loop and play the drop click regardless of
-      // whether the placement was valid — the player set the piece down
-      // either way.
-      if (scrollingIdleTimeoutRef.current !== null) {
-        window.clearTimeout(scrollingIdleTimeoutRef.current)
-        scrollingIdleTimeoutRef.current = null
-      }
-      stopScrollingLoop()
-      lastDragPointRef.current = null
+      // The player set the piece down — fire the drop click regardless
+      // of whether the placement was actually valid.
       playClickUp()
 
       if (cellId && pieceId) {
@@ -2906,7 +2874,6 @@ function App() {
                     pointerId: e.pointerId,
                     pointerType: e.pointerType || null,
                   }
-                  lastDragPointRef.current = { x: e.clientX, y: e.clientY }
                   setSelectedPieceId(displayPiece.id)
                   setDraggingPieceId(displayPiece.id)
                   const wrapper = boardWrapperRef.current
