@@ -1922,7 +1922,7 @@ function App() {
         return (
           <header className="hexaclear-header">
             <div className="hexaclear-header-main">
-              <div className="hexaclear-title">Cubic Cleanup</div>
+              <div className="hexaclear-title">Cubekill</div>
               <div className="hexaclear-header-main-right">
                 {showBest && (
                   <div className="hexaclear-best-banner">
@@ -2605,7 +2605,7 @@ function App() {
           {showMenu && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card hexaclear-menu-card">
-                <div className="title">Cubic Cleanup</div>
+                <div className="title">Cubekill</div>
                 <div className="hexaclear-menu-hint">
                   Drag pieces from the tray onto the board. Complete a
                   full line or rosette to clear it.
