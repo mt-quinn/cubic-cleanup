@@ -223,12 +223,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  /* Critical for short viewports: without min-height: 0, the flex
+     child's intrinsic content (the board SVG) prevents this column
+     from shrinking below the SVG's natural height, which then pushes
+     the hand below the .cubic-viewport overflow:hidden boundary. */
+  min-height: 0;
 }
 
 .hexaclear-board-wrapper {
   position: relative;
   flex: 1;
-  min-height: 260px;
+  /* Allow the wrapper to shrink below the SVG's intrinsic aspect-ratio
+     height. The SVG (with viewBox + width/height 100%) will scale down
+     to fit on short viewports; without min-height: 0 it would refuse. */
+  min-height: 0;
   border-radius: 1.25rem;
   background:
     radial-gradient(circle at 10% 0%, #5a341b, #3b2317 55%, #28130a 100%);
@@ -1458,7 +1466,13 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 0;
-  min-height: 110px;
+  /* Hand height tracks viewport height so it stays usable on short
+     windows (landscape phones, popped-out side panels, dev-tools open)
+     while still feeling roomy on tall windows. Rigid 110px would push
+     the layout past the viewport bottom and clip. */
+  flex: 0 0 auto;
+  min-height: 0;
+  height: clamp(72px, 16dvh, 120px);
   padding: 0.35rem;
   border-radius: 1rem;
   border: 1px solid rgba(255, 197, 138, 0.45);
@@ -1479,7 +1493,10 @@ body {
   align-items: center;
   justify-content: center;
   cursor: grab;
-  height: 100px;
+  /* Fill the hand so the piece SVG (which preserves its viewBox
+     aspect-ratio) scales fluidly with the hand's clamp()ed height. */
+  height: 100%;
+  min-height: 0;
   -webkit-user-drag: none;
   user-select: none;
   touch-action: none;
