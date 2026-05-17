@@ -12,6 +12,13 @@ import {
 import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { Axial } from './game/hexTypes'
+import {
+  playClickDown,
+  playClickUp,
+  startScrollingLoop,
+  stopScrollingLoop,
+  unlockAudioOnGesture,
+} from './audio'
 import './index.css'
 
 type HoverInfo = {
@@ -646,7 +653,7 @@ function App() {
   const [rippleToken, setRippleToken] = useState(0)
   const rippleRadiusRef = useRef(0)
   const rippleMaxRadiusRef = useRef(BOARD_RIPPLE_RADIUS * 2)
-  const CLEAR_RIPPLE_DURATION_MS = 1350
+  const CLEAR_RIPPLE_DURATION_MS = 900
   const dailyCubesRemaining = useMemo(() => {
     if (game.mode !== 'daily') return 0
     let count = 0
@@ -693,6 +700,11 @@ function App() {
     pointerId: number | null
     pointerType: string | null
   }>({ pieceId: null, pointerId: null, pointerType: null })
+  // Tracks the last raw pointer position during a drag so we can detect
+  // "is the piece actually moving right now?" and gate the scrolling SFX
+  // on it (we want the loop only while the piece is in motion).
+  const lastDragPointRef = useRef<{ x: number; y: number } | null>(null)
+  const scrollingIdleTimeoutRef = useRef<number | null>(null)
   // React dev StrictMode can invoke state updater functions twice; we use these
   // refs to ensure we don't schedule merge-time score increments twice.
   const placementActionIdRef = useRef(0)
@@ -1372,7 +1384,7 @@ function App() {
   useEffect(() => {
     if (!rippleCenter || rippleCells.length === 0) return
 
-    const durationMs = rippleIsClear ? CLEAR_RIPPLE_DURATION_MS : 900
+    const durationMs = rippleIsClear ? CLEAR_RIPPLE_DURATION_MS : 600
     const maxRadius = rippleMaxRadiusRef.current
     const start = performance.now()
     let frame: number
@@ -1593,6 +1605,25 @@ function App() {
       const x = (clientX - rect.left) / scale
       const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
+
+      // Drive the scrolling SFX from raw pointer motion: only play it
+      // while the pointer is actually moving, with a short idle timeout
+      // so single-frame jitter doesn't constantly retrigger it.
+      const last = lastDragPointRef.current
+      const moved =
+        !last || Math.hypot(clientX - last.x, clientY - last.y) >= 1
+      lastDragPointRef.current = { x: clientX, y: clientY }
+      if (moved) {
+        startScrollingLoop()
+        if (scrollingIdleTimeoutRef.current !== null) {
+          window.clearTimeout(scrollingIdleTimeoutRef.current)
+        }
+        scrollingIdleTimeoutRef.current = window.setTimeout(() => {
+          stopScrollingLoop()
+          scrollingIdleTimeoutRef.current = null
+        }, 90)
+      }
+
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
       const cellId = findClosestCellIdFromClientPoint(
@@ -1633,6 +1664,18 @@ function App() {
       dragState.current.pointerType = null
       setDraggingPieceId(null)
       setGhost(null)
+
+      // Stop the drag-motion loop and play the drop click regardless of
+      // whether the placement was valid — the player set the piece down
+      // either way.
+      if (scrollingIdleTimeoutRef.current !== null) {
+        window.clearTimeout(scrollingIdleTimeoutRef.current)
+        scrollingIdleTimeoutRef.current = null
+      }
+      stopScrollingLoop()
+      lastDragPointRef.current = null
+      playClickUp()
+
       if (cellId && pieceId) {
         placePieceAtCell(pieceId, cellId, attemptedCellIds)
       }
@@ -2630,11 +2673,17 @@ function App() {
                 onPointerDown={(e) => {
                   if (!displayPiece) return
                   e.preventDefault()
+                  // Prime audio on the very first user gesture so that
+                  // mobile browsers (iOS Safari especially) allow us to
+                  // start the looped scrolling sound from inside later
+                  // pointermove handlers.
+                  unlockAudioOnGesture()
                   dragState.current = {
                     pieceId: displayPiece.id,
                     pointerId: e.pointerId,
                     pointerType: e.pointerType || null,
                   }
+                  lastDragPointRef.current = { x: e.clientX, y: e.clientY }
                   setSelectedPieceId(displayPiece.id)
                   setDraggingPieceId(displayPiece.id)
                   const wrapper = boardWrapperRef.current
@@ -2647,6 +2696,7 @@ function App() {
                     })
                   }
                   triggerGrabHaptic()
+                  playClickDown()
                 }}
               >
                 {displayPiece && !isDragging && (
