@@ -1416,7 +1416,7 @@ body {
    in left-to-right. The animation plays once on mount and is harmless
    on the very first render. */
 .hexaclear-piece-flyin {
-  animation: hexaclear-hand-flyin 720ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation: hexaclear-hand-flyin 900ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   animation-delay: var(--hexaclear-fly-in-delay, 0ms);
 }
 

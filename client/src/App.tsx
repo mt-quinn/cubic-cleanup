@@ -2835,7 +2835,7 @@ function App() {
                 }}
                 style={{
                   ['--hexaclear-fly-in-delay' as string]:
-                    `${slotIndex * 140}ms`,
+                    `${slotIndex * 175}ms`,
                 }}
                 className={[
                   'hexaclear-piece-button',
