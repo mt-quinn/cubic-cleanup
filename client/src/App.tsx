@@ -2610,18 +2610,6 @@ function App() {
 
                 <div className="hexaclear-menu-rows">
                   <label className="hexaclear-menu-row">
-                    <span className="hexaclear-menu-row-label">Mute</span>
-                    <input
-                      type="checkbox"
-                      checked={audioMuted}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                        setAudioMutedState(next)
-                        setMuted(next)
-                      }}
-                    />
-                  </label>
-                  <label className="hexaclear-menu-row">
                     <span className="hexaclear-menu-row-label">Volume</span>
                     <input
                       type="range"
@@ -2640,6 +2628,18 @@ function App() {
                     <span className="hexaclear-menu-row-readout">
                       {Math.round(volume * 100)}%
                     </span>
+                  </label>
+                  <label className="hexaclear-menu-row">
+                    <span className="hexaclear-menu-row-label">Mute</span>
+                    <input
+                      type="checkbox"
+                      checked={audioMuted}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setAudioMutedState(next)
+                        setMuted(next)
+                      }}
+                    />
                   </label>
                   <label className="hexaclear-menu-row">
                     <span className="hexaclear-menu-row-label">
@@ -2845,9 +2845,12 @@ function App() {
                 <button
                   type="button"
                   className="hexaclear-reset"
-                  onClick={() => setShowScoring(false)}
+                  onClick={() => {
+                    setShowScoring(false)
+                    setShowMenu(true)
+                  }}
                 >
-                  Got it
+                  Back
                 </button>
               </div>
             </div>
@@ -3046,9 +3049,12 @@ function App() {
                   <button
                     type="button"
                     className="hexaclear-reset"
-                    onClick={() => setShowHighScores(false)}
+                    onClick={() => {
+                      setShowHighScores(false)
+                      setShowMenu(true)
+                    }}
                   >
-                    Resume
+                    Back
                   </button>
                 </div>
               </div>

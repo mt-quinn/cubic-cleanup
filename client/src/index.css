@@ -87,7 +87,11 @@ body {
 }
 
 .hexaclear-best-banner {
-  padding: 0.15rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 2rem;
+  padding: 0.2rem 0.8rem;
   border-radius: 999px;
   background: rgba(58, 18, 4, 0.8);
   border: 1px solid rgba(255, 205, 143, 0.8);
@@ -1082,6 +1086,13 @@ body {
   align-items: center;
   justify-content: center;
   background: radial-gradient(circle, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.95));
+  /* Tall modal cards (e.g. high scores with many entries) can overflow
+     the board wrapper and visually extend down over the hand area.
+     Without a z-index, those overflowing portions sit beneath the hand
+     in the stacking order — clicks on buttons in that region get
+     intercepted by hand-piece slots. Lift the overlay above all
+     in-game UI so the modal always wins. */
+  z-index: 50;
 }
 
 .hexaclear-overlay-card {
@@ -1746,11 +1757,13 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  min-height: 2rem;
   border-radius: 999px;
   background: rgba(58, 18, 4, 0.8);
   border: 1px solid rgba(255, 205, 143, 0.85);
   color: #ffe8a3;
-  padding: 0.35rem 0.85rem;
+  padding: 0.2rem 0.85rem;
   min-width: 5.5rem;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -2285,5 +2298,21 @@ body {
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
   transition-delay: 0ms !important;
+}
+
+/* The looping `cube-wiggle` animation on preview-clear cubes flickers
+   during drag when iteration-count is forced to 1: the wiggle lands on a
+   rotated keyframe (1.8deg) for a frame before reverting. As the player
+   moves the piece around the board, classes toggle on/off rapidly and
+   each toggle re-fires that one rotated frame — that's the visible
+   flicker. Disable the animations entirely and snap the cubes to their
+   static "shrunk" preview state so the player still sees which cells
+   are about to be cleared. */
+.cubic-viewport.reduced-motion .hexaclear-hex.preview-clear + .hexaclear-hex-cube,
+.cubic-viewport.reduced-motion .hexaclear-hex.preview-clear.preview-valid {
+  animation: none !important;
+  transform: scale(0.8) !important;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
