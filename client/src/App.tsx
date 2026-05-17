@@ -1515,7 +1515,7 @@ function App() {
     playGameOver()
     const tid = window.setTimeout(() => {
       setGameOverWindingDown(false)
-    }, 720)
+    }, 1440)
     return () => window.clearTimeout(tid)
   }, [game.gameOver])
 
@@ -2604,14 +2604,13 @@ function App() {
               <div className="hexaclear-overlay-card hexaclear-menu-card">
                 <div className="title">Cubic Cleanup</div>
                 <div className="hexaclear-menu-hint">
-                  Drag pieces from the tray onto the board.
-                  Complete a full line or rosette to clear it.
+                  Drag pieces from the tray onto the board. Complete a
+                  full line or rosette to clear it.
                 </div>
 
-                <div className="hexaclear-menu-section">
-                  <div className="hexaclear-menu-section-label">Audio</div>
+                <div className="hexaclear-menu-rows">
                   <label className="hexaclear-menu-row">
-                    <span>Mute</span>
+                    <span className="hexaclear-menu-row-label">Mute</span>
                     <input
                       type="checkbox"
                       checked={audioMuted}
@@ -2623,7 +2622,7 @@ function App() {
                     />
                   </label>
                   <label className="hexaclear-menu-row">
-                    <span>Volume</span>
+                    <span className="hexaclear-menu-row-label">Volume</span>
                     <input
                       type="range"
                       min={0}
@@ -2642,12 +2641,10 @@ function App() {
                       {Math.round(volume * 100)}%
                     </span>
                   </label>
-                </div>
-
-                <div className="hexaclear-menu-section">
-                  <div className="hexaclear-menu-section-label">Display</div>
                   <label className="hexaclear-menu-row">
-                    <span>Reduced motion</span>
+                    <span className="hexaclear-menu-row-label">
+                      Reduced motion
+                    </span>
                     <input
                       type="checkbox"
                       checked={reducedMotion}
@@ -2656,11 +2653,10 @@ function App() {
                   </label>
                 </div>
 
-                <div className="hexaclear-menu-section">
-                  <div className="hexaclear-menu-section-label">Info</div>
+                <div className="hexaclear-menu-links">
                   <button
                     type="button"
-                    className="hexaclear-menu-action"
+                    className="hexaclear-menu-link"
                     onClick={() => {
                       unlockAudioOnGesture()
                       setShowMenu(false)
@@ -2669,9 +2665,12 @@ function App() {
                   >
                     How to score
                   </button>
+                  <span className="hexaclear-menu-link-sep" aria-hidden="true">
+                    •
+                  </span>
                   <button
                     type="button"
-                    className="hexaclear-menu-action"
+                    className="hexaclear-menu-link"
                     onClick={() => {
                       unlockAudioOnGesture()
                       setShowMenu(false)
@@ -2682,20 +2681,17 @@ function App() {
                   </button>
                 </div>
 
-                <div className="hexaclear-menu-section">
-                  <div className="hexaclear-menu-section-label">Game</div>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-danger"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      setShowMenu(false)
-                      resetGame()
-                    }}
-                  >
-                    Restart run
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="hexaclear-menu-restart-link"
+                  onClick={() => {
+                    unlockAudioOnGesture()
+                    setShowMenu(false)
+                    resetGame()
+                  }}
+                >
+                  Restart run
+                </button>
 
                 <button
                   type="button"
@@ -2712,30 +2708,145 @@ function App() {
           )}
           {showScoring && (
             <div className="hexaclear-overlay">
-              <div className="hexaclear-overlay-card">
+              <div className="hexaclear-overlay-card hexaclear-scoring-card">
                 {game.mode === 'daily' ? (
                   <>
-                    <div className="title">Daily puzzles</div>
-                    <div className="score">
-                      <p>Clear all numbered cubes to finish the puzzle.</p>
-                      <p>Every placement is one move.</p>
-                      <p>Your best daily runs are the ones with the fewest moves.</p>
+                    <div className="title">Daily Puzzles</div>
+                    <div className="hexaclear-scoring-rules">
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-goal">
+                          Goal
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Clear every numbered cube
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Hit each cube the number of times shown on it.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-neutral">
+                          1 Move
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Each placement counts
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Every piece you place adds one move to the run.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-trophy">
+                          Best
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Fewest moves wins
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Your best daily run is the one finished in the
+                            fewest moves.
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="title">Endless scoring</div>
-                    <div className="score">
-                      <p>Clearing a full line or rosette is worth 10 base points.</p>
-                      <p>Clearing several lines or rosettes at once creates a combo that boosts those points.</p>
-                      <p>Clearing on back‑to‑back moves builds a streak that boosts them further.</p>
-                      <p>Clearing a Ruby gives a +10 bonus.</p>
-                      <p>Clearing the entire board in one move gives a +25 bonus.</p>
-                      <p>You also gain a flat +1 point for every cube you place.</p>
+                    <div className="title">How To Score</div>
+                    <div className="hexaclear-scoring-rules">
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-gold">
+                          +10
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Line or rosette clear
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Fill a straight line or a six-cube rosette.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-multiplier">
+                          Combo
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Combo bonus
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Clear several lines or rosettes in one
+                            placement to multiply the points.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-multiplier">
+                          Streak
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Streak multiplier
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Clear on back-to-back moves to keep the streak
+                            climbing.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-ruby">
+                          +10
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Ruby bonus
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Clearing a ruby cube grants extra points.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-big">
+                          +25
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Board clear
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Empty the entire board in a single placement.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hexaclear-scoring-rule">
+                        <span className="hexaclear-chip hexaclear-chip-small">
+                          +1
+                        </span>
+                        <div className="hexaclear-scoring-rule-text">
+                          <div className="hexaclear-scoring-rule-title">
+                            Per cube placed
+                          </div>
+                          <div className="hexaclear-scoring-rule-desc">
+                            Every cube you set down is worth one point.
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
-                <button type="button" onClick={() => setShowScoring(false)}>
+                <button
+                  type="button"
+                  className="hexaclear-reset"
+                  onClick={() => setShowScoring(false)}
+                >
                   Got it
                 </button>
               </div>

@@ -370,11 +370,11 @@ body {
    the modal stays vibrant on top of the dimmed playfield. */
 .hexaclear-board-wrapper.game-over-active > *:not(.hexaclear-overlay) {
   filter: saturate(0.32) brightness(0.7);
-  transition: filter 700ms ease-out;
+  transition: filter 1400ms ease-out;
 }
 
 .hexaclear-hand.game-over-winding-down .hexaclear-piece-button {
-  animation: hexaclear-game-over-shake 540ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  animation: hexaclear-game-over-shake 1080ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 @keyframes hexaclear-game-over-shake {
@@ -1115,7 +1115,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-action):not(.hexaclear-menu-danger) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -1775,11 +1775,12 @@ body {
 /* --- Menu modal ------------------------------------------------------ */
 .hexaclear-menu-card {
   text-align: left;
-  min-width: 18rem;
-  max-width: min(22rem, calc(100vw - 2rem));
+  min-width: 17rem;
+  max-width: min(20rem, calc(100vw - 2rem));
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.7rem;
+  padding: 1.4rem 1.4rem 1.1rem;
 }
 
 .hexaclear-menu-card .title {
@@ -1787,67 +1788,62 @@ body {
   font-family: 'Shrikhand', cursive;
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.25rem;
+  font-size: 1.4rem;
   letter-spacing: 0.06em;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
-  margin-bottom: 0.1rem;
+  margin-bottom: 0;
 }
 
-/* One-line orientation hint for first-time players, sitting just under
-   the menu title. Quiet typography so it doesn't compete with the
-   options below it. */
 .hexaclear-menu-hint {
   text-align: center;
   font-size: 0.78rem;
-  line-height: 1.35;
+  line-height: 1.4;
   color: #f0d4a8;
-  opacity: 0.78;
-  margin: -0.1rem 0 0.2rem;
+  opacity: 0.72;
+  margin: 0 0 0.25rem;
 }
 
 /* The Resume button is the only direct flex child that shouldn't
    stretch full-width — keep it centered at Restart-button size. */
 .hexaclear-menu-card > .hexaclear-reset {
   align-self: center;
-  margin-top: 0.15rem;
+  margin-top: 0.35rem;
+  min-width: 7rem;
 }
 
-.hexaclear-menu-section {
+/* Single cohesive settings group — no inset card, just a vertical
+   stack of rows separated by hairline dividers. */
+.hexaclear-menu-rows {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 0.65rem;
-  background: rgba(20, 8, 3, 0.55);
-  border: 1px solid rgba(255, 205, 143, 0.18);
-}
-
-.hexaclear-menu-section-label {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  opacity: 0.7;
-  color: #ffd9a3;
+  border-top: 1px solid rgba(255, 205, 143, 0.14);
+  border-bottom: 1px solid rgba(255, 205, 143, 0.14);
 }
 
 .hexaclear-menu-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
-  font-size: 0.85rem;
+  gap: 0.7rem;
+  font-size: 0.92rem;
   color: #ffe8c7;
   cursor: pointer;
+  padding: 0.55rem 0;
 }
 
-.hexaclear-menu-row > span:first-child {
+.hexaclear-menu-row + .hexaclear-menu-row {
+  border-top: 1px solid rgba(255, 205, 143, 0.08);
+}
+
+.hexaclear-menu-row-label {
   flex: 0 0 auto;
+  font-weight: 500;
 }
 
 .hexaclear-menu-row input[type='checkbox'] {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1.15rem;
+  height: 1.15rem;
   accent-color: #f7b35a;
   cursor: pointer;
 }
@@ -1869,42 +1865,214 @@ body {
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
-  opacity: 0.85;
+  opacity: 0.78;
 }
 
-.hexaclear-menu-action {
-  border-radius: 999px;
-  border: 1px solid rgba(255, 205, 143, 0.55) !important;
-  background: rgba(58, 18, 4, 0.65) !important;
+/* Inline pair of text-link-style nav buttons separated by a middle dot.
+   Reads as quiet navigation, not as another row of CTAs. */
+.hexaclear-menu-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 0.05rem 0 0;
+}
+
+.hexaclear-menu-link {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.15rem 0.25rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  color: #ffd9a3 !important;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 205, 143, 0.35);
+  text-underline-offset: 3px;
+}
+
+.hexaclear-menu-link:hover {
   color: #ffe8a3 !important;
+  text-decoration-color: rgba(255, 232, 163, 0.7);
+}
+
+.hexaclear-menu-link-sep {
+  color: rgba(255, 205, 143, 0.45);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+/* Quiet warm-red destructive link for "Restart run". Smaller than a CTA,
+   centered, never competes with Resume. */
+.hexaclear-menu-restart-link {
+  align-self: center;
+  background: transparent !important;
+  border: none !important;
+  padding: 0.2rem 0.35rem !important;
+  font-size: 0.78rem !important;
   font-weight: 500 !important;
-  padding: 0.45rem 0.9rem !important;
-  font-size: 0.8rem !important;
+  letter-spacing: 0.04em;
+  color: #ffa890 !important;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 168, 144, 0.35);
+  text-underline-offset: 3px;
+}
+
+.hexaclear-menu-restart-link:hover {
+  color: #ffc7b3 !important;
+  text-decoration-color: rgba(255, 199, 179, 0.7);
+}
+
+/* --- Scoring modal --------------------------------------------------- */
+.hexaclear-scoring-card {
+  text-align: left;
+  min-width: 18rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 1.4rem 1.4rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.hexaclear-scoring-card .title {
   text-align: center;
+  font-family: 'Shrikhand', cursive;
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: 1.4rem;
+  letter-spacing: 0.06em;
+  color: #ffe8a3;
+  text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
+  margin: 0 0 0.25rem;
 }
 
-.hexaclear-menu-action:hover {
-  background: rgba(78, 28, 8, 0.85) !important;
+.hexaclear-scoring-card > .hexaclear-reset {
+  align-self: center;
+  margin-top: 0.3rem;
+  min-width: 7rem;
 }
 
-/* Destructive action inside the menu (e.g. "Restart run"). Quiet warm-red
-   treatment — present and tappable, but not styled as a primary CTA. */
-.hexaclear-menu-danger {
-  border-radius: 999px;
-  border: 1px solid rgba(220, 110, 80, 0.55) !important;
-  background: rgba(58, 18, 4, 0.65) !important;
-  color: #ffb7a0 !important;
-  font-weight: 500 !important;
-  padding: 0.45rem 0.9rem !important;
-  font-size: 0.8rem !important;
-  cursor: pointer;
-  text-align: center;
+.hexaclear-scoring-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 
-.hexaclear-menu-danger:hover {
-  background: rgba(96, 30, 14, 0.85) !important;
-  color: #ffd6c2 !important;
+.hexaclear-scoring-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.hexaclear-scoring-rule-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hexaclear-scoring-rule-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #fff5dc;
+  line-height: 1.2;
+}
+
+.hexaclear-scoring-rule-desc {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #f0d4a8;
+  opacity: 0.78;
+  margin-top: 0.15rem;
+}
+
+/* Hex-shaped value chip for scoring rules. Six-sided clip-path so each
+   chip matches the game's hex motif. Variants tint the fill while
+   keeping geometry identical for a consistent rhythm down the list. */
+.hexaclear-chip {
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  clip-path: polygon(
+    50% 0%,
+    100% 25%,
+    100% 75%,
+    50% 100%,
+    0% 75%,
+    0% 25%
+  );
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: #2a1004;
+  text-shadow: 0 1px 0 rgba(255, 235, 195, 0.45);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55));
+  user-select: none;
+}
+
+/* Standard +N chip — warm gold, matches the placed-cube palette. */
+.hexaclear-chip-gold {
+  background: linear-gradient(155deg, #ffeaa3 0%, #f9a23f 55%, #c66a1a 100%);
+}
+
+/* Big bonus chip — brighter, more saturated. */
+.hexaclear-chip-big {
+  background: linear-gradient(155deg, #fff4b8 0%, #ffc14f 50%, #d97a18 100%);
+  font-size: 1.05rem;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, 0.55);
+}
+
+/* Small +1 chip — muted gold, smaller text presence. */
+.hexaclear-chip-small {
+  background: linear-gradient(155deg, #d9b878 0%, #a07033 60%, #6a3f12 100%);
+  color: #1a0c04;
+  font-size: 0.95rem;
+}
+
+/* Ruby chip — pink/red gradient matching the in-game ruby cube. */
+.hexaclear-chip-ruby {
+  background: linear-gradient(155deg, #ff7fa9 0%, #e23c5c 55%, #8a0c2a 100%);
+  color: #320612;
+  text-shadow: 0 1px 0 rgba(255, 200, 220, 0.5);
+}
+
+/* Multiplier chips for combo / streak. Smaller text + no letter-spacing
+   so longer words like STREAK/COMBO fit cleanly inside the hex shape. */
+.hexaclear-chip-multiplier {
+  background: linear-gradient(155deg, #ffd887 0%, #e08a32 55%, #8a4612 100%);
+  font-size: 0.58rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+/* Daily-mode chips — same hex shape, neutral fills since daily uses
+   moves rather than scoring. */
+.hexaclear-chip-goal {
+  background: linear-gradient(155deg, #ffd887 0%, #e08a32 55%, #8a4612 100%);
+  font-size: 0.62rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hexaclear-chip-neutral {
+  background: linear-gradient(155deg, #d9b878 0%, #a07033 60%, #6a3f12 100%);
+  color: #1a0c04;
+  font-size: 0.6rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hexaclear-chip-trophy {
+  background: linear-gradient(155deg, #fff4b8 0%, #ffc14f 50%, #d97a18 100%);
+  font-size: 0.62rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, 0.55);
 }
 
 /* --- Reduced motion: kill animations & transitions ------------------- */
