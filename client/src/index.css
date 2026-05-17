@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Shrikhand&family=Nunito:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Monoton&family=Nunito:wght@400;600;700&display=swap');
 
 :root {
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
@@ -75,11 +75,11 @@ body {
 }
 
 .hexaclear-title {
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-size: 1.2rem;
+  font-size: 1.44rem;
   color: #ffe8a3;
   text-shadow:
     0 2px 0 #b2481b,
@@ -425,7 +425,7 @@ body {
 }
 
 .hexaclear-board-hud .board-hud-block {
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   color: #fff7eb;
   text-shadow: 0 3px 6px rgba(0, 0, 0, 0.7);
 }
@@ -1195,7 +1195,7 @@ body {
 }
 
 .hexaclear-gem-label {
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-size: 0.8rem;
   fill: #fff7f2;
   stroke: rgba(110, 30, 30, 0.95);
@@ -1359,7 +1359,7 @@ body {
 }
 
 .hexaclear-golden-popup {
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-size: 0.9rem;
   fill: #ffe9b3;
   stroke: rgba(110, 60, 20, 0.9);
@@ -1597,7 +1597,7 @@ body {
 }
 
 .hexaclear-score-particle-value {
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-size: 2.8rem;
   font-weight: 700;
   color: #fff9e6;
@@ -1815,10 +1815,10 @@ body {
 
 .hexaclear-menu-card .title {
   text-align: center;
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.4rem;
+  font-size: 1.68rem;
   letter-spacing: 0.06em;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
@@ -1967,10 +1967,10 @@ body {
 
 .hexaclear-scoring-card .title {
   text-align: center;
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.4rem;
+  font-size: 1.68rem;
   letter-spacing: 0.06em;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
@@ -2106,7 +2106,7 @@ body {
 }
 
 /* --- High scores modal ---------------------------------------------- */
-/* Same shell language as the menu/scoring modals: Shrikhand uppercase
+/* Same shell language as the menu/scoring modals: Monoton uppercase
    title, hairline-divided sections, hex chips for the visual rhythm,
    tabular numerals for values. */
 .hexaclear-scores-card {
@@ -2121,10 +2121,10 @@ body {
 
 .hexaclear-scores-card .title {
   text-align: center;
-  font-family: 'Shrikhand', cursive;
+  font-family: 'Monoton', system-ui, sans-serif;
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.4rem;
+  font-size: 1.68rem;
   letter-spacing: 0.06em;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
