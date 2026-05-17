@@ -37,6 +37,9 @@ export type PlacementResult = {
   // and whether it was cleared in this placement.
   goldenCellId: CellId | null
   goldenCleared: boolean
+  // True when this placement emptied the entire board (earning the +25
+  // board-clear bonus). Surfaced so the UI can play a flourish.
+  boardCleared: boolean
 }
 
 export type GameState = {
@@ -332,6 +335,7 @@ export const applyPlacement = (
       dailyCompleted,
       goldenCellId,
       goldenCleared: false,
+      boardCleared: false,
     }
   }
 
@@ -370,8 +374,8 @@ export const applyPlacement = (
   const isBoardEmptyAfter = Object.values(board).every(
     (state) => state === 'empty',
   )
-  const boardClearedBonus =
-    !wasBoardEmptyBefore && isBoardEmptyAfter ? 25 : 0
+  const boardCleared = !wasBoardEmptyBefore && isBoardEmptyAfter
+  const boardClearedBonus = boardCleared ? 25 : 0
 
   const goldenBonus = current.mode === 'endless' && goldenCleared ? 10 : 0
   const basePoints = 10 * numClears + boardClearedBonus + goldenBonus
@@ -407,6 +411,7 @@ export const applyPlacement = (
     dailyCompleted,
     goldenCellId,
     goldenCleared,
+    boardCleared,
   }
 }
 

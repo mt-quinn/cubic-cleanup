@@ -16,6 +16,8 @@ import {
   playClearForStreakIndex,
   playClickDown,
   playClickUp,
+  playError,
+  playGameOver,
   startScrollingLoop,
   stopScrollingLoop,
   unlockAudioOnGesture,
@@ -574,6 +576,30 @@ function App() {
     string | null
   >(null)
   const [recentlyPlacedCells, setRecentlyPlacedCells] = useState<string[]>([])
+  // Screenshake & hitstop are driven by tokens that increment per event so
+  // we can retrigger CSS animations without remounting the wrapper element.
+  const [shakeRequest, setShakeRequest] = useState<{
+    token: number
+    intensity: number
+  }>({ token: 0, intensity: 0 })
+  const [hitstop, setHitstop] = useState(false)
+  // Bumped every time a fresh 3-piece hand is dealt. Used as part of each
+  // hand-piece button's React key so all three buttons remount together
+  // and the fly-in animation always plays on a hand refresh.
+  const [handFlyInToken, setHandFlyInToken] = useState(0)
+  // Radial particle burst that fires at the ruby's old position when it
+  // gets cleared. Token bumps so consecutive captures restart cleanly.
+  const [rubyBurst, setRubyBurst] = useState<{
+    token: number
+    x: number
+    y: number
+  } | null>(null)
+  // While true, the game-over modal is suppressed and the board is in
+  // its wind-down phase (desaturating, hand pieces shaking).
+  const [gameOverWindingDown, setGameOverWindingDown] = useState(false)
+  // Bumped each time a placement clears the entire board (+25 bonus).
+  // Drives a one-shot golden flash overlay on the board wrapper.
+  const [boardClearFlashToken, setBoardClearFlashToken] = useState(0)
   const [failedPlacementPieceId, setFailedPlacementPieceId] = useState<string | null>(
     null,
   )
@@ -782,6 +808,7 @@ function App() {
             ? attemptedCellIds
             : [cellId],
         )
+        playError()
         return current
       }
 
@@ -941,6 +968,9 @@ function App() {
         for (let i = 0; i < 3; i++) {
           updatedSlots[i] = newHand[i]?.id ?? null
         }
+        // All three slots just got refreshed — bump the fly-in token so
+        // every hand button remounts and runs its arrival animation.
+        setHandFlyInToken((t) => t + 1)
       }
 
       const noMovesLeft = !hasAnyValidMove(result.board, newHand)
@@ -1040,6 +1070,10 @@ function App() {
                       {
                         id: particleId,
                         value: totalScore,
+                        // Surface the rarest event in the game with a
+                        // dedicated label so the +25 doesn't get lost
+                        // in the bigger combo number.
+                        label: result.boardCleared ? 'BOARD CLEAR!' : undefined,
                         startX,
                         startY,
                         deltaX,
@@ -1116,6 +1150,15 @@ function App() {
         if (result.goldenCleared && current.goldenCellId) {
           setGoldenPopupCellId(current.goldenCellId)
           setGoldenPopupToken((t) => t + 1)
+          // Trigger a radial particle burst at the ruby's previous spot.
+          const rubyPos = BOARD_LAYOUT.positions[current.goldenCellId]
+          if (rubyPos) {
+            setRubyBurst((prev) => ({
+              token: (prev?.token ?? 0) + 1,
+              x: rubyPos.x + BOARD_LAYOUT.offsetX,
+              y: rubyPos.y + BOARD_LAYOUT.offsetY,
+            }))
+          }
         }
       } else {
         // Still show the clearing animation in daily mode.
@@ -1131,8 +1174,43 @@ function App() {
       // capped at clear_7 thereafter. A non-clearing placement resets
       // current.streak to 0 in game state, so the next clear after that
       // naturally lands back on clear_1.
-      if (result.clearedPatterns.length > 0) {
+      const clearCount = result.clearedPatterns.length
+      if (clearCount > 0) {
         playClearForStreakIndex(current.streak + 1)
+
+        // Screenshake intensity grows with combo size and current streak.
+        // No shake on non-clearing placements: the board ripple already
+        // covers those, and shaking on every drop quickly turns into
+        // background noise. Board-clear is the rarest event in the game
+        // and gets a much heavier shake regardless of other inputs.
+        let intensity = Math.min(
+          6,
+          clearCount + Math.min(current.streak * 0.5, 3),
+        )
+        if (result.boardCleared) {
+          intensity = Math.max(intensity, 9)
+        }
+        setShakeRequest((prev) => ({
+          token: prev.token + 1,
+          intensity,
+        }))
+
+        // Hitstop only on "big" clears: combos of 2+, a clear that
+        // pushes the streak to 3+, or any board clear. The momentary
+        // freeze sells the impact before the cascade plays out.
+        const streakAfter = current.streak + 1
+        const bigClear =
+          clearCount >= 2 || streakAfter >= 3 || result.boardCleared
+        if (bigClear) {
+          setHitstop(true)
+        }
+
+        // Board-clear flourish: a golden flash sweeps across the wrapper
+        // on top of the bigger shake. Token retriggers cleanly even if
+        // a player somehow lands two board-clears in a row.
+        if (result.boardCleared) {
+          setBoardClearFlashToken((t) => t + 1)
+        }
       }
 
       const newMoves = current.moves + 1
@@ -1366,6 +1444,68 @@ function App() {
     }, 600)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
+
+  // Drive the screenshake animation. Removes the class, forces a reflow,
+  // sets the amplitude variable, then re-adds the class so consecutive
+  // shakes always restart cleanly instead of fighting an in-progress one.
+  useEffect(() => {
+    if (shakeRequest.intensity <= 0) return
+    const node = boardWrapperRef.current
+    if (!node) return
+    node.classList.remove('hexaclear-shake')
+    node.style.setProperty(
+      '--hexaclear-shake-amp',
+      String(shakeRequest.intensity),
+    )
+    // Force reflow so the animation actually restarts.
+    void node.offsetWidth
+    node.classList.add('hexaclear-shake')
+    const tid = window.setTimeout(() => {
+      node.classList.remove('hexaclear-shake')
+    }, 380)
+    return () => {
+      window.clearTimeout(tid)
+    }
+  }, [shakeRequest])
+
+  // Hitstop timer: clears itself after a short freeze so the clear
+  // cascade and all paused animations resume together.
+  useEffect(() => {
+    if (!hitstop) return
+    const tid = window.setTimeout(() => {
+      setHitstop(false)
+    }, 90)
+    return () => window.clearTimeout(tid)
+  }, [hitstop])
+
+  // Clear the ruby burst after its outward animation completes so the
+  // SVG nodes don't pile up across captures.
+  useEffect(() => {
+    if (!rubyBurst) return
+    const tokenAtStart = rubyBurst.token
+    const tid = window.setTimeout(() => {
+      setRubyBurst((prev) =>
+        prev && prev.token === tokenAtStart ? null : prev,
+      )
+    }, 800)
+    return () => window.clearTimeout(tid)
+  }, [rubyBurst])
+
+  // Game-over wind-down: when the run ends, give the board a beat to
+  // desaturate and let the unplayable hand shake before the modal slams
+  // in. Plays game_over.wav at the start of the wind-down.
+  useEffect(() => {
+    if (!game.gameOver) {
+      setGameOverWindingDown(false)
+      return
+    }
+    setGameOverWindingDown(true)
+    playGameOver()
+    const tid = window.setTimeout(() => {
+      setGameOverWindingDown(false)
+    }, 720)
+    return () => window.clearTimeout(tid)
+  }, [game.gameOver])
 
   useEffect(() => {
     if (recentlyPlacedCells.length === 0) return
@@ -1771,7 +1911,12 @@ function App() {
 
   return (
     <div
-      className="cubic-viewport"
+      className={[
+        'cubic-viewport',
+        hitstop ? 'hitstop' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onDragStart={(e) => {
         e.preventDefault()
       }}
@@ -1855,7 +2000,15 @@ function App() {
       </header>
 
       <main className="hexaclear-main">
-        <div className="hexaclear-board-wrapper" ref={boardWrapperRef}>
+        <div
+          className={[
+            'hexaclear-board-wrapper',
+            game.gameOver ? 'game-over-active' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          ref={boardWrapperRef}
+        >
           <svg
             className="hexaclear-board"
             ref={svgRef}
@@ -2178,7 +2331,45 @@ function App() {
                 })()}
               </g>
             )}
+
+            {/* Ruby capture burst: a radial spray of small shards that
+                fly out from the ruby's last cell when it's cleared. */}
+            {rubyBurst && (
+              <g
+                key={rubyBurst.token}
+                className="hexaclear-ruby-burst"
+                pointerEvents="none"
+              >
+                {Array.from({ length: 12 }).map((_, i) => {
+                  const angle = (i / 12) * Math.PI * 2
+                  const dist = HEX_SIZE * (1.8 + ((i % 3) * 0.25))
+                  const dx = Math.cos(angle) * dist
+                  const dy = Math.sin(angle) * dist
+                  return (
+                    <circle
+                      key={i}
+                      cx={rubyBurst.x}
+                      cy={rubyBurst.y}
+                      r={3.4}
+                      className="hexaclear-ruby-shard"
+                      style={{
+                        ['--ruby-shard-dx' as string]: `${dx}px`,
+                        ['--ruby-shard-dy' as string]: `${dy}px`,
+                        ['--ruby-shard-delay' as string]: `${(i % 3) * 18}ms`,
+                      }}
+                    />
+                  )
+                })}
+              </g>
+            )}
           </svg>
+          {boardClearFlashToken > 0 && (
+            <div
+              key={boardClearFlashToken}
+              className="hexaclear-board-clear-flash"
+              aria-hidden="true"
+            />
+          )}
           <div className="hexaclear-board-hud">
             {game.mode === 'daily' ? (
               <>
@@ -2207,7 +2398,16 @@ function App() {
               <>
                 <div className="board-hud-block left">
                   {game.streak > 0 && (
-                    <span className="value">Streak {game.streak}</span>
+                    <span
+                      key={game.streak}
+                      className={[
+                        'value',
+                        'hexaclear-streak-value',
+                        `hexaclear-streak-tier-${Math.min(6, game.streak)}`,
+                      ].join(' ')}
+                    >
+                      Streak {game.streak}
+                    </span>
                   )}
                 </div>
                 <div className="board-hud-block right">
@@ -2283,7 +2483,7 @@ function App() {
               ))}
             </div>
           )}
-          {game.gameOver && game.mode === 'endless' && (
+          {game.gameOver && game.mode === 'endless' && !gameOverWindingDown && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card">
                 <div className="title">No more moves</div>
@@ -2347,7 +2547,7 @@ function App() {
               </div>
             </div>
           )}
-          {game.gameOver && game.mode === 'daily' && (
+          {game.gameOver && game.mode === 'daily' && !gameOverWindingDown && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card">
                 <div className="title">
@@ -2631,7 +2831,14 @@ function App() {
           )}
         </div>
 
-        <section className="hexaclear-hand">
+        <section
+          className={[
+            'hexaclear-hand',
+            gameOverWindingDown ? 'game-over-winding-down' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
           {game.handSlots.map((pieceId, slotIndex) => {
             const piece = game.hand.find((p) => p.id === pieceId) ?? null
             const isHiddenByUndo =
@@ -2650,12 +2857,21 @@ function App() {
 
             return (
               <button
-                key={slotIndex}
+                // Composite key: bumping handFlyInToken on a fresh hand
+                // forces all three buttons to remount together so the
+                // staggered fly-in animation always plays. Slot index
+                // alone keeps the buttons stable across regular renders.
+                key={`${handFlyInToken}-${slotIndex}`}
                 ref={(el) => {
                   handButtonRefs.current[slotIndex] = el
                 }}
+                style={{
+                  ['--hexaclear-fly-in-delay' as string]:
+                    `${slotIndex * 70}ms`,
+                }}
                 className={[
                   'hexaclear-piece-button',
+                  'hexaclear-piece-flyin',
                   isSelected ? 'selected' : '',
                   isDragging ? 'dragging' : '',
                   piece && !isPlayable ? 'unplayable' : '',

@@ -195,6 +195,175 @@ body {
   align-items: center;
   justify-content: center;
   overflow: visible;
+  /* Default amplitude in case --hexaclear-shake-amp isn't set yet. */
+  --hexaclear-shake-amp: 0;
+}
+
+/* SCREENSHAKE: pseudo-random translate burst applied to the whole board
+   wrapper. Amplitude is driven by --hexaclear-shake-amp (set via JS),
+   where ~1 = light single clear and ~5-6 = big combo on a high streak. */
+.hexaclear-board-wrapper.hexaclear-shake {
+  animation: hexaclear-screenshake 380ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes hexaclear-screenshake {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  10% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * -1.4px),
+      calc(var(--hexaclear-shake-amp) * 0.6px),
+      0
+    );
+  }
+  20% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * 1.6px),
+      calc(var(--hexaclear-shake-amp) * -1.1px),
+      0
+    );
+  }
+  30% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * -2.0px),
+      calc(var(--hexaclear-shake-amp) * 1.0px),
+      0
+    );
+  }
+  40% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * 1.8px),
+      calc(var(--hexaclear-shake-amp) * 1.4px),
+      0
+    );
+  }
+  50% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * -1.0px),
+      calc(var(--hexaclear-shake-amp) * -1.6px),
+      0
+    );
+  }
+  60% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * 1.2px),
+      calc(var(--hexaclear-shake-amp) * 0.8px),
+      0
+    );
+  }
+  72% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * -0.8px),
+      calc(var(--hexaclear-shake-amp) * -0.6px),
+      0
+    );
+  }
+  85% {
+    transform: translate3d(
+      calc(var(--hexaclear-shake-amp) * 0.5px),
+      calc(var(--hexaclear-shake-amp) * 0.3px),
+      0
+    );
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* HITSTOP: brief freeze of every CSS animation in the game. Triggered on
+   "big" clears (combo 2+ or streak 3+). The pause lets the brain register
+   that something significant happened before the cascade plays out. */
+.cubic-viewport.hitstop *,
+.cubic-viewport.hitstop *::before,
+.cubic-viewport.hitstop *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
+/* BOARD-CLEAR FLOURISH: rare full-board-empty event. A golden radial
+   flash washes across the wrapper, then fades, on top of the heavier
+   screenshake the placement handler triggers in tandem. */
+.hexaclear-board-clear-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 5;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 240, 180, 0.85) 0%,
+    rgba(255, 200, 100, 0.55) 35%,
+    rgba(255, 140, 60, 0.25) 60%,
+    rgba(255, 140, 60, 0) 80%
+  );
+  mix-blend-mode: screen;
+  animation: hexaclear-board-clear-flash 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes hexaclear-board-clear-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  45% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* GAME-OVER WIND-DOWN: when the run ends, the board desaturates over a
+   beat and the unplayable hand pieces shake one last time before the
+   modal arrives. The transition stays applied while the modal is up so
+   the desaturated board reads as "the game ended" behind the overlay. */
+.hexaclear-board-wrapper.game-over-active {
+  filter: saturate(0.32) brightness(0.7);
+  transition: filter 700ms ease-out;
+}
+
+.hexaclear-hand.game-over-winding-down .hexaclear-piece-button {
+  animation: hexaclear-game-over-shake 540ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes hexaclear-game-over-shake {
+  0% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-3px, 1px);
+  }
+  20% {
+    transform: translate(4px, -2px);
+  }
+  30% {
+    transform: translate(-5px, 1px);
+  }
+  40% {
+    transform: translate(4px, 3px);
+  }
+  50% {
+    transform: translate(-3px, -3px);
+  }
+  60% {
+    transform: translate(2px, 2px);
+  }
+  72% {
+    transform: translate(-2px, -1px);
+  }
+  85% {
+    transform: translate(1px, 1px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
 }
 
 .hexaclear-board-hud {
@@ -226,6 +395,77 @@ body {
   font-size: 0.8rem;
   display: block;
   max-width: 7.5rem;
+}
+
+/* STREAK HUD: tiers grow more emphatic the longer a clearing run goes,
+   so the player has something visceral to want to protect. The element
+   is keyed on streak count so React remounts on every increment and the
+   pop animation always plays once per streak step. */
+.hexaclear-streak-value {
+  display: inline-block;
+  transform-origin: left center;
+  animation: hexaclear-streak-pop 360ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transition: color 220ms ease-out, text-shadow 220ms ease-out;
+}
+
+.hexaclear-streak-tier-1 {
+  font-size: 1.4rem;
+  color: #fff7eb;
+}
+
+.hexaclear-streak-tier-2 {
+  font-size: 1.55rem;
+  color: #ffe18a;
+}
+
+.hexaclear-streak-tier-3 {
+  font-size: 1.75rem;
+  color: #ffcf73;
+  text-shadow:
+    0 0 10px rgba(255, 207, 115, 0.55),
+    0 3px 6px rgba(0, 0, 0, 0.75);
+}
+
+.hexaclear-streak-tier-4 {
+  font-size: 1.95rem;
+  color: #ff9d4f;
+  text-shadow:
+    0 0 14px rgba(255, 157, 79, 0.7),
+    0 0 4px rgba(255, 207, 115, 0.6),
+    0 3px 6px rgba(0, 0, 0, 0.75);
+}
+
+.hexaclear-streak-tier-5 {
+  font-size: 2.15rem;
+  color: #ff7349;
+  text-shadow:
+    0 0 20px rgba(255, 115, 73, 0.8),
+    0 0 6px rgba(255, 200, 90, 0.6),
+    0 3px 6px rgba(0, 0, 0, 0.75);
+}
+
+.hexaclear-streak-tier-6 {
+  font-size: 2.35rem;
+  color: #ff4d4d;
+  text-shadow:
+    0 0 26px rgba(255, 77, 77, 0.9),
+    0 0 10px rgba(255, 200, 60, 0.7),
+    0 3px 6px rgba(0, 0, 0, 0.75);
+}
+
+@keyframes hexaclear-streak-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 
@@ -993,7 +1233,14 @@ body {
   position: absolute;
   pointer-events: none;
   z-index: 10;
-  opacity: 0.6;
+  opacity: 0.85;
+  /* Sells the "lifted off the board" feeling: a soft, slightly offset
+     shadow + a tighter halo just under the piece. The drop-shadow filter
+     respects the piece's actual silhouette (cubes/lines), unlike a
+     box-shadow which would shadow the bounding rect. */
+  filter:
+    drop-shadow(0 12px 14px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 4px 5px rgba(0, 0, 0, 0.45));
 }
 
 .hexaclear-undo-animation {
@@ -1067,6 +1314,43 @@ body {
   animation: hexaclear-golden-popup-fade 900ms ease-out forwards;
 }
 
+/* RUBY CAPTURE BURST: 12 small ruby-tinted shards spray outward from the
+   captured ruby's last cell. Each shard's outward vector is supplied via
+   per-element CSS variables; they all share one keyframes definition. */
+.hexaclear-ruby-shard {
+  fill: #ff5a8a;
+  stroke: rgba(120, 18, 36, 0.95);
+  stroke-width: 0.6px;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 6px rgba(255, 90, 138, 0.85));
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-ruby-shard-fly 720ms cubic-bezier(0.18, 0.7, 0.3, 1) forwards;
+  animation-delay: var(--ruby-shard-delay, 0ms);
+}
+
+@keyframes hexaclear-ruby-shard-fly {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 1;
+  }
+  35% {
+    transform:
+      translate(
+        calc(var(--ruby-shard-dx) * 0.55),
+        calc(var(--ruby-shard-dy) * 0.55)
+      )
+      scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform:
+      translate(var(--ruby-shard-dx), var(--ruby-shard-dy))
+      scale(0.35);
+    opacity: 0;
+  }
+}
+
 .hexaclear-highscores {
   list-style: none;
   padding: 0;
@@ -1122,6 +1406,30 @@ body {
   -webkit-user-drag: none;
   user-select: none;
   touch-action: none;
+}
+
+/* Fly-in animation for fresh hands. Delay is set per-button via the
+   inline --hexaclear-fly-in-delay variable so the three pieces stagger
+   in left-to-right. The animation plays once on mount and is harmless
+   on the very first render. */
+.hexaclear-piece-flyin {
+  animation: hexaclear-hand-flyin 360ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation-delay: var(--hexaclear-fly-in-delay, 0ms);
+}
+
+@keyframes hexaclear-hand-flyin {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.78);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .hexaclear-piece-button.selected {

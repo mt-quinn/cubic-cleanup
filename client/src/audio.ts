@@ -16,6 +16,8 @@ type SoundKey =
   | 'clear5'
   | 'clear6'
   | 'clear7'
+  | 'error'
+  | 'gameOver'
 
 const SOURCES: Record<SoundKey, string> = {
   clickDown: '/click_down.wav',
@@ -28,6 +30,8 @@ const SOURCES: Record<SoundKey, string> = {
   clear5: '/clear_5.wav',
   clear6: '/clear_6.wav',
   clear7: '/clear_7.wav',
+  error: '/error.wav',
+  gameOver: '/game_over.wav',
 }
 
 const VOLUMES: Record<SoundKey, number> = {
@@ -41,6 +45,8 @@ const VOLUMES: Record<SoundKey, number> = {
   clear5: 0.85,
   clear6: 0.85,
   clear7: 0.85,
+  error: 0.8,
+  gameOver: 0.85,
 }
 
 let elements: Partial<Record<SoundKey, HTMLAudioElement>> = {}
@@ -111,6 +117,8 @@ const playOneShot = (key: SoundKey) => {
 
 export const playClickDown = () => playOneShot('clickDown')
 export const playClickUp = () => playOneShot('clickUp')
+export const playError = () => playOneShot('error')
+export const playGameOver = () => playOneShot('gameOver')
 
 // Play the SFX for the Nth consecutive clearing placement, capping at
 // clear_7.wav for the 7th and beyond. `streakIndex` is 1-based: 1 means
