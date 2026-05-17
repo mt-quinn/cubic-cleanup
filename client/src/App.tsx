@@ -2779,7 +2779,6 @@ function App() {
                       playUiClick()
                       setHasStartedSession(true)
                       setShowMenu(false)
-                      resetGame()
                     }}
                   >
                     New Game
