@@ -2852,181 +2852,208 @@ function App() {
               </div>
             </div>
           )}
-          {showHighScores && (
-            <div className="hexaclear-overlay">
-              <div className="hexaclear-overlay-card">
-                <div className="title">High Scores</div>
-                <div className="score">
-                  <p>Endless (score):</p>
-                  {highScores.length === 0 ? (
-                    <p>No endless scores yet. Play a game!</p>
-                  ) : (
-                    <ol className="hexaclear-highscores">
-                      {highScores
-                        .slice()
-                        .sort(
-                          (a, b) =>
-                            b.score - a.score || a.date - b.date,
-                        )
-                        .map((entry, idx) => {
+          {showHighScores && (() => {
+            const todayKey = getTodayKey()
+            const sortedEndless = highScores
+              .slice()
+              .sort((a, b) => b.score - a.score || a.date - b.date)
+            const dailyEntriesForDay = dailyHighScores
+              .slice()
+              .filter(
+                (entry) =>
+                  getDateKeyFromTimestamp(entry.date) === dailyScoresDateKey,
+              )
+              .sort((a, b) => a.moves - b.moves || a.date - b.date)
+            const rankClass = (rank: number) =>
+              rank === 1
+                ? 'hexaclear-chip-trophy'
+                : rank <= 3
+                  ? 'hexaclear-chip-gold'
+                  : 'hexaclear-chip-neutral'
+            return (
+              <div className="hexaclear-overlay">
+                <div className="hexaclear-overlay-card hexaclear-scores-card">
+                  <div className="title">High Scores</div>
+
+                  <div className="hexaclear-scores-section">
+                    <div className="hexaclear-scores-section-label">
+                      Endless · highest score
+                    </div>
+                    {sortedEndless.length === 0 ? (
+                      <p className="hexaclear-scores-empty">
+                        No endless scores yet. Play a game!
+                      </p>
+                    ) : (
+                      <ol className="hexaclear-scores-list">
+                        {sortedEndless.map((entry, idx) => {
                           const isRecent =
                             highScoreSaved &&
                             lastSavedHighScoreDate !== null &&
                             entry.date === lastSavedHighScoreDate
+                          const rank = idx + 1
                           return (
                             <li
                               key={entry.date + entry.name + idx}
-                              className={isRecent ? 'recent' : undefined}
+                              className={
+                                'hexaclear-scores-row' +
+                                (isRecent ? ' recent' : '')
+                              }
                             >
-                              <span className="name">{entry.name}</span>
-                              <span className="value">{entry.score}</span>
+                              <span
+                                className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                aria-hidden="true"
+                              >
+                                {rank}
+                              </span>
+                              <span className="hexaclear-scores-name">
+                                {entry.name}
+                              </span>
+                              <span className="hexaclear-scores-value">
+                                {entry.score}
+                              </span>
                             </li>
                           )
                         })}
-                    </ol>
-                  )}
-                </div>
-                <div className="score" style={{ marginTop: '0.75rem' }}>
-                  <p style={{ marginTop: 0, marginBottom: '0.25rem' }}>
-                    Daily (fewest moves)
-                  </p>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.5rem',
-                      marginBottom: '0.35rem',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      style={{ minWidth: '1.8rem' }}
-                      onClick={() => {
-                        setDailyScoresDateKey((prev) =>
-                          shiftDateKey(prev || getTodayKey(), -1),
-                        )
-                      }}
-                    >
-                      ◀
-                    </button>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      {dailyScoresDateKey}
-                    </span>
-                    <button
-                      type="button"
-                      style={{ minWidth: '1.8rem' }}
-                      onClick={() => {
-                        const today = getTodayKey()
-                        setDailyScoresDateKey((prev) => {
-                          const next = shiftDateKey(prev || today, 1)
-                          // Don&apos;t advance past today.
-                          return next > today ? today : next
-                        })
-                      }}
-                      disabled={dailyScoresDateKey >= getTodayKey()}
-                    >
-                      ▶
-                    </button>
-      </div>
-                  {dailyScoresDateKey !== getTodayKey() && (
-                    <div style={{ marginBottom: '0.4rem' }}>
+                      </ol>
+                    )}
+                  </div>
+
+                  <div className="hexaclear-scores-section">
+                    <div className="hexaclear-scores-section-label">
+                      Daily · fewest moves
+                    </div>
+                    <div className="hexaclear-scores-date-stepper">
                       <button
                         type="button"
-                        onClick={() => setDailyScoresDateKey(getTodayKey())}
+                        className="hexaclear-scores-date-step"
+                        aria-label="Previous day"
+                        onClick={() => {
+                          setDailyScoresDateKey((prev) =>
+                            shiftDateKey(prev || getTodayKey(), -1),
+                          )
+                        }}
                       >
-                        Today&apos;s scores
+                        ‹
+                      </button>
+                      <span className="hexaclear-scores-date-label">
+                        {dailyScoresDateKey}
+                      </span>
+                      <button
+                        type="button"
+                        className="hexaclear-scores-date-step"
+                        aria-label="Next day"
+                        onClick={() => {
+                          const today = getTodayKey()
+                          setDailyScoresDateKey((prev) => {
+                            const next = shiftDateKey(prev || today, 1)
+                            return next > today ? today : next
+                          })
+                        }}
+                        disabled={dailyScoresDateKey >= todayKey}
+                      >
+                        ›
                       </button>
                     </div>
-                  )}
-                  {(() => {
-                    const todayKey = getTodayKey()
-                    const entriesForDay = dailyHighScores.filter(
-                      (entry) =>
-                        getDateKeyFromTimestamp(entry.date) ===
-                        dailyScoresDateKey,
-                    )
-                    if (entriesForDay.length === 0) {
-                      return (
-                        <p>
-                          No scores stored for this date
-                          {dailyScoresDateKey === todayKey
-                            ? ". Play today's puzzle!"
-                            : '.'}
-                        </p>
-                      )
-                    }
-                    return (
-                      <ol className="hexaclear-highscores">
-                        {entriesForDay
-                          .slice()
-                          .sort(
-                            (a, b) => a.moves - b.moves || a.date - b.date,
-                          )
-                          .map((entry, idx) => {
-                            const isRecent =
-                              dailyHighScoreSaved &&
-                              lastSavedDailyHighScoreDate !== null &&
-                              entry.date === lastSavedDailyHighScoreDate
-                            return (
-                              <li
-                                key={entry.date + entry.name + idx}
-                                className={isRecent ? 'recent' : undefined}
+                    {dailyEntriesForDay.length === 0 ? (
+                      <p className="hexaclear-scores-empty">
+                        No scores stored for this date
+                        {dailyScoresDateKey === todayKey
+                          ? ". Play today's puzzle!"
+                          : '.'}
+                      </p>
+                    ) : (
+                      <ol className="hexaclear-scores-list">
+                        {dailyEntriesForDay.map((entry, idx) => {
+                          const isRecent =
+                            dailyHighScoreSaved &&
+                            lastSavedDailyHighScoreDate !== null &&
+                            entry.date === lastSavedDailyHighScoreDate
+                          const rank = idx + 1
+                          return (
+                            <li
+                              key={entry.date + entry.name + idx}
+                              className={
+                                'hexaclear-scores-row' +
+                                (isRecent ? ' recent' : '')
+                              }
+                            >
+                              <span
+                                className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                aria-hidden="true"
                               >
-                                <span className="name">{entry.name}</span>
-                                <span className="value">
-                                  {entry.moves} moves
-                                </span>
-                              </li>
-                            )
-                          })}
+                                {rank}
+                              </span>
+                              <span className="hexaclear-scores-name">
+                                {entry.name}
+                              </span>
+                              <span className="hexaclear-scores-value">
+                                {entry.moves} moves
+                              </span>
+                            </li>
+                          )
+                        })}
                       </ol>
-                    )
-                  })()}
-                </div>
-                {!showResetConfirm ? (
+                    )}
+                    {dailyScoresDateKey !== todayKey && (
+                      <button
+                        type="button"
+                        className="hexaclear-menu-link hexaclear-scores-today-link"
+                        onClick={() => setDailyScoresDateKey(todayKey)}
+                      >
+                        Jump to today
+                      </button>
+                    )}
+                  </div>
+
+                  {!showResetConfirm ? (
+                    <button
+                      type="button"
+                      className="hexaclear-menu-restart-link"
+                      onClick={() => setShowResetConfirm(true)}
+                    >
+                      Reset hiscores
+                    </button>
+                  ) : (
+                    <div className="hexaclear-scores-confirm">
+                      <p className="hexaclear-scores-confirm-text">
+                        Reset all local hiscores? This cannot be undone.
+                      </p>
+                      <div className="hexaclear-scores-confirm-actions">
+                        <button
+                          type="button"
+                          className="hexaclear-menu-restart-link"
+                          onClick={handleResetHighScores}
+                        >
+                          Yes, reset
+                        </button>
+                        <span
+                          className="hexaclear-menu-link-sep"
+                          aria-hidden="true"
+                        >
+                          •
+                        </span>
+                        <button
+                          type="button"
+                          className="hexaclear-menu-link"
+                          onClick={() => setShowResetConfirm(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setShowResetConfirm(true)}
-                    style={{ marginTop: '0.75rem' }}
+                    className="hexaclear-reset"
+                    onClick={() => setShowHighScores(false)}
                   >
-                    Reset Hiscores
+                    Resume
                   </button>
-                ) : (
-                  <div className="score" style={{ marginTop: '0.75rem' }}>
-                    <p>Reset all local hiscores? This cannot be undone.</p>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        marginTop: '0.25rem',
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={handleResetHighScores}
-                      >
-                        Yes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowResetConfirm(false)}
-                      >
-                        No
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowHighScores(false)}
-                >
-                  Close
-                </button>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
 
         <section
