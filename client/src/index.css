@@ -323,8 +323,11 @@ body {
 /* GAME-OVER WIND-DOWN: when the run ends, the board desaturates over a
    beat and the unplayable hand pieces shake one last time before the
    modal arrives. The transition stays applied while the modal is up so
-   the desaturated board reads as "the game ended" behind the overlay. */
-.hexaclear-board-wrapper.game-over-active {
+   the desaturated board reads as "the game ended" behind the overlay.
+
+   Applied to the wrapper's children (excluding the overlay itself) so
+   the modal stays vibrant on top of the dimmed playfield. */
+.hexaclear-board-wrapper.game-over-active > *:not(.hexaclear-overlay) {
   filter: saturate(0.32) brightness(0.7);
   transition: filter 700ms ease-out;
 }
@@ -1413,7 +1416,7 @@ body {
    in left-to-right. The animation plays once on mount and is harmless
    on the very first render. */
 .hexaclear-piece-flyin {
-  animation: hexaclear-hand-flyin 360ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation: hexaclear-hand-flyin 720ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   animation-delay: var(--hexaclear-fly-in-delay, 0ms);
 }
 
