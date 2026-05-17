@@ -122,14 +122,20 @@ body {
 }
 
 .hexaclear-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   border: 1px solid rgba(255, 205, 143, 0.85);
   background: linear-gradient(135deg, #f7b35a, #f37a3b);
   color: #3a1204;
-  padding: 0.35rem 0.65rem;
+  padding: 0.35rem 0.85rem;
+  min-width: 5.5rem;
   font-size: 0.7rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  line-height: 1;
   cursor: pointer;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.2),
@@ -1073,7 +1079,8 @@ body {
   font-size: 16px; /* Prevent iOS input-focus zoom */
 }
 
-.hexaclear-overlay-card button {
+.hexaclear-overlay-card
+  button:not(.hexaclear-reset):not(.hexaclear-menu-action) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -1677,16 +1684,19 @@ body {
   justify-content: center;
   border-radius: 999px;
   background: rgba(58, 18, 4, 0.8);
-  border: 1px solid rgba(255, 205, 143, 0.8);
+  border: 1px solid rgba(255, 205, 143, 0.85);
   color: #ffe8a3;
   padding: 0.35rem 0.85rem;
+  min-width: 5.5rem;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 6px 14px rgba(0, 0, 0, 0.45);
   transition: transform 80ms ease-out, background 120ms ease-out;
 }
 
@@ -1713,6 +1723,13 @@ body {
   font-size: 1.05rem;
   letter-spacing: 0.04em;
   margin-bottom: 0.1rem;
+}
+
+/* The Resume button is the only direct flex child that shouldn't
+   stretch full-width — keep it centered at Restart-button size. */
+.hexaclear-menu-card > .hexaclear-reset {
+  align-self: center;
+  margin-top: 0.15rem;
 }
 
 .hexaclear-menu-section {

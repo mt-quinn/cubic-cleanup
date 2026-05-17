@@ -2695,12 +2695,13 @@ function App() {
 
                 <button
                   type="button"
+                  className="hexaclear-reset"
                   onClick={() => {
                     unlockAudioOnGesture()
                     setShowMenu(false)
                   }}
                 >
-                  Close
+                  Resume
                 </button>
               </div>
             </div>
