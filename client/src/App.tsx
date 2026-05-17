@@ -20,7 +20,12 @@ import {
   stopScrollingLoop,
   unlockAudioOnGesture,
 } from './audio'
+import { WebHaptics } from 'web-haptics'
 import './index.css'
+
+// Single shared instance. Web-haptics no-ops on unsupported platforms,
+// so no feature detection is required at the call sites.
+const haptics = new WebHaptics()
 
 type HoverInfo = {
   cellId: string
@@ -541,22 +546,15 @@ const loadInitialGameFromStorage = (): GameState => {
   }
 }
 
-const triggerHaptics = (didClear: boolean) => {
-  if (typeof window === 'undefined') return
-  const nav: any = navigator
-  if (!nav || typeof nav.vibrate !== 'function') return
-  if (didClear) {
-    nav.vibrate([15, 40, 25])
-  } else {
-    nav.vibrate(10)
-  }
+// Both pickup and placement get the same heavy bump per game design.
+// `didClear` is preserved for the call site in case we want clear-only
+// haptics later, but both branches currently fire the same heavy impact.
+const triggerHaptics = (_didClear: boolean) => {
+  haptics.trigger('heavy')
 }
 
 const triggerGrabHaptic = () => {
-  if (typeof window === 'undefined') return
-  const nav: any = navigator
-  if (!nav || typeof nav.vibrate !== 'function') return
-  nav.vibrate(5)
+  haptics.trigger('heavy')
 }
 
 function App() {
