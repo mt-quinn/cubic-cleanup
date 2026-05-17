@@ -1537,7 +1537,7 @@ function App() {
     playGameOver()
     const tid = window.setTimeout(() => {
       setGameOverWindingDown(false)
-    }, 1440)
+    }, 2880)
     return () => window.clearTimeout(tid)
   }, [game.gameOver])
 

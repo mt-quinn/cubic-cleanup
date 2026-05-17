@@ -382,7 +382,7 @@ body {
    the modal stays vibrant on top of the dimmed playfield. */
 .hexaclear-board-wrapper.game-over-active > *:not(.hexaclear-overlay) {
   filter: saturate(0.32) brightness(0.7);
-  transition: filter 1400ms ease-out;
+  transition: filter 2800ms ease-out;
 }
 
 .hexaclear-hand.game-over-winding-down .hexaclear-piece-button {
