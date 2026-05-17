@@ -271,9 +271,12 @@ const CubeLines = ({
 }
 
 const SlotGeometry = ({ cx, cy }: { cx: number; cy: number }) => {
+  // Empty cells render as a single quiet hex dimple — no 3D cube facets — so
+  // placed pieces stand out clearly against open space. Filled cubes carry
+  // all the depth/shading. This is what tells the player "this cell is empty"
+  // at a glance.
   const vertices: { x: number; y: number }[] = []
-  const radius = HEX_SIZE * 0.9
-
+  const radius = HEX_SIZE * 0.86
   for (let i = 0; i < 6; i++) {
     const angleRad = ((60 * i - 30) * Math.PI) / 180
     vertices.push({
@@ -281,24 +284,11 @@ const SlotGeometry = ({ cx, cy }: { cx: number; cy: number }) => {
       y: cy + radius * Math.sin(angleRad),
     })
   }
-
-  const v0 = vertices[0]
-  const v1 = vertices[1]
-  const v2 = vertices[2]
-  const v3 = vertices[3]
-  const v4 = vertices[4]
-  const v5 = vertices[5]
-
-  // Use same three-face layout as cubes, but darker palette to read as a slot.
-  const rightFace = `${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`
-  const leftFace = `${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`
-  const topFace = `${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`
+  const points = vertices.map((v) => `${v.x},${v.y}`).join(' ')
 
   return (
     <g className="hexaclear-slot">
-      <polygon className="hexaclear-slot-right" points={rightFace} />
-      <polygon className="hexaclear-slot-left" points={leftFace} />
-      <polygon className="hexaclear-slot-top" points={topFace} />
+      <polygon className="hexaclear-slot-fill" points={points} />
     </g>
   )
 }
@@ -1010,7 +1000,7 @@ function App() {
           const totalScore = result.pointsGained + piece.shape.cells.length
           
           // Get score counter position
-          const scoreCounterEl = document.querySelector('.board-hud-block.right .value')
+          const scoreCounterEl = document.querySelector('.hexaclear-live-stat .value')
           const boardWrapper = boardWrapperRef.current
           if (scoreCounterEl && boardWrapper) {
             // Calculate centroid of all cleared patterns for start position
@@ -1051,7 +1041,7 @@ function App() {
                   lastScheduledScoreParticleActionIdRef.current = actionId
                   // Recalculate positions now that DOM is updated
                   const scoreCounterEl = document.querySelector(
-                    '.board-hud-block.right .value',
+                    '.hexaclear-live-stat .value',
                   )
                   const boardWrapper = boardWrapperRef.current
                   if (scoreCounterEl && boardWrapper) {
@@ -1102,7 +1092,7 @@ function App() {
                       })
 
                       const scoreCounter = document.querySelector(
-                        '.board-hud-block.right .value',
+                        '.hexaclear-live-stat .value',
                       )
                       if (scoreCounter) {
                         scoreCelebrateTokenRef.current += 1
@@ -1920,75 +1910,84 @@ function App() {
       }}
     >
       <div className="hexaclear-root" ref={rootRef}>
-      <header className="hexaclear-header">
-        <div className="hexaclear-header-main">
-          <div className="hexaclear-title">Cubic Cleanup</div>
-          <div className="hexaclear-header-main-right">
-            <div className="hexaclear-best-banner">
-              <span className="label">
-                {game.mode === 'daily' ? 'Best (today)' : 'Best'}
-              </span>
-              <span className="value">
-                {game.mode === 'daily'
-                  ? todayDailyBestMoves !== null
-                    ? todayDailyBestMoves
-                    : '—'
-                  : bestScore ?? '—'}
-              </span>
+      {(() => {
+        const bestValue =
+          game.mode === 'daily' ? todayDailyBestMoves : bestScore
+        const showBest = bestValue !== null && bestValue !== undefined
+        const liveStatLabel = game.mode === 'daily' ? 'Moves' : 'Score'
+        const liveStatValue =
+          game.mode === 'daily' ? game.moves : game.score
+        const showLiveStat =
+          game.mode === 'endless' || (game.mode === 'daily' && game.moves > 0)
+        return (
+          <header className="hexaclear-header">
+            <div className="hexaclear-header-main">
+              <div className="hexaclear-title">Cubic Cleanup</div>
+              <div className="hexaclear-header-main-right">
+                {showBest && (
+                  <div className="hexaclear-best-banner">
+                    <span className="label">
+                      {game.mode === 'daily' ? 'Best (today)' : 'Best'}
+                    </span>
+                    <span className="value">{bestValue}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="hexaclear-menu-button"
+                  onClick={() => setShowMenu(true)}
+                >
+                  Menu
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              className="hexaclear-menu-button"
-              onClick={() => setShowMenu(true)}
-            >
-              Menu
-            </button>
-          </div>
-        </div>
-        <div className="hexaclear-header-controls">
-          <div className="hexaclear-mode-toggle">
-            <button
-              type="button"
-              className={[
-                'mode-pill',
-                game.mode === 'endless' ? 'active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => {
-                if (game.mode !== 'endless') {
-                  toggleDailyMode()
-                }
-              }}
-            >
-              Endless
-            </button>
-            <button
-              type="button"
-              className={[
-                'mode-pill',
-                game.mode === 'daily' ? 'active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => {
-                if (game.mode !== 'daily') {
-                  toggleDailyMode()
-                }
-              }}
-            >
-              Daily
-            </button>
-          </div>
-          <button
-            className="hexaclear-reset"
-            type="button"
-            onClick={resetGame}
-          >
-            Restart
-          </button>
-        </div>
-      </header>
+            <div className="hexaclear-header-controls">
+              <div className="hexaclear-mode-toggle">
+                <button
+                  type="button"
+                  className={[
+                    'mode-pill',
+                    game.mode === 'endless' ? 'active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    if (game.mode !== 'endless') {
+                      toggleDailyMode()
+                    }
+                  }}
+                >
+                  Endless
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'mode-pill',
+                    game.mode === 'daily' ? 'active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    if (game.mode !== 'daily') {
+                      toggleDailyMode()
+                    }
+                  }}
+                >
+                  Daily
+                </button>
+              </div>
+              {showLiveStat ? (
+                <div className="hexaclear-live-stat">
+                  <span className="label">{liveStatLabel}</span>
+                  <span className="value">{liveStatValue}</span>
+                </div>
+              ) : (
+                <span className="hexaclear-live-stat-placeholder" />
+              )}
+            </div>
+          </header>
+        )
+      })()}
 
       <main className="hexaclear-main">
         <div
@@ -2363,49 +2362,35 @@ function App() {
           )}
           <div className="hexaclear-board-hud">
             {game.mode === 'daily' ? (
-              <>
-                <div className="board-hud-block left">
-                  {game.moves === 0 ? (
-                    <span className="value small">
-                      Clear all numbered cubes to win!
-                    </span>
-                  ) : (
-                    <span className="value">
-                       {dailyCubesRemaining}{' '}
-                      {dailyCubesRemaining === 1
-                        ? 'Cube Remains'
-                        : 'Cubes Remain'}
-                    </span>
-                  )}
-      </div>
-                {game.moves > 0 && (
-                  <div className="board-hud-block right">
-                    <span className="label">Moves</span>
-                    <span className="value">{game.moves}</span>
-                  </div>
+              <div className="board-hud-block left">
+                {game.moves === 0 ? (
+                  <span className="value small">
+                    Clear all numbered cubes to win!
+                  </span>
+                ) : (
+                  <span className="value">
+                    {dailyCubesRemaining}{' '}
+                    {dailyCubesRemaining === 1
+                      ? 'Cube Remains'
+                      : 'Cubes Remain'}
+                  </span>
                 )}
-              </>
+              </div>
             ) : (
-              <>
-                <div className="board-hud-block left">
-                  {game.streak > 0 && (
-                    <span
-                      key={game.streak}
-                      className={[
-                        'value',
-                        'hexaclear-streak-value',
-                        `hexaclear-streak-tier-${Math.min(6, game.streak)}`,
-                      ].join(' ')}
-                    >
-                      Streak {game.streak}
-                    </span>
-                  )}
-                </div>
-                <div className="board-hud-block right">
-                  <span className="label">Score</span>
-                  <span className="value">{game.score}</span>
-                </div>
-              </>
+              <div className="board-hud-block left">
+                {game.streak > 0 && (
+                  <span
+                    key={game.streak}
+                    className={[
+                      'value',
+                      'hexaclear-streak-value',
+                      `hexaclear-streak-tier-${Math.min(6, game.streak)}`,
+                    ].join(' ')}
+                  >
+                    Streak {game.streak}
+                  </span>
+                )}
+              </div>
             )}
           </div>
           {undoStack.length > 0 && !game.gameOver && (
@@ -2617,7 +2602,11 @@ function App() {
           {showMenu && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card hexaclear-menu-card">
-                <div className="title">Menu</div>
+                <div className="title">Cubic Cleanup</div>
+                <div className="hexaclear-menu-hint">
+                  Drag pieces from the tray onto the board.
+                  Complete a full line or rosette to clear it.
+                </div>
 
                 <div className="hexaclear-menu-section">
                   <div className="hexaclear-menu-section-label">Audio</div>
@@ -2690,6 +2679,21 @@ function App() {
                     }}
                   >
                     High scores
+                  </button>
+                </div>
+
+                <div className="hexaclear-menu-section">
+                  <div className="hexaclear-menu-section-label">Game</div>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-danger"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      setShowMenu(false)
+                      resetGame()
+                    }}
+                  >
+                    Restart run
                   </button>
                 </div>
 

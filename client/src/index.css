@@ -21,10 +21,11 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  /* Flatter, more neutral backdrop so the board has a clear figure/ground
+     relationship with the page. A single very subtle radial keeps it from
+     feeling like a flat black void. */
   background:
-    radial-gradient(circle at top left, #ffcf7a 0, transparent 55%),
-    radial-gradient(circle at bottom right, #f26c3b 0, transparent 55%),
-    linear-gradient(135deg, #3a1b0e 0, #1e0c05 55%, #3a1b0e 100%);
+    radial-gradient(circle at 50% 30%, #2a1208 0, #190902 75%);
   color: inherit;
   overflow: hidden;
   touch-action: none;
@@ -104,6 +105,7 @@ body {
   margin-left: 0.35rem;
   font-size: 1rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .hexaclear-stat {
@@ -119,6 +121,44 @@ body {
 
 .hexaclear-stat .value {
   font-variant-numeric: tabular-nums;
+}
+
+/* Live-stat: the current score (endless) or move count (daily) — the
+   game's primary live readout, lives in the right side of the second
+   header row. Kept naked (no background pill) so it reads as the hero
+   number rather than chrome. Tabular numerals so digits don't jitter. */
+.hexaclear-live-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  line-height: 1;
+}
+
+.hexaclear-live-stat .label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #f5c987;
+  opacity: 0.78;
+}
+
+.hexaclear-live-stat .value {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff5dc;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* Reserved space when there's no live stat to show (e.g. daily mode
+   pre-first-move) so the mode toggle doesn't reflow. */
+.hexaclear-live-stat-placeholder {
+  display: inline-block;
+  min-width: 5.5rem;
+  height: 1.5rem;
 }
 
 .hexaclear-reset {
@@ -676,16 +716,11 @@ body {
   pointer-events: none;
 }
 
-.hexaclear-slot-top {
-  fill: #190c07; /* slightly darker bottom plane */
-}
-
-.hexaclear-slot-right {
-  fill: #2f1a0f; /* darker side away from light */
-}
-
-.hexaclear-slot-left {
-  fill: #402214; /* darker side catching light from top-right */
+/* Empty cells: a single quiet hex dimple, no 3D cube facets. The point is
+   to make placed pieces stand out clearly against open space — empty cells
+   recede, filled cubes pop. */
+.hexaclear-slot-fill {
+  fill: #1a0c06;
 }
 
 .hexaclear-board-outline-back {
@@ -1080,7 +1115,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-action) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-action):not(.hexaclear-menu-danger) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -1113,16 +1148,20 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
+/* Placed cubes use a higher-contrast, brighter palette than the dim
+   empty-slot color, so filled vs empty reads instantly. The top face is the
+   brightest plane (catches "overhead light"), the right face is deepest
+   shadow, the left face is mid-tone. */
 .hexaclear-hex-cube .cube-top {
-  fill: #ffe18a;
+  fill: #ffeaa3;
 }
 
 .hexaclear-hex-cube .cube-right {
-  fill: #b85a24;
+  fill: #a04a18;
 }
 
 .hexaclear-hex-cube .cube-left {
-  fill: #f69d34;
+  fill: #f9a23f;
 }
 
 .hexaclear-hex-cube.golden .cube-top {
@@ -1387,30 +1426,58 @@ body {
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
 }
 
+/* The hand reads as a single tray with three slots, not three separate
+   cards. The outer container holds the unified background, border, and
+   shadow; the slots inside are quiet wells with subtle dividers between
+   them. */
 .hexaclear-hand {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
-  /* Fix the vertical footprint of the hand so the board never
-     grows or shrinks as different piece shapes appear/disappear. */
+  gap: 0;
   min-height: 110px;
+  padding: 0.35rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 197, 138, 0.45);
+  background:
+    radial-gradient(circle at 10% 0%, #4e2413, #2a1007 65%, #120502 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 12px 28px rgba(0, 0, 0, 0.55);
 }
 
 .hexaclear-piece-button {
   flex: 1;
-  border-radius: 0.9rem;
-  border: 1px solid rgba(255, 197, 138, 0.7);
-  background:
-    radial-gradient(circle at 10% 0%, #4e2413, #2a1007 65%, #120502 100%);
-  padding: 0.3rem 0.2rem;
+  border-radius: 0.6rem;
+  border: none;
+  background: transparent;
+  padding: 0.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
-  height: 110px;
+  height: 100px;
   -webkit-user-drag: none;
   user-select: none;
   touch-action: none;
+  position: relative;
+}
+
+/* Subtle divider between adjacent slots (skipped on the first slot). */
+.hexaclear-piece-button + .hexaclear-piece-button::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255, 197, 138, 0.22) 25%,
+    rgba(255, 197, 138, 0.22) 75%,
+    transparent
+  );
+  pointer-events: none;
 }
 
 /* Fly-in animation for fresh hands. Delay is set per-button via the
@@ -1438,9 +1505,9 @@ body {
 }
 
 .hexaclear-piece-button.selected {
-  border-color: #ffd57b;
-  box-shadow: 0 0 0 1px rgba(255, 213, 123, 0.7);
-  }
+  background: rgba(255, 213, 123, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 213, 123, 0.55);
+}
 
 .hexaclear-piece-button.unplayable {
   opacity: 0.45;
@@ -1566,12 +1633,9 @@ body {
   }
 }
 
-/* Score counter celebration when particles merge */
-.board-hud-block.right .value {
-  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-
-.board-hud-block.right .value.score-celebrate {
+/* Score counter celebration when particles merge — applied to the
+   live-stat value in the header. */
+.hexaclear-live-stat .value.score-celebrate {
   animation: hexaclear-score-counter-pop 400ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
@@ -1720,9 +1784,26 @@ body {
 
 .hexaclear-menu-card .title {
   text-align: center;
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
+  font-family: 'Shrikhand', cursive;
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+  color: #ffe8a3;
+  text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
   margin-bottom: 0.1rem;
+}
+
+/* One-line orientation hint for first-time players, sitting just under
+   the menu title. Quiet typography so it doesn't compete with the
+   options below it. */
+.hexaclear-menu-hint {
+  text-align: center;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #f0d4a8;
+  opacity: 0.78;
+  margin: -0.1rem 0 0.2rem;
 }
 
 /* The Resume button is the only direct flex child that shouldn't
@@ -1805,6 +1886,25 @@ body {
 
 .hexaclear-menu-action:hover {
   background: rgba(78, 28, 8, 0.85) !important;
+}
+
+/* Destructive action inside the menu (e.g. "Restart run"). Quiet warm-red
+   treatment — present and tappable, but not styled as a primary CTA. */
+.hexaclear-menu-danger {
+  border-radius: 999px;
+  border: 1px solid rgba(220, 110, 80, 0.55) !important;
+  background: rgba(58, 18, 4, 0.65) !important;
+  color: #ffb7a0 !important;
+  font-weight: 500 !important;
+  padding: 0.45rem 0.9rem !important;
+  font-size: 0.8rem !important;
+  cursor: pointer;
+  text-align: center;
+}
+
+.hexaclear-menu-danger:hover {
+  background: rgba(96, 30, 14, 0.85) !important;
+  color: #ffd6c2 !important;
 }
 
 /* --- Reduced motion: kill animations & transitions ------------------- */
