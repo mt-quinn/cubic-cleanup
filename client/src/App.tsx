@@ -939,9 +939,16 @@ function App() {
   const [dailyHighScoreSaved, setDailyHighScoreSaved] = useState(false)
   const [lastSavedDailyHighScoreDate, setLastSavedDailyHighScoreDate] =
     useState<number | null>(null)
+  // Pre-fill the high-score name field with the last name the
+  // player saved under, falling back to a friendly default for
+  // first-time players. Combined with the autosave-on-dismiss
+  // wiring on the gameover modal, this makes the Save button a
+  // confirm shortcut rather than a gate: every qualifying run
+  // ends up in the table even if the player just clicks "Play
+  // again" without touching the input.
   const [playerName, setPlayerName] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    return window.localStorage.getItem('cubic-player-name') ?? ''
+    if (typeof window === 'undefined') return 'Player'
+    return window.localStorage.getItem('cubic-player-name') ?? 'Player'
   })
   const [bestScore, setBestScore] = useState<number | null>(() => {
     const stored = window.localStorage.getItem('hexaclear-best-score')
@@ -3079,6 +3086,14 @@ function App() {
                   className="hexaclear-gameover-cta"
                   onClick={() => {
                     playUiClick()
+                    // Autosave the high score on dismiss so the
+                    // "Save score" button is just a confirm shortcut —
+                    // if the player walks away without clicking it
+                    // (or without typing a custom name) we still log
+                    // their run with whatever's in the field.
+                    if (pendingHighScore) {
+                      handleSaveHighScore()
+                    }
                     resetGame()
                   }}
                 >
@@ -3213,6 +3228,13 @@ function App() {
                   className="hexaclear-gameover-cta"
                   onClick={() => {
                     playUiClick()
+                    // Autosave on dismiss — see the endless-mode
+                    // counterpart above. The Save button stays as a
+                    // visible confirm action, but stepping away from
+                    // the modal still records the attempt.
+                    if (pendingDailyHighScore) {
+                      handleSaveDailyHighScore()
+                    }
                     const next = createDailyGameState()
                     setGame(next)
                     setSavedDailyGame(next)
