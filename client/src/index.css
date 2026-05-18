@@ -574,6 +574,13 @@ body {
     opacity 0.1s ease-out;
 }
 
+/* Bevel polylines (used by Win98 theme to draw raised-button
+   highlights/shadows on each empty hex). Hidden by default —
+   themes turn them on as needed. */
+.hexaclear-hex-bevels {
+  display: none;
+}
+
 .hexaclear-hex.empty {
   fill: transparent;
   stroke: #94633a;

@@ -123,6 +123,15 @@ const BOARD_RIPPLE_RADIUS =
 
 type Segment = { x1: number; y1: number; x2: number; y2: number }
 
+// Inset distances (in user units, same coordinate space as
+// HEX_SIZE = 32) for the two parallel lines that paint the
+// rosette etched groove. The bevel covers user units 0..4 from
+// the polygon edge; we leave a 1.5u gap so the groove reads as
+// a separate carved channel rather than a continuation of the
+// bevel.
+const ROSETTE_GROOVE_DARK_INSET = 5.5
+const ROSETTE_GROOVE_LIGHT_INSET = 7
+
 const FLOWER_BOUNDARY_SEGMENTS: Segment[] = (() => {
   const segments: Segment[] = []
   const idToCell = new Map(
@@ -164,6 +173,190 @@ const FLOWER_BOUNDARY_SEGMENTS: Segment[] = (() => {
   }
 
   return segments
+})()
+
+// Closed-loop rosette boundaries with proper inset polygons for
+// the Win98 etched-groove rendering. For each rosette we:
+//   1. Collect every cell-side segment that sits on the outer
+//      perimeter of the 7-cell flower.
+//   2. Stitch those segments into one ordered closed loop of
+//      vertices.
+//   3. Inset the loop by two perpendicular distances (the dark
+//      and light groove offsets) using the angle-bisector
+//      method so the resulting polygons stay parallel to the
+//      original boundary at every corner — including corners
+//      where two different rosette cells meet, which the older
+//      per-cell-per-side approach broke up.
+type Vec2 = { x: number; y: number }
+
+const stitchClosedLoop = (segs: Segment[]): Vec2[] => {
+  if (segs.length === 0) return []
+  const eps = 0.5
+  const same = (a: Vec2, b: Vec2) =>
+    Math.abs(a.x - b.x) < eps && Math.abs(a.y - b.y) < eps
+  const remaining = segs.map((s) => ({
+    a: { x: s.x1, y: s.y1 },
+    b: { x: s.x2, y: s.y2 },
+  }))
+  const result: Vec2[] = []
+  const first = remaining.shift()!
+  result.push(first.a)
+  let endpoint: Vec2 = first.b
+  while (remaining.length > 0) {
+    let foundIdx = -1
+    let nextEndpoint: Vec2 | null = null
+    for (let i = 0; i < remaining.length; i++) {
+      const s = remaining[i]
+      if (same(s.a, endpoint)) {
+        foundIdx = i
+        nextEndpoint = s.b
+        break
+      }
+      if (same(s.b, endpoint)) {
+        foundIdx = i
+        nextEndpoint = s.a
+        break
+      }
+    }
+    if (foundIdx < 0) break
+    result.push(endpoint)
+    endpoint = nextEndpoint as Vec2
+    remaining.splice(foundIdx, 1)
+  }
+  return result
+}
+
+const insetClosedLoop = (
+  verts: Vec2[],
+  dist: number,
+  inwardRef: Vec2,
+): Vec2[] => {
+  const n = verts.length
+  if (n < 3) return verts.map((v) => ({ ...v }))
+  const result: Vec2[] = []
+  for (let i = 0; i < n; i++) {
+    const prev = verts[(i - 1 + n) % n]
+    const curr = verts[i]
+    const next = verts[(i + 1) % n]
+
+    const e1x = curr.x - prev.x
+    const e1y = curr.y - prev.y
+    const e1len = Math.hypot(e1x, e1y)
+    const e1nx = e1x / e1len
+    const e1ny = e1y / e1len
+    const e2x = next.x - curr.x
+    const e2y = next.y - curr.y
+    const e2len = Math.hypot(e2x, e2y)
+    const e2nx = e2x / e2len
+    const e2ny = e2y / e2len
+
+    // Pick whichever perpendicular of each edge points toward
+    // the inward reference point (the rosette center). The two
+    // candidates are (-edgeY, edgeX) and (edgeY, -edgeX); we
+    // resolve the ambiguity per-edge using a dot-product sign
+    // check against the midpoint→center vector.
+    const mid1x = (prev.x + curr.x) / 2
+    const mid1y = (prev.y + curr.y) / 2
+    const toRef1x = inwardRef.x - mid1x
+    const toRef1y = inwardRef.y - mid1y
+    let n1x = -e1ny
+    let n1y = e1nx
+    if (n1x * toRef1x + n1y * toRef1y < 0) {
+      n1x = -n1x
+      n1y = -n1y
+    }
+    const mid2x = (curr.x + next.x) / 2
+    const mid2y = (curr.y + next.y) / 2
+    const toRef2x = inwardRef.x - mid2x
+    const toRef2y = inwardRef.y - mid2y
+    let n2x = -e2ny
+    let n2y = e2nx
+    if (n2x * toRef2x + n2y * toRef2y < 0) {
+      n2x = -n2x
+      n2y = -n2y
+    }
+
+    const bx = n1x + n2x
+    const by = n1y + n2y
+    const blen = Math.hypot(bx, by)
+    const bnx = bx / blen
+    const bny = by / blen
+    // Distance along the bisector that produces the requested
+    // perpendicular distance from each adjacent edge.
+    const cosHalf = bnx * n1x + bny * n1y
+    const D = dist / cosHalf
+
+    result.push({
+      x: curr.x + bnx * D,
+      y: curr.y + bny * D,
+    })
+  }
+  return result
+}
+
+const FLOWER_BOUNDARY_LOOPS: { dark: Vec2[]; light: Vec2[] }[] = (() => {
+  const loops: { dark: Vec2[]; light: Vec2[] }[] = []
+  const idToCell = new Map(
+    BOARD_DEFINITION.cells.map((c) => [c.id, c] as const),
+  )
+
+  for (const center of FLOWER_CENTERS) {
+    const centerId = axialToId(center)
+    const neighborIds = directions.map((d) =>
+      axialToId(addAxial(center, d)),
+    )
+    const cellIds = [centerId, ...neighborIds]
+    const cellSet = new Set(cellIds)
+
+    const segs: Segment[] = []
+    for (const cellId of cellIds) {
+      const cell = idToCell.get(cellId)
+      if (!cell) continue
+      const pos = BOARD_LAYOUT.positions[cellId]
+      const cx = pos.x + BOARD_LAYOUT.offsetX
+      const cy = pos.y + BOARD_LAYOUT.offsetY
+      for (let side = 0; side < 6; side++) {
+        const dir = directions[EDGE_DIRECTION_INDEX[side]]
+        const neighborCoord = addAxial(cell.coord, dir)
+        const neighborId = axialToId(neighborCoord)
+        if (cellSet.has(neighborId)) continue
+        const angleA = ((60 * side - 30) * Math.PI) / 180
+        const angleB = ((60 * ((side + 1) % 6) - 30) * Math.PI) / 180
+        segs.push({
+          x1: cx + HEX_SIZE * Math.cos(angleA),
+          y1: cy + HEX_SIZE * Math.sin(angleA),
+          x2: cx + HEX_SIZE * Math.cos(angleB),
+          y2: cy + HEX_SIZE * Math.sin(angleB),
+        })
+      }
+    }
+
+    if (segs.length === 0) {
+      loops.push({ dark: [], light: [] })
+      continue
+    }
+
+    const ordered = stitchClosedLoop(segs)
+    const centerPos = BOARD_LAYOUT.positions[centerId]
+    const inwardRef: Vec2 = {
+      x: centerPos.x + BOARD_LAYOUT.offsetX,
+      y: centerPos.y + BOARD_LAYOUT.offsetY,
+    }
+    loops.push({
+      dark: insetClosedLoop(
+        ordered,
+        ROSETTE_GROOVE_DARK_INSET,
+        inwardRef,
+      ),
+      light: insetClosedLoop(
+        ordered,
+        ROSETTE_GROOVE_LIGHT_INSET,
+        inwardRef,
+      ),
+    })
+  }
+
+  return loops
 })()
 
 // Exterior outline of the whole board: all hex edges whose neighbor is not
@@ -218,6 +411,51 @@ const buildHexPoints = (cx: number, cy: number): string => {
     points.push(`${x},${y}`)
   }
   return points.join(' ')
+}
+
+// For Win98 / Minesweeper-style raised tiles we render two polylines
+// per hex: a "highlight" along the upper-left half of the perimeter
+// (light-from-top-left convention) and a "shadow" along the
+// lower-right half. Theme CSS decides whether they're visible —
+// Wood theme keeps them hidden, Win98 paints the bevel.
+//
+// Vertices for our pointy-top hex (angles -30..270°):
+//   V0 upper-right, V1 lower-right, V2 bottom point,
+//   V3 lower-left,  V4 upper-left,  V5 top point.
+// Highlight = V3 → V4 → V5 → V0  (left, top-left, top-right edges)
+// Shadow    = V0 → V1 → V2 → V3  (right, bottom-right, bottom-left)
+//
+// The polylines are inset slightly toward the hex center so the
+// stroke sits *inside* the polygon edge (rather than half outside,
+// half inside). This way adjacent cells' bevels don't overpaint
+// each other on shared edges — every cell shows its own clean
+// raised-button outline. Inset is computed via the regular hex's
+// 60° apothem-to-vertex ratio: moving each vertex toward (cx, cy)
+// by insetDistance / sin(60°) keeps the stroke parallel to the
+// edge at the requested distance.
+const HEX_BEVEL_INSET = 2
+const HEX_BEVEL_RADIUS_FACTOR =
+  (HEX_SIZE - HEX_BEVEL_INSET / Math.sin(Math.PI / 3)) / HEX_SIZE
+const buildHexBevelPaths = (
+  cx: number,
+  cy: number,
+): { highlight: string; shadow: string } => {
+  const corners: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < 6; i++) {
+    const angleRad = ((60 * i - 30) * Math.PI) / 180
+    const r = HEX_SIZE * HEX_BEVEL_RADIUS_FACTOR
+    corners.push({
+      x: cx + r * Math.cos(angleRad),
+      y: cy + r * Math.sin(angleRad),
+    })
+  }
+  const highlight = [corners[3], corners[4], corners[5], corners[0]]
+    .map((p) => `${p.x},${p.y}`)
+    .join(' ')
+  const shadow = [corners[0], corners[1], corners[2], corners[3]]
+    .map((p) => `${p.x},${p.y}`)
+    .join(' ')
+  return { highlight, shadow }
 }
 
 const CubeLines = ({
@@ -1588,6 +1826,7 @@ function App() {
     }
   }, [theme])
 
+
   // Game-over wind-down: when the run ends, give the board a beat to
   // desaturate and let the unplayable hand shake before the modal slams
   // in. Plays game_over.wav at the start of the wind-down.
@@ -2281,6 +2520,7 @@ function App() {
                 const cx = pos.x + BOARD_LAYOUT.offsetX
                 const cy = pos.y + BOARD_LAYOUT.offsetY
                 const points = buildHexPoints(cx, cy)
+                const bevel = buildHexBevelPaths(cx, cy)
 
                 const isFilledLogical = game.board[cell.id] === 'filled'
                 const isClearing = clearingCells.includes(cell.id)
@@ -2331,6 +2571,7 @@ function App() {
                       className={[
                         'hexaclear-hex',
                         isFilled ? 'filled' : 'empty',
+                        isGolden ? 'golden' : '',
                         isClearing ? 'clearing' : '',
                         isInvalidDrop ? 'invalid-drop' : '',
                         willClearInPreview ? 'preview-clear' : '',
@@ -2358,6 +2599,33 @@ function App() {
                         }
                       }}
                     />
+                    <g
+                      className={[
+                        'hexaclear-hex-bevels',
+                        isFilled ? 'filled' : 'empty',
+                        isGolden ? 'golden' : '',
+                        isClearing ? 'clearing' : '',
+                        willClearInPreview ? 'preview-clear' : '',
+                        inPreview
+                          ? previewValid
+                            ? 'preview-valid'
+                            : 'preview-invalid'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-hidden="true"
+                      pointerEvents="none"
+                    >
+                      <polyline
+                        className="hexaclear-hex-bevel hexaclear-hex-bevel-highlight"
+                        points={bevel.highlight}
+                      />
+                      <polyline
+                        className="hexaclear-hex-bevel hexaclear-hex-bevel-shadow"
+                        points={bevel.shadow}
+                      />
+                    </g>
                     {!isFilledVisible && !inPreview && !willClearInPreview && (
                       <SlotGeometry cx={cx} cy={cy} />
                     )}
@@ -2487,6 +2755,38 @@ function App() {
                   y2={seg.y2}
                   className="hexaclear-flower-boundary"
                 />
+              ))}
+            </g>
+            {/* Win98 etched-groove rosette frame. One closed
+                polygon per rosette per groove tone; CSS hides the
+                whole group in non-Win98 themes. The polygons sit
+                above per-cell bevels and surfaces but below the
+                cube/label content, so the etched ring traces the
+                rosette without obscuring scoring text. */}
+            <g
+              className="hexaclear-flower-groove-group"
+              aria-hidden="true"
+              pointerEvents="none"
+            >
+              {FLOWER_BOUNDARY_LOOPS.map((loop, idx) => (
+                <g key={`flower-groove-${idx}`}>
+                  {loop.dark.length > 0 && (
+                    <polygon
+                      className="hexaclear-flower-groove hexaclear-flower-groove-dark"
+                      points={loop.dark
+                        .map((v) => `${v.x},${v.y}`)
+                        .join(' ')}
+                    />
+                  )}
+                  {loop.light.length > 0 && (
+                    <polygon
+                      className="hexaclear-flower-groove hexaclear-flower-groove-light"
+                      points={loop.light
+                        .map((v) => `${v.x},${v.y}`)
+                        .join(' ')}
+                    />
+                  )}
+                </g>
               ))}
             </g>
 
@@ -3597,12 +3897,28 @@ const PiecePreview = ({ shape, mode = 'hand' }: PiecePreviewProps) => {
           const cx = x + HEX_SIZE * 1
           const cy = y + HEX_SIZE * 1
           const points = buildHexPoints(cx, cy)
+          const bevel = buildHexBevelPaths(cx, cy)
           return (
-            <polygon
-              key={idx}
-              points={points}
-              className="hexaclear-hex piece"
-            />
+            <g key={idx}>
+              <polygon
+                points={points}
+                className="hexaclear-hex piece"
+              />
+              <g
+                className="hexaclear-hex-bevels piece"
+                aria-hidden="true"
+                pointerEvents="none"
+              >
+                <polyline
+                  className="hexaclear-hex-bevel hexaclear-hex-bevel-highlight"
+                  points={bevel.highlight}
+                />
+                <polyline
+                  className="hexaclear-hex-bevel hexaclear-hex-bevel-shadow"
+                  points={bevel.shadow}
+                />
+              </g>
+            </g>
           )
         })}
         {normalized.map((c, idx) => {
@@ -3667,12 +3983,45 @@ const PiecePreview = ({ shape, mode = 'hand' }: PiecePreviewProps) => {
         const cx = CARD_W / 2 + (x - centerX)
         const cy = CARD_H / 2 + (y - centerY)
         const points = buildPreviewHexPoints(cx, cy)
+        // Bevel paths use HEX_SIZE-relative geometry; the preview
+        // is drawn at PREVIEW_SIZE so we scale the inset radius
+        // factor identically here for visually-consistent bevels.
+        const corners: Array<{ x: number; y: number }> = []
+        for (let i = 0; i < 6; i++) {
+          const angleRad = ((60 * i - 30) * Math.PI) / 180
+          const r = PREVIEW_SIZE * HEX_BEVEL_RADIUS_FACTOR
+          corners.push({
+            x: cx + r * Math.cos(angleRad),
+            y: cy + r * Math.sin(angleRad),
+          })
+        }
+        const highlight = [corners[3], corners[4], corners[5], corners[0]]
+          .map((p) => `${p.x},${p.y}`)
+          .join(' ')
+        const shadow = [corners[0], corners[1], corners[2], corners[3]]
+          .map((p) => `${p.x},${p.y}`)
+          .join(' ')
         return (
-          <polygon
-            key={idx}
-            points={points}
-            className="hexaclear-hex piece"
-          />
+          <g key={idx}>
+            <polygon
+              points={points}
+              className="hexaclear-hex piece"
+            />
+            <g
+              className="hexaclear-hex-bevels piece"
+              aria-hidden="true"
+              pointerEvents="none"
+            >
+              <polyline
+                className="hexaclear-hex-bevel hexaclear-hex-bevel-highlight"
+                points={highlight}
+              />
+              <polyline
+                className="hexaclear-hex-bevel hexaclear-hex-bevel-shadow"
+                points={shadow}
+              />
+            </g>
+          </g>
         )
       })}
       {centers.map(({ x, y }, idx) => {

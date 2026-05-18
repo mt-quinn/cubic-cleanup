@@ -9,10 +9,10 @@
      #818181  dark gray         #c3c3c3  light gray
      #fdffff  near-white        #010081  navy
      #008080  teal              #000000  black
-     #ff0081  magenta accent (reserved for the ruby cube)
 
    Plus from the Minesweeper reference: bright LCD red on black, used
-   only inside the LCD displays.
+   inside the LCD displays AND for the ruby cube (matching the
+   flag / mine red used in classic Minesweeper).
 
    Win98's classic "3D" border uses four tones laid in a specific way:
      outset (raised):  white outer + light-gray inner / black outer
@@ -53,22 +53,34 @@
   --w98-lcd-dim: #3a0000; /* "off" segment hint, kept very dark */
   --w98-magenta: #ff0081;
 
-  /* Cube palette: user-requested navy / teal / gray three-tone. We
-     keep the existing top/right/left convention so the isometric
-     reads correctly: top is the brightest plane. Of the three
-     palette colors the gray reads brightest at the same value, so
-     it lands on top. */
+  /* Filled-cell faces. The Win98 theme renders filled hexes as
+     flat-color sunken tiles (no isometric cube), so we only need
+     a single fill per state. Teal is the "normal" filled color;
+     the ruby reuses Minesweeper's flag red. */
+  --w98-cube-fill: #008080;
+  --w98-ruby-fill: #ff0000;
+
+  /* Rosette etched groove. We mark each rosette as its own
+     button group by carving a Win98-style 2-tone etched line
+     into the cells along the rosette outer boundary. The line
+     sits inset further than the per-cell bevel so it reads as a
+     second tier of depth — the cells stay raised (or sunken when
+     filled), and the rosette itself reads as the "card" the
+     buttons sit on. Standard Win98 group-box convention: shadow
+     line on the outer side, highlight line on the inner side. */
+  --w98-rosette-groove-shadow: #000000;
+  --w98-rosette-groove-highlight: #fdffff;
+
+  /* Legacy cube vars preserved so any non-Win98-aware rule that
+     references them still resolves to a reasonable color, even
+     though the Win98 theme hides the isometric cube faces. */
   --cube-top: #818181;
   --cube-left: #008080;
   --cube-right: #010081;
   --cube-stroke: #000000;
-  /* Ruby cube — three pink variations of #ff0081 stepped along
-     lightness so the isometric facets read as one coherent gem.
-     Top is the lightest plane (overhead light), right is deepest
-     shadow, left sits in between. */
-  --cube-golden-top: #ff66b3;
-  --cube-golden-left: #ff0081;
-  --cube-golden-right: #99004d;
+  --cube-golden-top: #ff0000;
+  --cube-golden-left: #c00000;
+  --cube-golden-right: #800000;
 
   /* Font stack — system MS Sans Serif equivalents on Windows fall
      back to Tahoma elsewhere. Crisp, low-letter-spacing, tabular
@@ -510,11 +522,380 @@
   display: none !important;
 }
 
-/* Empty/clearing hex cells use warm brown strokes by default. Swap
-   to dark gray so they read on the Win98 surface. */
-[data-theme="win98"] .hexaclear-hex.empty,
+/* Empty hex cells: flat surface fill plus a hairline dark stroke
+   on every edge. Adjacent cells share strokes, producing a clean
+   1px black gutter between buttons (mirroring how Minesweeper
+   tiles are visually separated by the underlying frame). The
+   raised-button feel comes from the bevel polylines below.
+
+   IMPORTANT: fill / stroke / stroke-width here are deliberately
+   non-`!important`. Per the CSS cascade, `!important` author
+   declarations beat animation declarations, so any `!important`
+   on these properties would silently disable our keyframe
+   animations (clear-unpress, invalid-flash, ripple, undo-fly,
+   etc.) on these cells. The Win98 theme attribute on the
+   selector already adds enough specificity to win against every
+   Wood rule that doesn't itself use `!important`, which none of
+   them do for these cells. Only `filter` keeps `!important`
+   because we need to neutralize Wood's drop-shadow and nothing
+   animates filter. */
+[data-theme="win98"] .hexaclear-hex.empty {
+  fill: var(--w98-surface);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+  filter: none !important;
+}
+
+/* Filled hex cells: solid teal face (no isometric cube), with a
+   sunken/clicked-button bevel applied via the polylines below.
+   Reads as the "pressed" state of an empty tile. Same cascade
+   note as `.empty` above — no `!important` on fill/stroke so the
+   un-press animation can recolor the cell during clears. */
+[data-theme="win98"] .hexaclear-hex.filled {
+  fill: var(--w98-cube-fill);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+  filter: none !important;
+}
+
+/* The ruby cell uses the same sunken-tile pattern but in the
+   Minesweeper flag-red palette so it still reads as the high-
+   value collectible. */
+[data-theme="win98"] .hexaclear-hex.filled.golden {
+  fill: var(--w98-ruby-fill);
+}
+
 [data-theme="win98"] .hexaclear-hex.clearing {
-  stroke: var(--w98-shadow);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+  filter: none !important;
+}
+
+/* CLEARING ANIMATION: cells about to clear were already raised
+   (outset bevels) AND already painted magenta during the
+   preview-clear state, so the clear itself only needs to fade
+   the magenta fill back to flat surface gray — no bevel flip,
+   no color snap. Anchoring the keyframe's 0% explicitly to
+   magenta keeps the transition smooth out of preview-clear
+   (magenta → magenta → surface), which is the dominant code
+   path. Cells that enter clearing without going through
+   preview-clear first (rare — daily-mode auto-clears, etc.)
+   will see a single-frame snap from teal/ruby to magenta as
+   the animation engages, which is acceptable given the
+   animation runs immediately and the clear visual is the
+   rapid color drain anyway.
+
+   Durations and stagger delays mirror the Wood-theme cube
+   clears (220ms line clears with a 40ms-per-step stagger;
+   260ms flower center; 260ms ring delayed 190ms after) so
+   audio + haptic + visual events stay locked together
+   regardless of theme.
+
+   Clearing bevels are forced to the outset (raised) palette
+   below, overriding the resting `.filled` inset coloring so the
+   cells don't pop from sunken to raised when the clear begins —
+   they were already raised in preview-clear. */
+@keyframes hexaclear-w98-cell-unpress {
+  0%   { fill: var(--w98-magenta); }
+  100% { fill: var(--w98-surface); }
+}
+
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line {
+  animation: hexaclear-w98-cell-unpress 220ms ease-in both;
+}
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-0 { animation-delay: 0ms; }
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-1 { animation-delay: 40ms; }
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-2 { animation-delay: 80ms; }
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-3 { animation-delay: 120ms; }
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-4 { animation-delay: 160ms; }
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-5 { animation-delay: 200ms; }
+[data-theme="win98"] .hexaclear-hex.filled.clearing-line-step-6 { animation-delay: 240ms; }
+
+[data-theme="win98"] .hexaclear-hex.filled.clearing-flower-center {
+  animation: hexaclear-w98-cell-unpress 260ms ease-in both;
+}
+[data-theme="win98"] .hexaclear-hex.filled.clearing-flower-ring {
+  animation: hexaclear-w98-cell-unpress 260ms ease-in both 190ms;
+}
+
+/* Force outset bevels on any clearing filled cell. The bevels
+   group only carries the generic `.clearing` class (not the
+   per-pattern step classes), so we target that. Without this
+   override, the resting `.filled` rule keeps the bevels inset
+   and the cell would pop sunken→raised at the start of the
+   clear. */
+[data-theme="win98"] .hexaclear-hex-bevels.filled.clearing .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-highlight);
+}
+[data-theme="win98"] .hexaclear-hex-bevels.filled.clearing .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-deep-shadow);
+}
+
+/* Hide the isometric cube graphics in Win98 — filled cells now
+   render flat with a teal/red face plus the inset bevel. Keep
+   the cube group itself so child text labels (gem "+10", daily
+   counter) still render. */
+[data-theme="win98"] .hexaclear-hex-cube .cube-face {
+  display: none !important;
+}
+
+/* Daily-target counter text on a teal field: dark numerals with
+   no halo to match the flat aesthetic. */
+[data-theme="win98"] .hexaclear-daily-number-centered {
+  fill: var(--w98-text) !important;
+  stroke: none !important;
+  filter: none !important;
+}
+
+/* Bevel polylines: visible in Win98 on every cell. The default
+   (raised / outset) palette places a white highlight along the
+   upper-left half of the perimeter and a black shadow along the
+   lower-right half. Filled / golden board cells and hand pieces
+   override this below to flip the colors and read as sunken
+   "clicked" tiles. */
+[data-theme="win98"] .hexaclear-hex-bevels {
+  display: block;
+}
+/* (Earlier hide rule for .clearing / .preview-clear bevels has been
+   replaced — both states now want the bevel polylines visible so
+   they can carry the raised-button look through the clear. The
+   preview-clear bevel-coloring + display rules live below in their
+   own block.) */
+[data-theme="win98"] .hexaclear-hex-bevel {
+  fill: none;
+  stroke-width: 4;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
+  pointer-events: none;
+}
+[data-theme="win98"] .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-highlight);
+}
+[data-theme="win98"] .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-deep-shadow);
+}
+
+/* Sunken (filled / golden) board cells flip the bevel: dark on
+   the upper-left rim, light on the lower-right. */
+[data-theme="win98"] .hexaclear-hex-bevels.filled .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-deep-shadow);
+}
+[data-theme="win98"] .hexaclear-hex-bevels.filled .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-highlight);
+}
+
+/* PIECE PREVIEW (drag-over state): when the player is hovering a
+   piece over the board, every cell the piece would land in gets
+   "preview-valid" (placement is legal) or "preview-invalid"
+   (overlap / off-board). In Wood we render these as a translucent
+   warm wash on the polygon. In Win98 we treat them as "tiles
+   being pushed in by your finger" — translucent teal/red fill +
+   inset bevels so the cluster reads as a row of half-pressed
+   buttons telegraphing the placement. */
+[data-theme="win98"] .hexaclear-hex.preview-valid {
+  fill: rgba(0, 128, 128, 0.45);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+}
+[data-theme="win98"] .hexaclear-hex.preview-invalid {
+  fill: rgba(192, 0, 0, 0.45);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+}
+
+[data-theme="win98"] .hexaclear-hex-bevels.preview-valid .hexaclear-hex-bevel-highlight,
+[data-theme="win98"] .hexaclear-hex-bevels.preview-invalid .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-deep-shadow);
+}
+[data-theme="win98"] .hexaclear-hex-bevels.preview-valid .hexaclear-hex-bevel-shadow,
+[data-theme="win98"] .hexaclear-hex-bevels.preview-invalid .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-highlight);
+}
+
+/* PREVIEW-CLEAR: existing cells on the board that will clear
+   when the player drops the piece. They render as RAISED
+   (outset) magenta buttons — an inverted/contrasting color vs
+   both the teal-filled cells and the ruby cell, so the
+   about-to-clear cluster pops out as its own state. Ruby cells
+   in preview-clear paint magenta too (no golden override) so
+   the whole cluster reads uniformly. Bevels stay outset — the
+   user-driven design choice for "this is ready to pop out."
+
+   IMPORTANT: this rule covers existing-board cells (filled +
+   preview-clear, no preview-valid). The held piece's OWN cells,
+   which always carry preview-valid, get a different treatment
+   below — they keep the inset/pushed-in bevels of a regular
+   piece preview and just shift their fill to low-opacity
+   magenta. That way the held piece's silhouette stays a
+   coherent inset cluster regardless of whether it triggers a
+   clear; the existing board cells around it are the ones that
+   pop into the raised magenta state.
+
+   Wood's `hexaclear-preview-clear-scale-in` keyframe shrinks
+   the polygon to 0.8 scale so the cube wiggles inside a smaller
+   tile face. In Win98 the cube is hidden, so that scale just
+   makes the polygon look detached from its (full-size) bevel
+   frame. We disable the animation here so the tile stays full
+   size. */
+[data-theme="win98"] .hexaclear-hex.preview-clear {
+  fill: var(--w98-magenta);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+  animation: none;
+  transform: none;
+}
+
+/* Override the earlier display:none on preview-clear bevels and
+   force outset coloring (raised) regardless of filled/empty.
+   The held-piece override below uses a more-specific selector
+   to flip these back to inset for cells with preview-valid. */
+[data-theme="win98"] .hexaclear-hex-bevels.preview-clear {
+  display: block;
+}
+[data-theme="win98"] .hexaclear-hex-bevels.preview-clear .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-highlight);
+}
+[data-theme="win98"] .hexaclear-hex-bevels.preview-clear .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-deep-shadow);
+}
+
+/* HELD PIECE OVER A CLEAR: the cells the held piece will land in
+   ALSO get preview-clear when the placement triggers a clear. We
+   want those cells to keep looking like a regular piece preview
+   (low-opacity fill + inset bevels — the "finger pushing the
+   tile in" silhouette of the held piece), not jump to the
+   raised+full-color state used for existing board cells in the
+   clear. The fill just shifts from low-opacity teal to
+   low-opacity magenta to signal "this placement also clears."
+   Bevels stay inset (matching the regular preview-valid). The
+   `.preview-valid.preview-clear` selector is more specific than
+   the bare `.preview-clear` rule above, so it wins for cells
+   that carry both classes. */
+[data-theme="win98"] .hexaclear-hex.preview-valid.preview-clear {
+  fill: rgba(255, 0, 129, 0.45);
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+  animation: none;
+  transform: none;
+}
+[data-theme="win98"] .hexaclear-hex-bevels.preview-valid.preview-clear .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-deep-shadow);
+}
+[data-theme="win98"] .hexaclear-hex-bevels.preview-valid.preview-clear .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-highlight);
+}
+
+/* MISPLACED-PIECE FLASH: when a drop is rejected, every cell of
+   the failed placement gets .invalid-drop. The Wood-theme
+   keyframe animates the warm-brown stroke to a bright red, but
+   that brown isn't in our palette and the 1px Win98 stroke is too
+   thin to read on its own — so we override with a fill flash that
+   reads on both empty (gray) and filled (teal) backgrounds. The
+   timing and 2-pulse rhythm match Wood for parity with the error
+   sfx + haptic. */
+[data-theme="win98"] .hexaclear-hex.invalid-drop {
+  animation: hexaclear-w98-invalid-flash 520ms ease-out both !important;
+}
+[data-theme="win98"] .hexaclear-hex.filled.invalid-drop {
+  animation: hexaclear-w98-invalid-flash-filled 520ms ease-out both !important;
+}
+@keyframes hexaclear-w98-invalid-flash {
+  0%   { fill: var(--w98-surface); stroke: var(--w98-deep-shadow); }
+  18%  { fill: #ff6060; stroke: #ff0000; }
+  36%  { fill: var(--w98-surface); stroke: var(--w98-deep-shadow); }
+  54%  { fill: #ff6060; stroke: #ff0000; }
+  100% { fill: var(--w98-surface); stroke: var(--w98-deep-shadow); }
+}
+@keyframes hexaclear-w98-invalid-flash-filled {
+  0%   { fill: var(--w98-cube-fill); stroke: var(--w98-deep-shadow); }
+  18%  { fill: #ff4040; stroke: #ff0000; }
+  36%  { fill: var(--w98-cube-fill); stroke: var(--w98-deep-shadow); }
+  54%  { fill: #ff4040; stroke: #ff0000; }
+  100% { fill: var(--w98-cube-fill); stroke: var(--w98-deep-shadow); }
+}
+
+/* RIPPLE: the ripple wave that emanates from a placed piece is
+   actually an SVG group (`.hexaclear-board-ripple-overlay`) of
+   per-cell hex outlines, revealed through a moving mask whose
+   radius is tweened from JS. The mask creates the motion; the
+   stroke color of the overlay polygons is what the player
+   *sees* as the ripple color. Wood paints those outlines in
+   cream/gold, which reads as a "whitish highlight" against the
+   Win98 gray surface. We override to the iconic Win98 navy
+   (titlebar color) for the bright ring on clears, and a
+   dimmer surface-darker for the soft ring on plain placements,
+   so each ripple still has the bright-vs-soft contrast Wood
+   provided. (The unused `.ripple-active` / `.bounce-wave`
+   keyframes that previously lived here were not actually the
+   ripple visible on the board — they targeted the cell's own
+   polygon, which we don't want to flicker.) */
+[data-theme="win98"] .hexaclear-board-ripple-overlay .hexaclear-hex.ripple-overlay {
+  stroke: var(--w98-titlebar);
+  stroke-width: 3.4;
+}
+[data-theme="win98"] .hexaclear-board-ripple-overlay.soft .hexaclear-hex.ripple-overlay {
+  stroke: var(--w98-surface-darker);
+}
+
+/* Rosette etched groove. One closed polygon per rosette per
+   tone, both inset from the boundary by the angle-bisector
+   method so the resulting line stays parallel to the original
+   perimeter at every corner — including corners where two
+   different rosette cells meet. Together the dark+light pair
+   reads as a single carved 2-tone channel that frames the whole
+   7-cell flower without breaks. Hidden by default; only painted
+   in Win98. */
+.hexaclear-flower-groove-group {
+  display: none;
+}
+[data-theme="win98"] .hexaclear-flower-groove-group {
+  display: block;
+}
+[data-theme="win98"] .hexaclear-flower-groove {
+  fill: none;
+  stroke-width: 1;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
+  vector-effect: non-scaling-stroke;
+}
+[data-theme="win98"] .hexaclear-flower-groove-dark {
+  stroke: var(--w98-rosette-groove-shadow);
+}
+[data-theme="win98"] .hexaclear-flower-groove-light {
+  stroke: var(--w98-rosette-groove-highlight);
+}
+
+/* The standalone perimeter outline drawn over each rosette is
+   redundant once the bevels carry the tint — hide both the back
+   and front strokes in Win98 so the underlying bevel speaks for
+   itself. */
+[data-theme="win98"] .hexaclear-flower-boundary-back,
+[data-theme="win98"] .hexaclear-flower-boundary {
+  display: none !important;
+}
+[data-theme="win98"] .hexaclear-flower-boundary-group {
+  filter: none !important;
+}
+
+/* Hand-tray pieces: teal-filled hex with an inset bevel so each
+   piece reads as a "pressed" tile (matching the sunken filled
+   cells on the board). The bevels share their colors with
+   filled-cell bevels (dark top-left, light bottom-right) and
+   their stroke-width is reduced so they scale proportionally
+   with the smaller piece preview SVG. */
+[data-theme="win98"] .hexaclear-hex.piece {
+  fill: var(--w98-cube-fill) !important;
+  stroke: var(--w98-deep-shadow) !important;
+  stroke-width: 1 !important;
+}
+[data-theme="win98"] .hexaclear-hex-bevels.piece .hexaclear-hex-bevel {
+  stroke-width: 3;
+}
+[data-theme="win98"] .hexaclear-hex-bevels.piece .hexaclear-hex-bevel-highlight {
+  stroke: var(--w98-deep-shadow);
+}
+[data-theme="win98"] .hexaclear-hex-bevels.piece .hexaclear-hex-bevel-shadow {
+  stroke: var(--w98-highlight);
 }
 
 /* The black background rect inside the board SVG. Override to a
@@ -524,37 +905,21 @@
   fill: var(--w98-surface);
 }
 
-/* Flower (rosette) boundary strokes: warm orange + dark brown by
-   default. Repaint as a Win98 etched line — black outer + white
-   inner — so the outline reads as a sunken inset on the gray
-   surface. */
-[data-theme="win98"] .hexaclear-flower-boundary-back {
-  stroke: var(--w98-deep-shadow) !important;
-}
-[data-theme="win98"] .hexaclear-flower-boundary {
-  stroke: var(--w98-highlight) !important;
-}
-[data-theme="win98"] .hexaclear-flower-boundary-group {
-  filter: none !important;
-}
+/* (Removed: a previous rule forced stroke / stroke-width to
+   `!important` on `.bounce-wave .hexaclear-hex` and
+   `.ripple-active .hexaclear-hex` to overwrite Wood's warm-brown
+   stroke during ripples — but `!important` author rules beat
+   animation declarations in the CSS cascade, so that override
+   silently killed the ripple keyframe entirely. The ripple now
+   plays again with Wood's stroke values; a Win98-specific ripple
+   keyframe is layered on top below to recolor it without
+   blocking the animation.) */
 
-/* Catch animation-state strokes that hardcode the warm brown so
-   they don't peek through during ripples / clears. */
-[data-theme="win98"] .hexaclear-cell .hexaclear-hex.empty,
-[data-theme="win98"] .hexaclear-cell .hexaclear-hex.clearing,
-[data-theme="win98"] .hexaclear-cell.bounce-wave .hexaclear-hex,
-[data-theme="win98"] .hexaclear-cell.ripple-active .hexaclear-hex {
-  stroke: var(--w98-shadow) !important;
-}
-
-/* Empty-cell dimple fill — was a near-black warm brown. In Win98 we
-   want empty cells to read as the same surface gray as the chrome
-   so the board reads as one consistent panel with cubes "set into"
-   it. */
+/* The slot-fill inner-hex dimple gets in the way of the raised
+   tile read — hide it in Win98 so each empty cell looks like a
+   single clean button face. */
 [data-theme="win98"] .hexaclear-slot-fill {
-  fill: var(--w98-surface) !important;
-  stroke: var(--w98-shadow);
-  stroke-width: 1;
+  display: none !important;
 }
 
 /* Heavy black outer board outline + green secondary outline don't
@@ -1168,3 +1533,42 @@
 [data-theme="win98"] .hexaclear-hex-cube.daily-target .cube-face {
   filter: none !important;
 }
+
+/* --- Streak HUD ------------------------------------------------------ */
+/* The streak banner sits absolutely positioned over the upper-left
+   of the board. Wood theme uses a custom display font + warm cream
+   color + drop shadow; Win98 trades all of that for plain bold MS
+   Sans Serif scaled by tier. We keep the existing per-tier sizing
+   curve (each step bigger and more emphatic) so the celebratory
+   beat survives, just rendered in the chrome's typographic voice.
+   A 1px white halo (4-corner text-shadow) keeps the black numerals
+   legible whether they land over gray surface or a teal filled
+   cell. */
+[data-theme="win98"] .hexaclear-board-hud .board-hud-block {
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  color: var(--w98-text) !important;
+  text-shadow: none !important;
+}
+[data-theme="win98"] .hexaclear-board-hud .board-hud-block .value {
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  color: var(--w98-text) !important;
+}
+[data-theme="win98"] .hexaclear-streak-value {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-shadow:
+    1px 1px 0 var(--w98-highlight),
+    -1px -1px 0 var(--w98-highlight),
+    1px -1px 0 var(--w98-highlight),
+    -1px 1px 0 var(--w98-highlight) !important;
+}
+[data-theme="win98"] .hexaclear-streak-tier-1 { font-size: 22px !important; }
+[data-theme="win98"] .hexaclear-streak-tier-2 { font-size: 26px !important; }
+[data-theme="win98"] .hexaclear-streak-tier-3 { font-size: 30px !important; }
+[data-theme="win98"] .hexaclear-streak-tier-4 { font-size: 34px !important; }
+[data-theme="win98"] .hexaclear-streak-tier-5 { font-size: 38px !important; }
+[data-theme="win98"] .hexaclear-streak-tier-6 { font-size: 42px !important; }
