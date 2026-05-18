@@ -51,6 +51,24 @@ const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
 
 const HEX_SIZE = 32
 const SQRT3 = Math.sqrt(3)
+
+// Resolve the on-screen score counter element for the active theme.
+// Wood theme renders the score in `.hexaclear-live-stat .value`;
+// Win98 hides that and renders it as a 7-segment LCD on the right
+// side of the LCD row (`.hexaclear-win98-lcd-score .lcd-frame`).
+// The score-fly particle queries this every frame to land at the
+// correct readout regardless of which theme is live.
+function getScoreCounterEl(): Element | null {
+  if (typeof document === 'undefined') return null
+  const theme = document.documentElement.dataset.theme
+  if (theme === 'win98') {
+    return (
+      document.querySelector('.hexaclear-win98-lcd-score .lcd-frame') ??
+      document.querySelector('.hexaclear-live-stat .value')
+    )
+  }
+  return document.querySelector('.hexaclear-live-stat .value')
+}
 const DEBUG_SHOW_COORDS = false
 
 // Mapping from polygon edge index (0..5) to axial neighbor direction index.
@@ -1039,7 +1057,7 @@ function App() {
           const totalScore = result.pointsGained + piece.shape.cells.length
           
           // Get score counter position
-          const scoreCounterEl = document.querySelector('.hexaclear-live-stat .value')
+          const scoreCounterEl = getScoreCounterEl()
           const boardWrapper = boardWrapperRef.current
           if (scoreCounterEl && boardWrapper) {
             // Calculate centroid of all cleared patterns for start position
@@ -1079,9 +1097,7 @@ function App() {
                   if (lastScheduledScoreParticleActionIdRef.current === actionId) return
                   lastScheduledScoreParticleActionIdRef.current = actionId
                   // Recalculate positions now that DOM is updated
-                  const scoreCounterEl = document.querySelector(
-                    '.hexaclear-live-stat .value',
-                  )
+                  const scoreCounterEl = getScoreCounterEl()
                   const boardWrapper = boardWrapperRef.current
                   if (scoreCounterEl && boardWrapper) {
                     const counterRect = scoreCounterEl.getBoundingClientRect()
@@ -1130,9 +1146,7 @@ function App() {
                         }
                       })
 
-                      const scoreCounter = document.querySelector(
-                        '.hexaclear-live-stat .value',
-                      )
+                      const scoreCounter = getScoreCounterEl()
                       if (scoreCounter) {
                         scoreCelebrateTokenRef.current += 1
                         const token = scoreCelebrateTokenRef.current

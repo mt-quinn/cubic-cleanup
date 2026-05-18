@@ -1106,9 +1106,52 @@
 
 /* Score particles in Win98 — keep them, but recolor to white-on-black
    so the gold trails don't fight the cool palette. */
+/* Score-fly particle: paint the value as a glowing red 7-segment
+   readout on a black LCD bezel that matches the destination LCD.
+   The label (e.g. "BOARD CLEAR!") stays in the Win98 system font
+   so it reads as a status caption rather than a digit. */
 [data-theme="win98"] .hexaclear-score-particle {
-  color: var(--w98-text-on-navy) !important;
-  text-shadow: 1px 1px 0 var(--w98-text);
+  color: var(--w98-lcd-fg) !important;
+  text-shadow: none;
+  background: var(--w98-lcd-bg);
+  padding: 4px 8px;
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow);
+  gap: 0;
+  line-height: 1;
+}
+
+[data-theme="win98"] .hexaclear-score-particle .hexaclear-score-particle-value {
+  font-family:
+    "DSEG7-Classic",
+    "DSEG7 Classic",
+    "Courier New",
+    Courier,
+    monospace !important;
+  font-weight: 700 !important;
+  font-size: 32px !important;
+  color: var(--w98-lcd-fg) !important;
+  text-shadow:
+    0 0 4px rgba(255, 0, 0, 0.55),
+    0 0 1px rgba(255, 0, 0, 0.85) !important;
+  letter-spacing: 2px !important;
+  line-height: 1 !important;
+}
+
+[data-theme="win98"] .hexaclear-score-particle .hexaclear-score-particle-label {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--w98-lcd-fg) !important;
+  text-shadow: 0 0 3px rgba(255, 0, 0, 0.5) !important;
+  letter-spacing: 0.05em !important;
+  margin-top: 4px;
 }
 
 /* The cube preview "+10" gem label (engraved ruby pink in Wood) —
