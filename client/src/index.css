@@ -787,7 +787,7 @@ body {
   stroke: #ff8a7a;
 }
 
-.hexaclear-hex.preview-invalid + .hexaclear-hex-cube .cube-face {
+.hexaclear-hex.preview-invalid ~ .hexaclear-hex-cube .cube-face {
   filter: brightness(0.7) saturate(1.3);
 }
 
@@ -1054,8 +1054,16 @@ body {
 }
 
 /* TO-BE-CLEARED HIGHLIGHT: cubes and ghost cells are simply shrunk in
-   place to stand out from the board without extra motion. */
-.hexaclear-hex.preview-clear + .hexaclear-hex-cube {
+   place to stand out from the board without extra motion.
+
+   The general-sibling combinator (`~`) is intentional: the Win98
+   theme adds a `<g class="hexaclear-hex-bevels">` between the
+   polygon and the cube in the cell render, so the cube is no
+   longer the polygon's *adjacent* sibling. `~` keeps this rule
+   matching the cube regardless of how many siblings sit between
+   it and the polygon. (Each cell renders at most one cube, so
+   `~` and `+` would otherwise be equivalent here.) */
+.hexaclear-hex.preview-clear ~ .hexaclear-hex-cube {
   transform-box: fill-box;
   transform-origin: center;
   /* Ease into the smaller state with wiggle; snapping back to full size when
@@ -1102,7 +1110,7 @@ body {
     stroke-width: 3;
   }
 
-  .hexaclear-hex.preview-clear + .hexaclear-hex-cube,
+  .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube,
   .hexaclear-hex.preview-clear.preview-valid {
     animation-duration: 580ms;
   }
@@ -2599,7 +2607,7 @@ body {
    flicker. Disable the animations entirely and snap the cubes to their
    static "shrunk" preview state so the player still sees which cells
    are about to be cleared. */
-.cubic-viewport.reduced-motion .hexaclear-hex.preview-clear + .hexaclear-hex-cube,
+.cubic-viewport.reduced-motion .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube,
 .cubic-viewport.reduced-motion .hexaclear-hex.preview-clear.preview-valid {
   animation: none !important;
   transform: scale(0.8) !important;
