@@ -37,6 +37,18 @@ type HoverInfo = {
   cellId: string
 } | null
 
+// Theme engine: the set of identifiers a user can pick from in the
+// menu's theme selector. Wood is the original warm cream/gold theme;
+// win98 is the Minesweeper / Windows 98 homage. The active id lives on
+// <html data-theme="..."> and every theme-specific CSS rule is scoped
+// under that attribute so switching is a single DOM write.
+type ThemeId = 'wood' | 'win98'
+
+const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
+  { id: 'wood', label: 'Cubekill (default)' },
+  { id: 'win98', label: 'Windows 98' },
+]
+
 const HEX_SIZE = 32
 const SQRT3 = Math.sqrt(3)
 const DEBUG_SHOW_COORDS = false
@@ -649,6 +661,16 @@ function App() {
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('cubic-reduced-motion') === 'true'
+  })
+  // Theme engine: which visual theme is active. Wood is the original
+  // warm cream/gold treatment; win98 is the Windows 98 / Minesweeper
+  // homage. Stored as a flat string so we can add more themes later
+  // without a migration. Applied via a [data-theme="..."] attribute on
+  // <html>, which all theme overrides scope under in CSS.
+  const [theme, setTheme] = useState<ThemeId>(() => {
+    if (typeof window === 'undefined') return 'wood'
+    const raw = window.localStorage.getItem('cubic-theme')
+    return raw === 'win98' ? 'win98' : 'wood'
   })
   const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
     () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
@@ -1538,6 +1560,20 @@ function App() {
     }
   }, [reducedMotion])
 
+  // Apply the active theme to <html data-theme="..."> and persist it.
+  // Every theme override in CSS is scoped under that selector so
+  // switching is purely a single attribute write — no remount needed,
+  // no flash, animations keep running.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    document.documentElement.dataset.theme = theme
+    try {
+      window.localStorage.setItem('cubic-theme', theme)
+    } catch {
+      // Best-effort persistence.
+    }
+  }, [theme])
+
   // Game-over wind-down: when the run ends, give the board a beat to
   // desaturate and let the unplayable hand shake before the modal slams
   // in. Plays game_over.wav at the start of the wind-down.
@@ -1984,6 +2020,39 @@ function App() {
       }}
     >
       <div className="hexaclear-root" ref={rootRef}>
+      {/* Win98 app titlebar — only visible when [data-theme="win98"] is
+          active. Window controls are visual-only; closing/minimizing a
+          web app doesn't make sense. Kept always-mounted so theme swaps
+          are a single CSS reflow with no React reconciliation. */}
+      <div className="hexaclear-win98-titlebar" aria-hidden="true">
+        <span className="title">Cubekill</span>
+        <span className="title-controls">
+          <button
+            type="button"
+            className="title-control"
+            tabIndex={-1}
+            aria-label="Minimize"
+          >
+            <span className="glyph glyph-min" />
+          </button>
+          <button
+            type="button"
+            className="title-control"
+            tabIndex={-1}
+            aria-label="Maximize"
+          >
+            <span className="glyph glyph-max" />
+          </button>
+          <button
+            type="button"
+            className="title-control title-control-close"
+            tabIndex={-1}
+            aria-label="Close"
+          >
+            <span className="glyph glyph-close" />
+          </button>
+        </span>
+      </div>
       {(() => {
         const bestValue =
           game.mode === 'daily' ? todayDailyBestMoves : bestScore
@@ -2070,6 +2139,49 @@ function App() {
               )}
             </div>
           </header>
+        )
+      })()}
+
+      {/* Win98 LCD row — Minesweeper-style red 7-segment displays. Best
+          on the left with its label tucked to the inside; Score on the
+          right with its label tucked to the inside. Default to the
+          authentic Minesweeper 3-digit width and grow naturally for
+          larger values (4-digit when score hits 1000+, etc). */}
+      {(() => {
+        const bestValue =
+          game.mode === 'daily' ? todayDailyBestMoves : bestScore
+        const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
+        const liveStatValue =
+          game.mode === 'daily' ? dailyCubesRemaining : game.score
+        const bestLabel = 'Best'
+        // 3 digits is the Minesweeper default; values >999 expand the
+        // display naturally rather than truncating. The off-segment
+        // ghost layer matches the active display length so all "8"s
+        // align under whatever digits are showing.
+        const padDigits = (n: number | null | undefined): string => {
+          if (n === null || n === undefined) return '---'
+          const num = Math.max(0, Math.floor(n))
+          return String(num).padStart(3, '0')
+        }
+        const bestDigits = padDigits(bestValue)
+        const liveDigits = padDigits(liveStatValue)
+        return (
+          <div className="hexaclear-win98-lcds" aria-hidden="true">
+            <div className="hexaclear-win98-lcd hexaclear-win98-lcd-best">
+              <span className="lcd-frame">
+                <span className="lcd-digits-off">{'8'.repeat(bestDigits.length)}</span>
+                <span className="lcd-digits">{bestDigits}</span>
+              </span>
+              <span className="lcd-label">{bestLabel}</span>
+            </div>
+            <div className="hexaclear-win98-lcd hexaclear-win98-lcd-score">
+              <span className="lcd-label">{liveStatLabel}</span>
+              <span className="lcd-frame">
+                <span className="lcd-digits-off">{'8'.repeat(liveDigits.length)}</span>
+                <span className="lcd-digits">{liveDigits}</span>
+              </span>
+            </div>
+          </div>
         )
       })()}
 
@@ -2859,6 +2971,24 @@ function App() {
                       }}
                     />
                   </label>
+                  <label className="hexaclear-menu-row">
+                    <span className="hexaclear-menu-row-label">Theme</span>
+                    <select
+                      className="hexaclear-menu-row-select"
+                      value={theme}
+                      onChange={(e) => {
+                        setTheme(e.target.value as ThemeId)
+                        playUiClick()
+                      }}
+                      aria-label="Theme"
+                    >
+                      {THEME_OPTIONS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
 
                 <div className="hexaclear-menu-links">
@@ -3407,6 +3537,7 @@ function App() {
           })}
         </section>
       </main>
+
       </div>
     </div>
   )

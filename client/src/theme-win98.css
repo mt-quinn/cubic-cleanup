@@ -1,0 +1,1134 @@
+/* =====================================================================
+   Windows 98 / Minesweeper theme
+   ---------------------------------------------------------------------
+   Every rule in this file is scoped under [data-theme="win98"] so it
+   only fires when the user picks the theme. The active theme is set
+   on <html data-theme="..."> from App.tsx.
+
+   Allowed palette (from the user's reference images):
+     #818181  dark gray         #c3c3c3  light gray
+     #fdffff  near-white        #010081  navy
+     #008080  teal              #000000  black
+     #ff0081  magenta accent (reserved for the ruby cube)
+
+   Plus from the Minesweeper reference: bright LCD red on black, used
+   only inside the LCD displays.
+
+   Win98's classic "3D" border uses four tones laid in a specific way:
+     outset (raised):  white outer + light-gray inner / black outer
+                       + dark-gray inner
+     inset  (sunken):  dark-gray outer + black inner / light-gray
+                       outer + white inner
+   We emulate this with paired box-shadow insets so a single element
+   can carry the full 4-tone border without nested wrappers.
+   ===================================================================== */
+
+/* Real seven-segment LCD font (DSEG7-Classic Bold) by keshikan, OFL.
+   Self-hosted from public/fonts/ so we don't rely on a third-party
+   CDN. Only the bold woff2 is shipped (5 KB). */
+@font-face {
+  font-family: 'DSEG7-Classic';
+  src: url('/fonts/DSEG7Classic-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root[data-theme="win98"] {
+  /* Surface tokens */
+  --w98-surface: #c3c3c3;
+  --w98-surface-darker: #818181;
+  --w98-text: #000000;
+  --w98-text-on-navy: #fdffff;
+  --w98-titlebar: #010081;
+  --w98-titlebar-blur: #818181;
+  --w98-desktop: #008080;
+  --w98-highlight: #fdffff;
+  --w98-shadow: #818181;
+  --w98-deep-shadow: #000000;
+  --w98-selected: #010081;
+  --w98-selected-text: #fdffff;
+  --w98-lcd-bg: #000000;
+  --w98-lcd-fg: #ff0000; /* the canonical Minesweeper LCD red */
+  --w98-lcd-dim: #3a0000; /* "off" segment hint, kept very dark */
+  --w98-magenta: #ff0081;
+
+  /* Cube palette: user-requested navy / teal / gray three-tone. We
+     keep the existing top/right/left convention so the isometric
+     reads correctly: top is the brightest plane. Of the three
+     palette colors the gray reads brightest at the same value, so
+     it lands on top. */
+  --cube-top: #818181;
+  --cube-left: #008080;
+  --cube-right: #010081;
+  --cube-stroke: #000000;
+  /* Ruby cube — three pink variations of #ff0081 stepped along
+     lightness so the isometric facets read as one coherent gem.
+     Top is the lightest plane (overhead light), right is deepest
+     shadow, left sits in between. */
+  --cube-golden-top: #ff66b3;
+  --cube-golden-left: #ff0081;
+  --cube-golden-right: #99004d;
+
+  /* Font stack — system MS Sans Serif equivalents on Windows fall
+     back to Tahoma elsewhere. Crisp, low-letter-spacing, tabular
+     numerals available throughout. */
+  font-family:
+    "Pixelated MS Sans Serif",
+    "MS Sans Serif",
+    "Microsoft Sans Serif",
+    Tahoma,
+    "Geneva",
+    sans-serif;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+/* --- Page-level reset ------------------------------------------------ */
+[data-theme="win98"] body,
+[data-theme="win98"] .cubic-viewport {
+  background: var(--w98-desktop) !important;
+  color: var(--w98-text);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+[data-theme="win98"] .hexaclear-root {
+  /* Clamp the whole game to a Win98-ish window: surface gray with a
+     classic raised border and a hard inner edge. The titlebar /
+     menu bar / LCDs / board / hand / status bar all sit inside
+     this surface. The wood theme's 0.75rem gap between strips is
+     killed here so the chrome elements stack flush — Win98 dialogs
+     pack their rows tight. */
+  max-width: min(720px, calc(100vw - 1rem));
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  padding: 0 !important;
+  gap: 0 !important;
+  border: 2px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+  border-radius: 0 !important;
+}
+
+/* The viewport's gradient/blur backdrop has no place in Win98; flatten. */
+[data-theme="win98"] .cubic-viewport::before,
+[data-theme="win98"] .cubic-viewport::after {
+  display: none !important;
+}
+
+/* --- Titlebar -------------------------------------------------------- */
+.hexaclear-win98-titlebar {
+  display: none;
+}
+
+[data-theme="win98"] .hexaclear-win98-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--w98-titlebar);
+  color: var(--w98-text-on-navy);
+  /* Grow the titlebar to match its larger title — 3px top/bottom
+     keeps the classic tight Win98 cap, and margin: 2px 2px 0
+     removes the gap that used to sit between the titlebar and the
+     menu bar so the two strips meet flush. */
+  padding: 3px 4px 3px 8px;
+  margin: 2px 2px 0;
+  font-weight: 700;
+  user-select: none;
+  flex: 0 0 auto;
+}
+
+[data-theme="win98"] .hexaclear-win98-titlebar .title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: none;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+[data-theme="win98"] .hexaclear-win98-titlebar .title-controls {
+  display: inline-flex;
+  gap: 2px;
+}
+
+[data-theme="win98"] .hexaclear-win98-titlebar .title-control {
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border: 1px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+[data-theme="win98"] .hexaclear-win98-titlebar .title-control:active {
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow),
+    inset -1px -1px 0 var(--w98-surface);
+}
+
+/* Window-control glyphs drawn as pure CSS so we don't depend on any
+   font's symbol rendering. _ for minimize, [] for maximize, X for
+   close — all slim enough to read as Win98 glyphs. */
+[data-theme="win98"] .glyph {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  position: relative;
+}
+
+[data-theme="win98"] .glyph-min::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 0;
+  height: 2px;
+  background: var(--w98-text);
+}
+
+[data-theme="win98"] .glyph-max::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--w98-text);
+  border-top-width: 2px;
+}
+
+[data-theme="win98"] .glyph-close::before,
+[data-theme="win98"] .glyph-close::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--w98-text);
+  transform-origin: center;
+}
+[data-theme="win98"] .glyph-close::before {
+  transform: translateY(-50%) rotate(45deg);
+}
+[data-theme="win98"] .glyph-close::after {
+  transform: translateY(-50%) rotate(-45deg);
+}
+
+/* --- Menu bar (re-skinned existing header) --------------------------- */
+/* We collapse the existing two-row header into a single Win98 menu
+   bar by laying out every control as a direct flex child of
+   .hexaclear-header. display:contents on the intermediate wrappers
+   lets us bypass them without changing the JSX. The title and best
+   banner are hidden (those live in the titlebar / LCDs above). */
+
+[data-theme="win98"] .hexaclear-header {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex-wrap: wrap;
+  margin: 0 2px;
+  padding: 0;
+  gap: 0;
+  background: var(--w98-surface);
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--w98-shadow);
+  box-shadow: 0 1px 0 var(--w98-highlight);
+  flex: 0 0 auto;
+}
+
+[data-theme="win98"] .hexaclear-header-main,
+[data-theme="win98"] .hexaclear-header-main-right,
+[data-theme="win98"] .hexaclear-header-controls,
+[data-theme="win98"] .hexaclear-mode-toggle {
+  display: contents;
+}
+
+[data-theme="win98"] .hexaclear-title {
+  display: none !important;
+}
+
+/* Endless / Daily / Menu all render as raised Win98 toolbar buttons
+   so the menu bar reads as a coherent button strip. The active mode
+   pill is the only one that sits depressed — the rest are pushed
+   out (outset borders). Sizes are bumped from native 8pt up to a
+   mobile-friendly target (~40px tall, 14px label) while keeping the
+   same border idiom so the aesthetic survives. */
+
+[data-theme="win98"] .hexaclear-mode-toggle .mode-pill,
+[data-theme="win98"] .hexaclear-menu-button {
+  appearance: none;
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 8px 16px;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  cursor: default;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+  filter: none !important;
+  min-height: 36px;
+  margin: 2px;
+}
+
+/* Pressed state — clicking visually depresses any of the three
+   buttons. (For the active mode pill this is the resting state,
+   handled below.) */
+[data-theme="win98"] .hexaclear-mode-toggle .mode-pill:active,
+[data-theme="win98"] .hexaclear-menu-button:active {
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  padding: 9px 15px 7px 17px;
+}
+
+/* The active mode pill stays visually depressed — that's how the
+   toggle communicates which mode is selected. Bold weight reinforces
+   the selection without changing the button geometry. */
+[data-theme="win98"] .hexaclear-mode-toggle .mode-pill.active {
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  font-weight: 700;
+  padding: 9px 15px 7px 17px;
+}
+
+/* Menu button is order:99 so it lands at the right end of the bar
+   regardless of where it sits in the DOM. */
+[data-theme="win98"] .hexaclear-menu-button {
+  order: 99;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+}
+
+[data-theme="win98"] .hexaclear-menu-button-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+[data-theme="win98"] .hexaclear-menu-button-label {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Hide the Wood-theme best banner + live-stat — Win98 surfaces
+   these in the LCD row below. */
+[data-theme="win98"] .hexaclear-best-banner,
+[data-theme="win98"] .hexaclear-live-stat,
+[data-theme="win98"] .hexaclear-live-stat-placeholder {
+  display: none !important;
+}
+
+/* --- LCD row (Best / Score) ------------------------------------------ */
+.hexaclear-win98-lcds {
+  display: none;
+}
+
+[data-theme="win98"] .hexaclear-win98-lcds {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px;
+  padding: 3px 8px;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface);
+  flex: 0 0 auto;
+}
+
+/* Each LCD module wraps its red-on-black digit window plus a label
+   that lives on the inner side of the row (Best on the right of the
+   left LCD, Score on the left of the right LCD). The flex direction
+   of each module decides which side the label sits on. */
+[data-theme="win98"] .hexaclear-win98-lcd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+}
+[data-theme="win98"] .hexaclear-win98-lcd-best {
+  flex-direction: row; /* digits then label */
+}
+[data-theme="win98"] .hexaclear-win98-lcd-score {
+  flex-direction: row; /* label then digits, controlled by JSX order */
+  margin-left: auto;
+}
+
+/* The black bezel around the digits — sunken Win98 inset to match
+   the surrounding chrome. */
+[data-theme="win98"] .hexaclear-win98-lcd .lcd-frame {
+  position: relative;
+  display: inline-block;
+  background: var(--w98-lcd-bg);
+  padding: 2px 6px;
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow);
+  line-height: 1;
+}
+
+/* Stack the lit digits exactly on top of the dim "all 8s" ghost.
+   Both layers share the same monospace seven-segment font so the
+   segments line up perfectly — only the lit segments differ in
+   color. The off layer reads as the ghosted background segments
+   you'd see on a real LCD when the segments are off. */
+[data-theme="win98"] .hexaclear-win98-lcd .lcd-digits,
+[data-theme="win98"] .hexaclear-win98-lcd .lcd-digits-off {
+  font-family:
+    "DSEG7-Classic",
+    "DSEG7 Classic",
+    "Courier New",
+    Courier,
+    monospace;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  min-width: 3ch;
+  text-align: right;
+  white-space: pre;
+}
+
+[data-theme="win98"] .hexaclear-win98-lcd .lcd-digits-off {
+  color: var(--w98-lcd-dim);
+  position: absolute;
+  inset: 4px 8px;
+}
+
+[data-theme="win98"] .hexaclear-win98-lcd .lcd-digits {
+  position: relative;
+  color: var(--w98-lcd-fg);
+}
+
+[data-theme="win98"] .hexaclear-win98-lcd .lcd-label {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--w98-text);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* --- Game area framing ----------------------------------------------- */
+[data-theme="win98"] .hexaclear-main {
+  margin: 0 4px;
+  padding: 4px 0 0;
+  gap: 4px;
+}
+
+[data-theme="win98"] .hexaclear-board-wrapper {
+  background: var(--w98-surface) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  padding: 4px;
+}
+
+/* The board background (behind the SVG cells) flattens to plain
+   surface in Win98 — no warm radial wash. */
+[data-theme="win98"] .hexaclear-board-wrapper::before,
+[data-theme="win98"] .hexaclear-board-wrapper::after {
+  display: none !important;
+}
+
+/* Empty/clearing hex cells use warm brown strokes by default. Swap
+   to dark gray so they read on the Win98 surface. */
+[data-theme="win98"] .hexaclear-hex.empty,
+[data-theme="win98"] .hexaclear-hex.clearing {
+  stroke: var(--w98-shadow);
+}
+
+/* The black background rect inside the board SVG. Override to a
+   surface-colored fill so empty cells (transparent) reveal the same
+   gray as the chrome around the board. */
+[data-theme="win98"] .hexaclear-board > rect:first-of-type {
+  fill: var(--w98-surface);
+}
+
+/* Flower (rosette) boundary strokes: warm orange + dark brown by
+   default. Repaint as a Win98 etched line — black outer + white
+   inner — so the outline reads as a sunken inset on the gray
+   surface. */
+[data-theme="win98"] .hexaclear-flower-boundary-back {
+  stroke: var(--w98-deep-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-flower-boundary {
+  stroke: var(--w98-highlight) !important;
+}
+[data-theme="win98"] .hexaclear-flower-boundary-group {
+  filter: none !important;
+}
+
+/* Catch animation-state strokes that hardcode the warm brown so
+   they don't peek through during ripples / clears. */
+[data-theme="win98"] .hexaclear-cell .hexaclear-hex.empty,
+[data-theme="win98"] .hexaclear-cell .hexaclear-hex.clearing,
+[data-theme="win98"] .hexaclear-cell.bounce-wave .hexaclear-hex,
+[data-theme="win98"] .hexaclear-cell.ripple-active .hexaclear-hex {
+  stroke: var(--w98-shadow) !important;
+}
+
+/* Empty-cell dimple fill — was a near-black warm brown. In Win98 we
+   want empty cells to read as the same surface gray as the chrome
+   so the board reads as one consistent panel with cubes "set into"
+   it. */
+[data-theme="win98"] .hexaclear-slot-fill {
+  fill: var(--w98-surface) !important;
+  stroke: var(--w98-shadow);
+  stroke-width: 1;
+}
+
+/* Heavy black outer board outline + green secondary outline don't
+   belong in Win98. Hide them and let the wrapper chrome do the
+   framing. */
+[data-theme="win98"] .hexaclear-board-outline-back,
+[data-theme="win98"] .hexaclear-board-outline-front {
+  display: none !important;
+}
+
+/* Sunken inset for the hand tray, matching the board frame. */
+[data-theme="win98"] .hexaclear-hand {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface);
+  border-radius: 0;
+  padding: 4px;
+  gap: 4px;
+}
+
+/* Hand piece slots become sunken individual wells (a la the
+   Minesweeper grid cells). */
+[data-theme="win98"] .hexaclear-piece-button {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* --- Generic Win98 buttons ------------------------------------------- */
+/* Anything inside an overlay-card or styled as a primary action gets
+   the classic raised 3D button. The press-down state inverts the
+   borders for the proper "click-down" feel. Sized for touch — 36px
+   min height, 14px label — while keeping the Win98 chrome ratios. */
+[data-theme="win98"] .hexaclear-overlay-card button:not(.title-control),
+[data-theme="win98"] button.hexaclear-reset,
+[data-theme="win98"] button.hexaclear-gameover-cta,
+[data-theme="win98"] button.hexaclear-gameover-save-button,
+[data-theme="win98"] button.hexaclear-menu-new-game {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  padding: 8px 18px !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  filter: none !important;
+  min-width: 80px;
+  min-height: 36px;
+  cursor: default;
+}
+
+[data-theme="win98"] .hexaclear-overlay-card button:not(.title-control):active,
+[data-theme="win98"] button.hexaclear-reset:active,
+[data-theme="win98"] button.hexaclear-gameover-cta:active,
+[data-theme="win98"] button.hexaclear-gameover-save-button:active,
+[data-theme="win98"] button.hexaclear-menu-new-game:active {
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  /* Subtle 1px nudge sells the "down" travel. */
+  padding: 9px 17px 7px 19px !important;
+}
+
+[data-theme="win98"] button:focus-visible {
+  outline: 1px dotted var(--w98-text);
+  outline-offset: -4px;
+}
+
+/* Win98 has no hover gloss / brightness changes on buttons — strip
+   any leftover transitions from Wood theme rules. */
+[data-theme="win98"] .hexaclear-overlay-card button:hover {
+  filter: none !important;
+}
+
+/* --- Modals as Win98 dialog windows ---------------------------------- */
+/* The overlay backdrop drops the warm radial — Win98 just dims with
+   a subtle gray. The card becomes a window with titlebar + body. */
+[data-theme="win98"] .hexaclear-overlay {
+  background: rgba(0, 0, 0, 0.35) !important;
+  backdrop-filter: none !important;
+}
+
+[data-theme="win98"] .hexaclear-overlay-card {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface),
+    0 0 0 0 transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+}
+
+/* Force every text element inside a Win98 modal to use the
+   theme's text colors. The wood theme uses warm cream tones
+   (#f0d4a8, #ffd9a3) plus opacity dimming on dozens of helper
+   classes (subtitles, empty states, date labels, etc.). Rather
+   than chase each one individually, we blanket-override here:
+   every descendant gets var(--w98-text) at full opacity. The
+   navy titlebar then re-asserts its own white-on-blue text. */
+[data-theme="win98"] .hexaclear-overlay-card,
+[data-theme="win98"] .hexaclear-overlay-card * {
+  color: var(--w98-text) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+[data-theme="win98"] .hexaclear-overlay-card .title,
+[data-theme="win98"] .hexaclear-overlay-card .title * {
+  color: var(--w98-text-on-navy) !important;
+}
+
+/* Disabled controls (e.g. the < / > date stepper at the start
+   of history): classic Win98 "etched" disabled text — gray with
+   a 1px white drop-shadow for the engraved look. */
+[data-theme="win98"] .hexaclear-overlay-card button:disabled,
+[data-theme="win98"] .hexaclear-overlay-card button:disabled * {
+  color: var(--w98-shadow) !important;
+  text-shadow: 1px 1px 0 var(--w98-highlight) !important;
+  cursor: not-allowed;
+}
+
+/* The "Today" link in the high scores card uses the warm wood
+   underline by default. In Win98 we want a plain titlebar-blue
+   text link with a regular underline. */
+[data-theme="win98"] .hexaclear-scores-today-link {
+  color: var(--w98-titlebar) !important;
+  text-decoration: underline !important;
+  text-decoration-color: var(--w98-titlebar) !important;
+}
+
+/* Each modal's existing title becomes the window titlebar. We use
+   ::before pseudo on the .title to render the navy strip above it,
+   but it's simpler and more flexible to wrap the title with padding
+   matching a real Win98 dialog. */
+[data-theme="win98"] .hexaclear-overlay-card .title {
+  background: var(--w98-titlebar) !important;
+  color: var(--w98-text-on-navy) !important;
+  font-family: inherit !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  text-shadow: none !important;
+  letter-spacing: 0 !important;
+  padding: 3px 6px !important;
+  margin: 2px !important;
+  text-align: left !important;
+  display: block !important;
+}
+
+/* Body padding inside the dialog window (everything after the title). */
+[data-theme="win98"] .hexaclear-overlay-card > *:not(.title) {
+  margin-left: 12px !important;
+  margin-right: 12px !important;
+}
+[data-theme="win98"] .hexaclear-overlay-card > *:last-child {
+  margin-bottom: 12px !important;
+}
+[data-theme="win98"] .hexaclear-overlay-card > .title + * {
+  margin-top: 10px !important;
+}
+
+/* Headline numbers (final score / moves) — flatten to plain Win98 type. */
+[data-theme="win98"] .hexaclear-gameover-headline-value {
+  font-family: inherit !important;
+  font-size: 28px !important;
+  font-weight: 700 !important;
+  color: var(--w98-text) !important;
+  text-shadow: none !important;
+}
+[data-theme="win98"] .hexaclear-gameover-headline-label,
+[data-theme="win98"] .hexaclear-gameover-section-label,
+[data-theme="win98"] .hexaclear-scores-section-label {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  opacity: 1 !important;
+}
+
+[data-theme="win98"] .hexaclear-gameover-card.daily-win .title {
+  /* Daily win still uses the navy bar — the celebration is in the
+     gold flash, not in the modal chrome. */
+  color: var(--w98-text-on-navy) !important;
+  text-shadow: none !important;
+}
+
+/* Section dividers in Win98 are 1px etched lines (dark + highlight). */
+[data-theme="win98"] .hexaclear-gameover-section + .hexaclear-gameover-section,
+[data-theme="win98"] .hexaclear-scores-section + .hexaclear-scores-section {
+  border-top: 1px solid var(--w98-shadow) !important;
+  box-shadow: 0 -1px 0 var(--w98-highlight);
+  padding-top: 8px !important;
+}
+
+/* Scores list rows use plain Win98 text and rank chips. */
+[data-theme="win98"] .hexaclear-scores-row {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  padding: 6px 0 !important;
+  border-top-color: var(--w98-shadow) !important;
+}
+
+[data-theme="win98"] .hexaclear-scores-value {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+}
+
+/* Rank chips: kill the warm gradients, use a flat surface with a
+   classic outset border so they read as Win98 buttons. Width is
+   only fixed for numeric rank chips; text chips (COMBO, STREAK)
+   need to size to content. */
+[data-theme="win98"] .hexaclear-rank-chip,
+[data-theme="win98"] .hexaclear-chip {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border: 1px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-shadow)
+    var(--w98-shadow)
+    var(--w98-highlight) !important;
+  clip-path: none !important;
+  border-radius: 0 !important;
+  filter: none !important;
+  text-shadow: none !important;
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  padding: 3px 8px !important;
+  min-width: 2rem;
+  height: auto !important;
+  line-height: 1.3 !important;
+}
+
+[data-theme="win98"] .hexaclear-rank-chip {
+  width: 2rem !important;
+  height: 1.8rem !important;
+}
+
+/* Inputs (name field) get the sunken inset look. */
+[data-theme="win98"] .hexaclear-input,
+[data-theme="win98"] input[type="text"] {
+  background: var(--w98-highlight) !important;
+  color: var(--w98-text) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  padding: 3px 5px !important;
+}
+
+/* --- Menu modal rows: settings list ---------------------------------- */
+[data-theme="win98"] .hexaclear-menu-card {
+  min-width: 320px;
+}
+
+[data-theme="win98"] .hexaclear-menu-rows {
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  background: var(--w98-surface);
+  padding: 12px 14px;
+  margin: 8px 0;
+  gap: 8px;
+}
+
+[data-theme="win98"] .hexaclear-menu-row {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  padding: 6px 0 !important;
+  gap: 12px;
+  min-height: 28px;
+}
+
+[data-theme="win98"] .hexaclear-menu-row-label {
+  font-weight: 400 !important;
+}
+
+/* Volume readout (the "100%") next to the slider. */
+[data-theme="win98"] .hexaclear-menu-row-readout {
+  font-size: 14px !important;
+  flex-basis: 3.2rem !important;
+}
+
+/* Slider — Win98 trough + raised thumb, sized so the thumb is a
+   comfortable touch target (28px tall, ~16px wide). flex: 1 lets
+   the trough soak up whatever horizontal space is left in the row
+   so the percentage readout always sits inside the row's right
+   edge instead of overhanging the panel border. */
+[data-theme="win98"] .hexaclear-menu-row input[type="range"] {
+  appearance: none;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 80px;
+  height: 28px;
+  background: transparent;
+  margin: 0;
+  cursor: default;
+}
+
+[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  background: var(--w98-surface);
+  border: 1px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  border-radius: 0;
+  margin-top: 11px;
+  margin-bottom: 11px;
+}
+
+[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 28px;
+  margin-top: -12px;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+  border-radius: 0;
+}
+
+[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 28px;
+  background: var(--w98-surface);
+  border: 2px solid var(--w98-deep-shadow);
+  border-radius: 0;
+}
+
+/* Checkboxes — a plain sunken square with a black ✓ when checked.
+   Sized up to ~24px square for a finger-friendly tap target. */
+[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"] {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background: var(--w98-highlight);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface);
+  position: relative;
+  cursor: default;
+  flex: 0 0 auto;
+}
+
+[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--w98-text);
+  line-height: 1;
+}
+
+/* Native <select> for the theme picker — keep system rendering when
+   possible, but apply the sunken Win98 chrome where we can. */
+[data-theme="win98"] .hexaclear-menu-row-select {
+  appearance: none;
+  background: var(--w98-highlight) !important;
+  color: var(--w98-text) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  padding: 6px 26px 6px 10px !important;
+  min-height: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--w98-text) 50%),
+    linear-gradient(-45deg, transparent 50%, var(--w98-text) 50%) !important;
+  background-position:
+    calc(100% - 12px) 50%,
+    calc(100% - 6px) 50% !important;
+  background-size: 6px 6px, 6px 6px !important;
+  background-repeat: no-repeat !important;
+}
+
+/* "How to score" / "High scores" links inside the menu modal — render
+   as plain Win98 text links (underlined) instead of the warm
+   handwritten chrome. (These are styled as full Win98 buttons by
+   the .hexaclear-overlay-card button rule above; we only restore
+   transparent backgrounds here if needed.) */
+[data-theme="win98"] .hexaclear-menu-link-sep {
+  text-decoration: none !important;
+  color: var(--w98-text) !important;
+  font-size: 14px !important;
+}
+
+/* Menu modal hint — plain text, larger for touch readability. */
+[data-theme="win98"] .hexaclear-menu-hint {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  opacity: 1 !important;
+  text-align: left !important;
+}
+
+/* --- Scoring & High Scores cards: same dialog-window treatment ------- */
+[data-theme="win98"] .hexaclear-scoring-card,
+[data-theme="win98"] .hexaclear-scores-card,
+[data-theme="win98"] .hexaclear-gameover-card {
+  min-width: 260px;
+}
+
+[data-theme="win98"] .hexaclear-scoring-rule-title,
+[data-theme="win98"] .hexaclear-scoring-rule-desc,
+[data-theme="win98"] .hexaclear-gameover-headline-label,
+[data-theme="win98"] .hexaclear-gameover-headline-value,
+[data-theme="win98"] .hexaclear-gameover-section-label {
+  color: var(--w98-text) !important;
+}
+
+[data-theme="win98"] .hexaclear-scoring-rule-title {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+[data-theme="win98"] .hexaclear-scoring-rule-desc {
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+}
+[data-theme="win98"] .hexaclear-scoring-rule {
+  gap: 12px !important;
+}
+
+/* Header buttons: undo while in-play — same Win98 raised chrome. */
+[data-theme="win98"] .hexaclear-undo-button {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  padding: 3px 10px !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  filter: none !important;
+}
+
+/* --- Misc Wood-only flourishes that should stay quiet in Win98 ------- */
+/* The score popup (when scoring fallback engages) — flatten to a
+   plain inset readout. */
+[data-theme="win98"] .hexaclear-score-popup {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  border-radius: 0 !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* Score particles in Win98 — keep them, but recolor to white-on-black
+   so the gold trails don't fight the cool palette. */
+[data-theme="win98"] .hexaclear-score-particle {
+  color: var(--w98-text-on-navy) !important;
+  text-shadow: 1px 1px 0 var(--w98-text);
+}
+
+/* The cube preview "+10" gem label (engraved ruby pink in Wood) —
+   in Win98 it sits on a magenta cube top, so a flat black numeral
+   reads cleanly without the engrave trick. */
+[data-theme="win98"] .hexaclear-gem-label {
+  fill: var(--w98-text) !important;
+  filter: none !important;
+}
+
+/* Daily-target chrome cubes use the same Win98 gray-on-white look. */
+[data-theme="win98"] .hexaclear-hex-cube.daily-target .cube-top {
+  fill: var(--w98-highlight) !important;
+}
+[data-theme="win98"] .hexaclear-hex-cube.daily-target .cube-left {
+  fill: var(--w98-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-hex-cube.daily-target .cube-right {
+  fill: var(--w98-deep-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-hex-cube.daily-target .cube-face {
+  filter: none !important;
+}

@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Monoton&family=Nunito:wght@400;600;700;800&display=swap');
+@import url('./theme-win98.css');
 
 :root {
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
@@ -1179,38 +1180,50 @@ body {
   animation: hexaclear-score-popup-fade 2.6s ease-out forwards;
 }
 
+/* Placed cubes use a higher-contrast, brighter palette than the dim
+   empty-slot color, so filled vs empty reads instantly. The top face is the
+   brightest plane (catches "overhead light"), the right face is deepest
+   shadow, the left face is mid-tone. Faces resolve through CSS variables
+   so themes can swap the cube palette without touching the SVG. */
+:root {
+  --cube-top: #ffeaa3;
+  --cube-right: #a04a18;
+  --cube-left: #f9a23f;
+  --cube-stroke: rgba(40, 20, 10, 0.95);
+
+  --cube-golden-top: #ff5a8a;
+  --cube-golden-right: #b01232;
+  --cube-golden-left: #e23c5c;
+}
+
 .hexaclear-hex-cube line {
-  stroke: rgba(40, 20, 10, 0.95);
+  stroke: var(--cube-stroke);
   stroke-width: 2.2;
   vector-effect: non-scaling-stroke;
 }
 
-/* Placed cubes use a higher-contrast, brighter palette than the dim
-   empty-slot color, so filled vs empty reads instantly. The top face is the
-   brightest plane (catches "overhead light"), the right face is deepest
-   shadow, the left face is mid-tone. */
 .hexaclear-hex-cube .cube-top {
-  fill: #ffeaa3;
+  fill: var(--cube-top);
 }
 
 .hexaclear-hex-cube .cube-right {
-  fill: #a04a18;
+  fill: var(--cube-right);
 }
 
 .hexaclear-hex-cube .cube-left {
-  fill: #f9a23f;
+  fill: var(--cube-left);
 }
 
 .hexaclear-hex-cube.golden .cube-top {
-  fill: #ff5a8a; /* bright ruby top */
+  fill: var(--cube-golden-top);
 }
 
 .hexaclear-hex-cube.golden .cube-right {
-  fill: #b01232;
+  fill: var(--cube-golden-right);
 }
 
 .hexaclear-hex-cube.golden .cube-left {
-  fill: #e23c5c;
+  fill: var(--cube-golden-left);
 }
 
 .hexaclear-hex-cube.golden .cube-face {
@@ -1975,6 +1988,26 @@ body {
   font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
   opacity: 0.78;
+}
+
+/* Wood-theme styling for the theme selector — picks up the same warm
+   chrome as the menu rows. Win98 theme overrides this with native
+   <select> chrome later. */
+.hexaclear-menu-row-select {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 205, 143, 0.4);
+  background: rgba(56, 26, 12, 0.9);
+  color: #ffe8c7;
+  cursor: pointer;
+}
+
+.hexaclear-menu-row-select:focus {
+  outline: 2px solid rgba(255, 205, 143, 0.55);
+  outline-offset: 1px;
 }
 
 /* Inline pair of text-link-style nav buttons separated by a middle dot.
