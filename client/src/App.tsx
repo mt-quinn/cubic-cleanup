@@ -3053,7 +3053,7 @@ function App() {
                             Board clear
                           </div>
                           <div className="hexaclear-scoring-rule-desc">
-                            Empty the entire board in a single placement.
+                            Clear the entire board to get 25 bonus points.
                           </div>
                         </div>
                       </div>
