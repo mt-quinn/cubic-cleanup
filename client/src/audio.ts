@@ -25,6 +25,7 @@ type SoundKey =
   | 'clear7'
   | 'error'
   | 'gameOver'
+  | 'break'
 
 const SOURCES: Record<SoundKey, string> = {
   clickDown: '/click_down.wav',
@@ -38,6 +39,7 @@ const SOURCES: Record<SoundKey, string> = {
   clear7: '/clear_7.wav',
   error: '/error.wav',
   gameOver: '/game_over.wav',
+  break: '/break.wav',
 }
 
 const VOLUMES: Record<SoundKey, number> = {
@@ -50,8 +52,11 @@ const VOLUMES: Record<SoundKey, number> = {
   clear5: 0.85,
   clear6: 0.85,
   clear7: 0.85,
-  error: 0.8,
+  // Error SFX dialed back per request — was reading too loud relative
+  // to the quieter UI clicks and clear hits around it.
+  error: 0.64,
   gameOver: 0.85,
+  break: 0.85,
 }
 
 const LS_VOLUME_KEY = 'cubic-master-volume'
@@ -213,6 +218,29 @@ export const playClickDown = () => playOneShot('clickDown')
 export const playClickUp = () => playOneShot('clickUp')
 export const playError = () => playOneShot('error')
 export const playGameOver = () => playOneShot('gameOver')
+
+// Ruby capture: scheduled to fire ~80ms after the matching clear SFX
+// for a stacked "shatter follow-up" feel rather than overlapping the
+// clear's attack. We use the AudioContext clock instead of setTimeout
+// so the offset is sample-accurate and doesn't drift under load.
+export const playBreakAfterClear = (delayMs = 80) => {
+  if (muted) return
+  const ctx = audioContext
+  if (!ctx || !masterGainNode) return
+  if (ctx.state !== 'running') return
+  const buf = buffers.break
+  if (!buf) return
+  try {
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const clipGain = ctx.createGain()
+    clipGain.gain.value = VOLUMES.break
+    src.connect(clipGain).connect(masterGainNode)
+    src.start(ctx.currentTime + delayMs / 1000)
+  } catch {
+    // Ignore — playback is best-effort.
+  }
+}
 
 // UI click: click_down immediately followed by click_up, scheduled
 // so click_up begins exactly when click_down ends. We use the

@@ -2385,6 +2385,161 @@ body {
   gap: 0.5rem;
 }
 
+/* --- Game Over modals (endless + daily win + daily loss) ---------- */
+/* Same shell language as menu/scoring/scores: Monoton uppercase title,
+   hairline-divided sections, hex chips for color rhythm, tabular
+   numerals on values. Daily-win adds a slightly more triumphant gold
+   tone to the title. */
+.hexaclear-gameover-card {
+  text-align: left;
+  min-width: 18rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 1.4rem 1.4rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.hexaclear-gameover-card .title {
+  text-align: center;
+  font-family: 'Monoton', system-ui, sans-serif;
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: 1.68rem;
+  letter-spacing: 0.06em;
+  color: #ffe8a3;
+  text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
+  margin: 0 0 0.2rem;
+}
+
+.hexaclear-gameover-card.daily-win .title {
+  color: #ffd57a;
+  text-shadow:
+    0 2px 0 #b87728,
+    0 0 16px rgba(255, 200, 80, 0.55);
+}
+
+/* Headline stat — the big focus number (final score, moves, etc). */
+.hexaclear-gameover-headline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0 0.2rem;
+}
+
+.hexaclear-gameover-headline-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f0d4a8;
+  opacity: 0.78;
+}
+
+.hexaclear-gameover-headline-value {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 2.6rem;
+  font-variant-numeric: tabular-nums;
+  color: #ffe8a3;
+  text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
+  line-height: 1;
+}
+
+.hexaclear-gameover-card.daily-win .hexaclear-gameover-headline-value {
+  color: #ffd57a;
+  text-shadow:
+    0 2px 0 #b87728,
+    0 0 14px rgba(255, 200, 80, 0.55);
+}
+
+/* Secondary subhead — used when there's a second stat below the
+   headline (e.g. "3 cubes left" on a daily loss). */
+.hexaclear-gameover-subhead {
+  text-align: center;
+  font-size: 0.85rem;
+  color: #f0d4a8;
+  opacity: 0.85;
+  margin: -0.15rem 0 0;
+}
+
+/* Sections with hairline dividers, mirroring the scores card. */
+.hexaclear-gameover-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hexaclear-gameover-section + .hexaclear-gameover-section {
+  border-top: 1px solid rgba(255, 205, 143, 0.14);
+  padding-top: 0.7rem;
+}
+
+.hexaclear-gameover-section-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #f0d4a8;
+  opacity: 0.78;
+}
+
+/* New-hiscore input row — input on its own line, button centered. */
+.hexaclear-gameover-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.hexaclear-gameover-input-row .hexaclear-input {
+  font-size: 16px; /* prevents iOS focus zoom */
+}
+
+/* Save score / Save daily result — secondary confirmation pill, sized
+   between a chip and the primary CTA. The overlay-card global button
+   rule still hits this so we don't need duplicate gradient styling;
+   we just nudge sizing and self-alignment. */
+.hexaclear-overlay-card button.hexaclear-gameover-save-button {
+  align-self: center;
+  min-width: 8.5rem;
+}
+
+/* Primary CTA at the bottom — same gold gradient as the menu's
+   New Game button, scoped here so it doesn't depend on .hexaclear-
+   menu-card being its parent. */
+.hexaclear-overlay-card button.hexaclear-gameover-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  margin-top: 0.4rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 205, 143, 0.85);
+  background: linear-gradient(135deg, #f7b35a, #f37a3b);
+  color: #3a1204;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  transition: transform 80ms ease-out, filter 120ms ease-out;
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-cta:hover {
+  filter: brightness(1.06);
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-cta:active {
+  transform: scale(0.97);
+}
+
 /* --- Reduced motion: kill animations & transitions ------------------- */
 .cubic-viewport.reduced-motion *,
 .cubic-viewport.reduced-motion *::before,

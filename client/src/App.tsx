@@ -15,6 +15,7 @@ import type { Axial } from './game/hexTypes'
 import {
   getMasterVolume,
   getMuted,
+  playBreakAfterClear,
   playClearForStreakIndex,
   playClickDown,
   playClickUp,
@@ -1189,7 +1190,19 @@ function App() {
       // naturally lands back on clear_1.
       const clearCount = result.clearedPatterns.length
       if (clearCount > 0) {
-        playClearForStreakIndex(current.streak + 1)
+        // If this placement also ends the run, the game-over SFX fires
+        // shortly after and overlapping a celebratory clear hit on top
+        // of it sounds chaotic. Cede the moment to game_over.wav.
+        if (!gameOver) {
+          playClearForStreakIndex(current.streak + 1)
+          // Ruby capture: layer break.wav ~80ms after the clear hit so
+          // the shatter reads as a follow-up to the clear, not on top
+          // of its attack. Skipped when the same placement also ends
+          // the game (game-over SFX owns the moment).
+          if (result.goldenCleared) {
+            playBreakAfterClear(80)
+          }
+        }
 
         // Screenshake intensity grows with combo size and current streak.
         // No shake on non-clearing placements: the board ripple already
@@ -1533,13 +1546,52 @@ function App() {
       setGameOverWindingDown(false)
       return
     }
+
+    // Daily win: celebratory beat — flash the gold board-clear overlay
+    // and snap directly to the modal. Skip the desaturate wind-down
+    // and the game-over SFX since both read as "you lost".
+    if (game.mode === 'daily' && game.dailyCompleted) {
+      setBoardClearFlashToken((t) => t + 1)
+      setGameOverWindingDown(false)
+      return
+    }
+
+    // Endless loss / daily loss — existing wind-down with desaturate +
+    // game_over SFX before the modal appears.
     setGameOverWindingDown(true)
     playGameOver()
     const tid = window.setTimeout(() => {
       setGameOverWindingDown(false)
     }, 2880)
     return () => window.clearTimeout(tid)
-  }, [game.gameOver])
+  }, [game.gameOver, game.dailyCompleted, game.mode])
+
+  // Mobile pause-on-refocus: iOS suspends the AudioContext when the page
+  // is backgrounded and won't auto-resume even when the page is visible
+  // again — until a fresh user gesture. We re-open the main menu on
+  // refocus so dismissing it counts as that gesture (the menu's Resume
+  // button already calls unlockAudioOnGesture). Touch-device gated so
+  // desktop users tab-switching aren't paused unnecessarily.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const isTouchDevice =
+      'ontouchstart' in window ||
+      (typeof navigator !== 'undefined' &&
+        typeof navigator.maxTouchPoints === 'number' &&
+        navigator.maxTouchPoints > 0)
+    if (!isTouchDevice) return
+    const handler = () => {
+      if (document.visibilityState !== 'visible') return
+      // Don't stack on top of an existing modal flow — the game-over
+      // modal owns its moment, and the player can dismiss scoring /
+      // scores modals on their own time when they come back.
+      if (showScoring || showHighScores) return
+      if (game.gameOver) return
+      setShowMenu(true)
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [showScoring, showHighScores, game.gameOver])
 
   useEffect(() => {
     if (recentlyPlacedCells.length === 0) return
@@ -1936,11 +1988,13 @@ function App() {
         const bestValue =
           game.mode === 'daily' ? todayDailyBestMoves : bestScore
         const showBest = bestValue !== null && bestValue !== undefined
-        const liveStatLabel = game.mode === 'daily' ? 'Moves' : 'Score'
+        const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
-          game.mode === 'daily' ? game.moves : game.score
-        const showLiveStat =
-          game.mode === 'endless' || (game.mode === 'daily' && game.moves > 0)
+          game.mode === 'daily' ? dailyCubesRemaining : game.score
+        // Daily shows the cube count from the start so the player sees
+        // the goal target before placing anything; endless's score
+        // surfaces from the start too.
+        const showLiveStat = true
         return (
           <header className="hexaclear-header">
             <div className="hexaclear-header-main">
@@ -2023,7 +2077,12 @@ function App() {
         <div
           className={[
             'hexaclear-board-wrapper',
-            game.gameOver ? 'game-over-active' : '',
+            // Desaturate "you lost" treatment only on losses. Daily wins
+            // keep their colors (and get a gold-flash flourish instead).
+            game.gameOver &&
+            !(game.mode === 'daily' && game.dailyCompleted)
+              ? 'game-over-active'
+              : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -2396,16 +2455,9 @@ function App() {
           <div className="hexaclear-board-hud">
             {game.mode === 'daily' ? (
               <div className="board-hud-block left">
-                {game.moves === 0 ? (
+                {game.moves === 0 && (
                   <span className="value small">
                     Clear all numbered cubes to win!
-                  </span>
-                ) : (
-                  <span className="value">
-                    {dailyCubesRemaining}{' '}
-                    {dailyCubesRemaining === 1
-                      ? 'Cube Remains'
-                      : 'Cubes Remain'}
                   </span>
                 )}
               </div>
@@ -2497,71 +2549,108 @@ function App() {
           )}
           {game.gameOver && game.mode === 'endless' && !gameOverWindingDown && (
             <div className="hexaclear-overlay">
-              <div className="hexaclear-overlay-card">
-                <div className="title">No more moves</div>
-                <div className="score">Final score: {game.score}</div>
+              <div className="hexaclear-overlay-card hexaclear-gameover-card">
+                <div className="title">Game Over</div>
+
+                <div className="hexaclear-gameover-headline">
+                  <div className="hexaclear-gameover-headline-label">
+                    Final score
+                  </div>
+                  <div className="hexaclear-gameover-headline-value">
+                    {game.score}
+                  </div>
+                </div>
+
                 {pendingHighScore && (
-                  <div className="score">
-                    <p>New high score! Enter your name:</p>
-                    <input
-                      className="hexaclear-input"
-                      value={playerName}
-                      onChange={(e) => setPlayerName(e.target.value)}
-                      placeholder="Your name"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playUiClick()
-                        handleSaveHighScore()
-                      }}
-                      style={{ marginTop: '0.5rem' }}
-                    >
-                      Save score
-        </button>
+                  <div className="hexaclear-gameover-section">
+                    <div className="hexaclear-gameover-section-label">
+                      New high score
+                    </div>
+                    <div className="hexaclear-gameover-input-row">
+                      <input
+                        className="hexaclear-input"
+                        value={playerName}
+                        onChange={(e) => setPlayerName(e.target.value)}
+                        placeholder="Your name"
+                      />
+                      <button
+                        type="button"
+                        className="hexaclear-gameover-save-button"
+                        onClick={() => {
+                          playUiClick()
+                          handleSaveHighScore()
+                        }}
+                      >
+                        Save score
+                      </button>
+                    </div>
                   </div>
                 )}
+
                 {highScores.length > 0 && (
-                  <div className="score">
-                    <p>Top scores:</p>
-                    <ol className="hexaclear-highscores">
+                  <div className="hexaclear-gameover-section">
+                    <div className="hexaclear-gameover-section-label">
+                      Top scores
+                    </div>
+                    <ol className="hexaclear-scores-list">
                       {highScores
                         .slice()
-                        .sort(
-                          (a, b) =>
-                            b.score - a.score || a.date - b.date,
-                        )
+                        .sort((a, b) => b.score - a.score || a.date - b.date)
+                        .slice(0, 5)
                         .map((entry, idx) => {
                           const isRecent =
                             highScoreSaved &&
                             lastSavedHighScoreDate !== null &&
                             entry.date === lastSavedHighScoreDate
+                          const rank = idx + 1
+                          const chipClass = [
+                            'hexaclear-rank-chip',
+                            rank === 1
+                              ? 'hexaclear-chip-trophy'
+                              : rank <= 3
+                                ? 'hexaclear-chip-gold'
+                                : 'hexaclear-chip-neutral',
+                          ].join(' ')
                           return (
                             <li
                               key={entry.date + entry.name + idx}
-                              className={isRecent ? 'recent' : undefined}
+                              className={[
+                                'hexaclear-scores-row',
+                                isRecent ? 'recent' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
                             >
-                              <span className="name">{entry.name}</span>
-                              <span className="value">{entry.score}</span>
+                              <span className={chipClass}>{rank}</span>
+                              <span className="hexaclear-scores-name">
+                                {entry.name}
+                              </span>
+                              <span className="hexaclear-scores-value">
+                                {entry.score}
+                              </span>
                             </li>
                           )
                         })}
                     </ol>
                   </div>
                 )}
+
                 {undoStack.length > 0 && !highScoreSaved && (
                   <button
                     type="button"
+                    className="hexaclear-menu-link"
                     onClick={() => {
                       playUiClick()
                       handleUndo()
                     }}
-                    style={{ marginBottom: '0.5rem' }}
                   >
                     Undo last move
                   </button>
                 )}
+
                 <button
+                  type="button"
+                  className="hexaclear-gameover-cta"
                   onClick={() => {
                     playUiClick()
                     resetGame()
@@ -2574,72 +2663,128 @@ function App() {
           )}
           {game.gameOver && game.mode === 'daily' && !gameOverWindingDown && (
             <div className="hexaclear-overlay">
-              <div className="hexaclear-overlay-card">
+              <div
+                className={[
+                  'hexaclear-overlay-card',
+                  'hexaclear-gameover-card',
+                  game.dailyCompleted ? 'daily-win' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
                 <div className="title">
-                  {game.dailyCompleted ? 'Daily cleared!' : 'Daily over'}
+                  {game.dailyCompleted ? 'Daily Cleared' : 'Daily Over'}
                 </div>
-                <div className="score">
-                  <p>Moves: {game.moves}</p>
-                  <p>Goal: clear all numbered cubes.</p>
+
+                <div className="hexaclear-gameover-headline">
+                  <div className="hexaclear-gameover-headline-label">
+                    {game.dailyCompleted ? 'Cleared in' : 'Used'}
+                  </div>
+                  <div className="hexaclear-gameover-headline-value">
+                    {game.moves}
+                  </div>
+                  <div className="hexaclear-gameover-headline-label">
+                    {game.moves === 1 ? 'move' : 'moves'}
+                  </div>
                 </div>
-                {pendingDailyHighScore && (
-                  <div className="score">
-                    <p>New daily best! Enter your name:</p>
-                    <input
-                      className="hexaclear-input"
-                      value={playerName}
-                      onChange={(e) => setPlayerName(e.target.value)}
-                      placeholder="Your name"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playUiClick()
-                        handleSaveDailyHighScore()
-                      }}
-                      style={{ marginTop: '0.5rem' }}
-                    >
-                      Save daily result
-                    </button>
+
+                {!game.dailyCompleted && dailyCubesRemaining > 0 && (
+                  <div className="hexaclear-gameover-subhead">
+                    {dailyCubesRemaining}{' '}
+                    {dailyCubesRemaining === 1 ? 'cube' : 'cubes'} still
+                    standing — goal is to clear every numbered cube.
                   </div>
                 )}
+
+                {pendingDailyHighScore && (
+                  <div className="hexaclear-gameover-section">
+                    <div className="hexaclear-gameover-section-label">
+                      {game.dailyCompleted
+                        ? 'New daily best'
+                        : 'Log this attempt'}
+                    </div>
+                    <div className="hexaclear-gameover-input-row">
+                      <input
+                        className="hexaclear-input"
+                        value={playerName}
+                        onChange={(e) => setPlayerName(e.target.value)}
+                        placeholder="Your name"
+                      />
+                      <button
+                        type="button"
+                        className="hexaclear-gameover-save-button"
+                        onClick={() => {
+                          playUiClick()
+                          handleSaveDailyHighScore()
+                        }}
+                      >
+                        Save daily result
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {todayPlayerDailyRuns.length > 0 && (
-                  <div className="score">
-                    <p>Your best finishes today (fewest moves):</p>
-                    <ol className="hexaclear-highscores">
-                      {todayPlayerDailyRuns.map((entry, idx) => {
-                          const isRecent =
-                            dailyHighScoreSaved &&
-                            lastSavedDailyHighScoreDate !== null &&
-                            entry.date === lastSavedDailyHighScoreDate
-                          return (
-                            <li
-                              key={entry.date + entry.name + idx}
-                              className={isRecent ? 'recent' : undefined}
-                            >
-                              <span className="value">
-                                {entry.moves} {entry.moves === 1 ? 'move' : 'moves'}
-                              </span>
-                            </li>
-                          )
-                        })}
+                  <div className="hexaclear-gameover-section">
+                    <div className="hexaclear-gameover-section-label">
+                      Your best today
+                    </div>
+                    <ol className="hexaclear-scores-list">
+                      {todayPlayerDailyRuns.slice(0, 5).map((entry, idx) => {
+                        const isRecent =
+                          dailyHighScoreSaved &&
+                          lastSavedDailyHighScoreDate !== null &&
+                          entry.date === lastSavedDailyHighScoreDate
+                        const rank = idx + 1
+                        const chipClass = [
+                          'hexaclear-rank-chip',
+                          rank === 1
+                            ? 'hexaclear-chip-trophy'
+                            : rank <= 3
+                              ? 'hexaclear-chip-gold'
+                              : 'hexaclear-chip-neutral',
+                        ].join(' ')
+                        return (
+                          <li
+                            key={entry.date + entry.name + idx}
+                            className={[
+                              'hexaclear-scores-row',
+                              isRecent ? 'recent' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                          >
+                            <span className={chipClass}>{rank}</span>
+                            <span className="hexaclear-scores-name">
+                              {entry.name || 'You'}
+                            </span>
+                            <span className="hexaclear-scores-value">
+                              {entry.moves}{' '}
+                              {entry.moves === 1 ? 'move' : 'moves'}
+                            </span>
+                          </li>
+                        )
+                      })}
                     </ol>
                   </div>
                 )}
+
                 {undoStack.length > 0 && !dailyHighScoreSaved && (
                   <button
                     type="button"
+                    className="hexaclear-menu-link"
                     onClick={() => {
                       playUiClick()
                       handleUndo()
                     }}
-                    style={{ marginBottom: '0.5rem' }}
                   >
                     Undo last move
                   </button>
                 )}
+
                 <button
                   type="button"
+                  className="hexaclear-gameover-cta"
                   onClick={() => {
                     playUiClick()
                     const next = createDailyGameState()
@@ -2651,7 +2796,7 @@ function App() {
                   }}
                 >
                   Retry today&apos;s puzzle
-        </button>
+                </button>
               </div>
             </div>
           )}
@@ -2862,11 +3007,12 @@ function App() {
                         </span>
                         <div className="hexaclear-scoring-rule-text">
                           <div className="hexaclear-scoring-rule-title">
-                            Combo bonus
+                            Combo multiplier
                           </div>
                           <div className="hexaclear-scoring-rule-desc">
-                            Clear several lines or rosettes in one
-                            placement to multiply the points.
+                            Clear several lines or rosettes in one placement
+                            to multiply the points by 1.5&times; per extra
+                            clear.
                           </div>
                         </div>
                       </div>
@@ -2879,8 +3025,9 @@ function App() {
                             Streak multiplier
                           </div>
                           <div className="hexaclear-scoring-rule-desc">
-                            Clear on back-to-back moves to keep the streak
-                            climbing.
+                            Clear on back-to-back placements to multiply the
+                            points by a stacking 1.1&times; per consecutive
+                            clear.
                           </div>
                         </div>
                       </div>
