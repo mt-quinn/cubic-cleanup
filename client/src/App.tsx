@@ -2027,6 +2027,9 @@ function App() {
           ]
             .filter(Boolean)
             .join(' ')}
+          style={{
+            aspectRatio: `${BOARD_LAYOUT.width} / ${BOARD_LAYOUT.height}`,
+          }}
           ref={boardWrapperRef}
         >
           <svg

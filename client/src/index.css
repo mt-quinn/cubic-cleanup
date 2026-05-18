@@ -223,6 +223,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  /* Center the column vertically so leftover height on tall portrait
+     viewports splits symmetrically above and below the board+hand
+     pair instead of bloating the board panel with empty letterbox. */
+  justify-content: center;
   /* Critical for short viewports: without min-height: 0, the flex
      child's intrinsic content (the board SVG) prevents this column
      from shrinking below the SVG's natural height, which then pushes
@@ -232,10 +236,18 @@ body {
 
 .hexaclear-board-wrapper {
   position: relative;
-  flex: 1;
-  /* Allow the wrapper to shrink below the SVG's intrinsic aspect-ratio
-     height. The SVG (with viewBox + width/height 100%) will scale down
-     to fit on short viewports; without min-height: 0 it would refuse. */
+  /* The wrapper hugs the SVG's natural aspect ratio (set via inline
+     style from BOARD_LAYOUT) instead of greedily filling all vertical
+     space. On tall portrait viewports this keeps the rounded panel
+     proportional to its contents instead of leaving letterbox padding
+     inside the panel. The aspect-ratio property cooperates with both
+     max-width and max-height to fit within whatever the column gives
+     us — modern browsers shrink the unconstrained dimension to keep
+     the ratio when one dimension is capped. */
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
   min-height: 0;
   border-radius: 1.25rem;
   background:
