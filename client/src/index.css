@@ -50,7 +50,12 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0.9rem;
+  /* Vertical padding scales with viewport height so on tall portrait
+     phones the column gets meaningful frame padding instead of leaving
+     "void" dead space above/below the centered content. Horizontal
+     padding stays fixed because narrow phones already need every
+     pixel of board width. */
+  padding: clamp(0.9rem, 4dvh, 3rem) 0.9rem;
   /* Lock the game width so it doesn't shrink when the hand contents
      get narrower (e.g. 1 piece left). This keeps the board scale
      stable regardless of hand state. */
@@ -1480,11 +1485,13 @@ body {
   gap: 0;
   /* Hand height tracks viewport height so it stays usable on short
      windows (landscape phones, popped-out side panels, dev-tools open)
-     while still feeling roomy on tall windows. Rigid 110px would push
-     the layout past the viewport bottom and clip. */
+     while claiming the vertical space the square-ish board panel
+     can't use on tall portrait phones. The ceiling lets the tray
+     become a substantial bottom UI element on tall screens instead
+     of leaving dead space below the board. */
   flex: 0 0 auto;
   min-height: 0;
-  height: clamp(72px, 16dvh, 120px);
+  height: clamp(80px, 18dvh, 180px);
   padding: 0.35rem;
   border-radius: 1rem;
   border: 1px solid rgba(255, 197, 138, 0.45);
@@ -1583,12 +1590,6 @@ body {
   font-family: inherit;
 }
 
-@media (min-width: 768px) {
-  .hexaclear-root {
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
-}
-}
 
 @keyframes hexaclear-flip-clear {
   0% {
