@@ -1575,6 +1575,12 @@ function App() {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const boardWrapperRef = useRef<HTMLDivElement | null>(null)
+  // Bounding box of the hand bar. Drops that release inside this rect
+  // are treated as "cancel the drag" instead of attempted placements,
+  // so the player can pick a piece up and immediately drop it (or drag
+  // it back home from over the board) without triggering an error
+  // shake or an accidental commit at the closest board cell.
+  const handSectionRef = useRef<HTMLElement | null>(null)
   const dragState = useRef<{
     pieceId: string | null
     pointerId: number | null
@@ -3252,6 +3258,23 @@ function App() {
   }
 
   useEffect(() => {
+    // True iff the given client-space point lies inside the hand bar.
+    // Used to suppress on-board placement preview / placement attempts
+    // while the player is hovering the piece over their own hand —
+    // dragging back to the hand is treated as "cancel this drag", not
+    // as a placement attempt at the nearest board cell.
+    const isPointOverHand = (clientX: number, clientY: number): boolean => {
+      const node = handSectionRef.current
+      if (!node) return false
+      const r = node.getBoundingClientRect()
+      return (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      )
+    }
+
     const updateFromClientPoint = (clientX: number, clientY: number) => {
       if (!dragState.current.pieceId) return
       const wrapper = boardWrapperRef.current
@@ -3260,6 +3283,13 @@ function App() {
       const x = (clientX - rect.left) / scale
       const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
+
+      // While the cursor sits over the hand, kill the on-board preview
+      // entirely so cells don't light up behind the held piece.
+      if (isPointOverHand(clientX, clientY)) {
+        setHover(null)
+        return
+      }
 
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
@@ -3278,12 +3308,24 @@ function App() {
       if (!dragState.current.pieceId) return
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
-      let cellId = hover?.cellId ?? null
-      if (!cellId && clientX !== null && clientY !== null) {
-        cellId = findClosestCellIdFromClientPoint(
-          clientX,
-          clientY - previewOffsetY,
-        )
+
+      // Released over the hand bar — cancel the drag silently. No
+      // placement attempt, no error shake, no preview-cell snap. We
+      // still play the soft click_up so the gesture sounds completed.
+      const releasedOverHand =
+        clientX !== null &&
+        clientY !== null &&
+        isPointOverHand(clientX, clientY)
+
+      let cellId: string | null = null
+      if (!releasedOverHand) {
+        cellId = hover?.cellId ?? null
+        if (!cellId && clientX !== null && clientY !== null) {
+          cellId = findClosestCellIdFromClientPoint(
+            clientX,
+            clientY - previewOffsetY,
+          )
+        }
       }
       const pieceId = dragState.current.pieceId
       // Compute the full attempted footprint for visual feedback even if
@@ -3303,7 +3345,8 @@ function App() {
       setGhost(null)
 
       // The player set the piece down — fire the drop click regardless
-      // of whether the placement was actually valid.
+      // of whether the placement was actually valid (or whether they
+      // dropped it back onto the hand to cancel).
       playClickUp()
 
       if (cellId && pieceId) {
@@ -3317,6 +3360,11 @@ function App() {
         // The click-to-select workflow goes through handleCellClick
         // instead, which intentionally keeps the selection alive so the
         // player can keep tapping cells.
+        setSelectedPieceId(null)
+      } else if (releasedOverHand) {
+        // Drag-cancel: also drop the click-to-select state so the next
+        // pointer-down on the same piece reads as a fresh pickup
+        // instead of a follow-up placement at the closest cell.
         setSelectedPieceId(null)
       }
       setHover(null)
@@ -5261,6 +5309,7 @@ function App() {
         </div>
 
         <section
+          ref={handSectionRef}
           className={[
             'hexaclear-hand',
             gameOverWindingDown ? 'game-over-winding-down' : '',
