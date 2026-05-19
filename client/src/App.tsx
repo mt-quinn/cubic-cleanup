@@ -3798,93 +3798,104 @@ function App() {
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div className="title">How To Score</div>
-                    <div className="hexaclear-scoring-rules">
-                      <div className="hexaclear-scoring-rule">
-                        <span className="hexaclear-chip hexaclear-chip-gold">
-                          +10
-                        </span>
-                        <div className="hexaclear-scoring-rule-text">
-                          <div className="hexaclear-scoring-rule-title">
-                            Line or rosette clear
+                  (() => {
+                    // Per-mode scoring numbers shown in the rules card.
+                    // Mirrors SCORING_BY_MODE in gameLogic.ts so the UI
+                    // and the actual point values never drift.
+                    const isBig = game.mode === 'big'
+                    const clearPoints = isBig ? 40 : 10
+                    const boardClearPoints = isBig ? 100 : 25
+                    return (
+                      <>
+                        <div className="title">How To Score</div>
+                        <div className="hexaclear-scoring-rules">
+                          <div className="hexaclear-scoring-rule">
+                            <span className="hexaclear-chip hexaclear-chip-gold">
+                              +{clearPoints}
+                            </span>
+                            <div className="hexaclear-scoring-rule-text">
+                              <div className="hexaclear-scoring-rule-title">
+                                Line or rosette clear
+                              </div>
+                              <div className="hexaclear-scoring-rule-desc">
+                                Fill a straight line or a six-cube rosette.
+                              </div>
+                            </div>
                           </div>
-                          <div className="hexaclear-scoring-rule-desc">
-                            Fill a straight line or a six-cube rosette.
+                          <div className="hexaclear-scoring-rule">
+                            <span className="hexaclear-chip hexaclear-chip-multiplier">
+                              Combo
+                            </span>
+                            <div className="hexaclear-scoring-rule-text">
+                              <div className="hexaclear-scoring-rule-title">
+                                Combo multiplier
+                              </div>
+                              <div className="hexaclear-scoring-rule-desc">
+                                Clear several lines or rosettes in one
+                                placement to multiply the points by 1.5&times;
+                                per extra clear.
+                              </div>
+                            </div>
+                          </div>
+                          <div className="hexaclear-scoring-rule">
+                            <span className="hexaclear-chip hexaclear-chip-multiplier">
+                              Streak
+                            </span>
+                            <div className="hexaclear-scoring-rule-text">
+                              <div className="hexaclear-scoring-rule-title">
+                                Streak multiplier
+                              </div>
+                              <div className="hexaclear-scoring-rule-desc">
+                                Clear on back-to-back placements to multiply
+                                the points by a stacking 1.1&times; per
+                                consecutive clear.
+                              </div>
+                            </div>
+                          </div>
+                          <div className="hexaclear-scoring-rule">
+                            <span className="hexaclear-chip hexaclear-chip-ruby">
+                              +10
+                            </span>
+                            <div className="hexaclear-scoring-rule-text">
+                              <div className="hexaclear-scoring-rule-title">
+                                Ruby bonus
+                              </div>
+                              <div className="hexaclear-scoring-rule-desc">
+                                Clearing a ruby cube grants extra points.
+                              </div>
+                            </div>
+                          </div>
+                          <div className="hexaclear-scoring-rule">
+                            <span className="hexaclear-chip hexaclear-chip-big">
+                              +{boardClearPoints}
+                            </span>
+                            <div className="hexaclear-scoring-rule-text">
+                              <div className="hexaclear-scoring-rule-title">
+                                Board clear
+                              </div>
+                              <div className="hexaclear-scoring-rule-desc">
+                                Clear the entire board to get {boardClearPoints}{' '}
+                                bonus points.
+                              </div>
+                            </div>
+                          </div>
+                          <div className="hexaclear-scoring-rule">
+                            <span className="hexaclear-chip hexaclear-chip-small">
+                              +1
+                            </span>
+                            <div className="hexaclear-scoring-rule-text">
+                              <div className="hexaclear-scoring-rule-title">
+                                Per cube placed
+                              </div>
+                              <div className="hexaclear-scoring-rule-desc">
+                                Every cube you set down is worth one point.
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="hexaclear-scoring-rule">
-                        <span className="hexaclear-chip hexaclear-chip-multiplier">
-                          Combo
-                        </span>
-                        <div className="hexaclear-scoring-rule-text">
-                          <div className="hexaclear-scoring-rule-title">
-                            Combo multiplier
-                          </div>
-                          <div className="hexaclear-scoring-rule-desc">
-                            Clear several lines or rosettes in one placement
-                            to multiply the points by 1.5&times; per extra
-                            clear.
-                          </div>
-                        </div>
-                      </div>
-                      <div className="hexaclear-scoring-rule">
-                        <span className="hexaclear-chip hexaclear-chip-multiplier">
-                          Streak
-                        </span>
-                        <div className="hexaclear-scoring-rule-text">
-                          <div className="hexaclear-scoring-rule-title">
-                            Streak multiplier
-                          </div>
-                          <div className="hexaclear-scoring-rule-desc">
-                            Clear on back-to-back placements to multiply the
-                            points by a stacking 1.1&times; per consecutive
-                            clear.
-                          </div>
-                        </div>
-                      </div>
-                      <div className="hexaclear-scoring-rule">
-                        <span className="hexaclear-chip hexaclear-chip-ruby">
-                          +10
-                        </span>
-                        <div className="hexaclear-scoring-rule-text">
-                          <div className="hexaclear-scoring-rule-title">
-                            Ruby bonus
-                          </div>
-                          <div className="hexaclear-scoring-rule-desc">
-                            Clearing a ruby cube grants extra points.
-                          </div>
-                        </div>
-                      </div>
-                      <div className="hexaclear-scoring-rule">
-                        <span className="hexaclear-chip hexaclear-chip-big">
-                          +25
-                        </span>
-                        <div className="hexaclear-scoring-rule-text">
-                          <div className="hexaclear-scoring-rule-title">
-                            Board clear
-                          </div>
-                          <div className="hexaclear-scoring-rule-desc">
-                            Clear the entire board to get 25 bonus points.
-                          </div>
-                        </div>
-                      </div>
-                      <div className="hexaclear-scoring-rule">
-                        <span className="hexaclear-chip hexaclear-chip-small">
-                          +1
-                        </span>
-                        <div className="hexaclear-scoring-rule-text">
-                          <div className="hexaclear-scoring-rule-title">
-                            Per cube placed
-                          </div>
-                          <div className="hexaclear-scoring-rule-desc">
-                            Every cube you set down is worth one point.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
+                      </>
+                    )
+                  })()
                 )}
                 <button
                   type="button"
