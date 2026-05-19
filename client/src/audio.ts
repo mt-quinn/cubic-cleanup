@@ -110,6 +110,68 @@ let buffersStartedLoading = false
 
 const computeMasterGainValue = (): number => (muted ? 0 : masterVolume)
 
+// True when the AudioContext is in any of the not-actually-playing
+// states. iOS Safari emits a non-standard 'interrupted' state when
+// another app/tab grabs the audio session (phone call, background
+// music app, control-center playback, etc.) — it's not in the W3C
+// AudioContext spec but the runtime uses it, so we string-match
+// rather than rely on the TS lib types.
+const isContextStalled = (ctx: AudioContext): boolean => {
+  const state = ctx.state as string
+  return state === 'suspended' || state === 'interrupted' || state === 'closed'
+}
+
+// Best-effort resume. Safe to call repeatedly: a context that's
+// already running is a no-op, a context that's suspended/interrupted
+// gets a resume() kicked off, and a closed one is a hard no-op (we
+// can't recover those without rebuilding the context).
+const resumeAudioIfNeeded = (): void => {
+  const ctx = audioContext
+  if (!ctx) return
+  const state = ctx.state as string
+  if (state === 'closed') return
+  if (state === 'running') return
+  ctx.resume().catch(() => {
+    // iOS Safari sometimes rejects resume() outside a user gesture.
+    // We also wire up a pointerdown listener below as a fallback so
+    // the very next tap re-tries from inside a gesture, which is the
+    // path the platform actually allows.
+  })
+}
+
+let visibilityHooksInstalled = false
+
+const installVisibilityHooks = () => {
+  if (visibilityHooksInstalled) return
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  visibilityHooksInstalled = true
+
+  // Re-prod the context every time the tab becomes visible. Covers
+  // tab-switch, multitasking app-switch, lock-screen → unlock, etc.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resumeAudioIfNeeded()
+  })
+
+  // window.focus picks up the desktop-browser case where
+  // visibilitychange doesn't fire (clicking another window).
+  window.addEventListener('focus', resumeAudioIfNeeded)
+
+  // Restored from bfcache on mobile back-navigation. Same recovery
+  // path needed.
+  window.addEventListener('pageshow', resumeAudioIfNeeded)
+
+  // The platform-correct path on iOS: any user gesture is allowed to
+  // resume an interrupted context, so we hook the global pointer/
+  // touch down events. This is the fallback for the "returned to the
+  // game but no SFX yet" window between visibilitychange (which iOS
+  // sometimes ignores) and the player's first interaction.
+  const onGesture = () => resumeAudioIfNeeded()
+  window.addEventListener('pointerdown', onGesture, { passive: true })
+  window.addEventListener('touchstart', onGesture, { passive: true })
+  window.addEventListener('mousedown', onGesture, { passive: true })
+  window.addEventListener('keydown', onGesture, { passive: true })
+}
+
 const ensureContext = (): AudioContext | null => {
   if (typeof window === 'undefined') return null
   if (audioContext) return audioContext
@@ -125,6 +187,19 @@ const ensureContext = (): AudioContext | null => {
     masterGainNode = ctx.createGain()
     masterGainNode.gain.value = computeMasterGainValue()
     masterGainNode.connect(ctx.destination)
+    // If the context flaps mid-session (iOS interruption / user
+    // pulled the audio session out from under us / etc.), try to
+    // recover automatically. This is in addition to the visibility
+    // hooks below — sometimes the runtime emits statechange without
+    // a corresponding visibility event.
+    ctx.addEventListener('statechange', () => {
+      if (isContextStalled(ctx) && ctx.state !== 'closed') {
+        // Ride the next tick — calling resume() synchronously inside
+        // the statechange handler is sometimes ignored by iOS.
+        Promise.resolve().then(resumeAudioIfNeeded)
+      }
+    })
+    installVisibilityHooks()
     return ctx
   } catch {
     return null
@@ -162,12 +237,13 @@ const loadAllBuffers = () => {
 }
 
 // Must be called from inside a user gesture so the AudioContext can move
-// out of the "suspended" state. Subsequent plays from non-gesture code
-// (pointermove, timer callbacks, etc.) are then permitted.
+// out of the "suspended" / "interrupted" state. Subsequent plays from
+// non-gesture code (pointermove, timer callbacks, etc.) are then
+// permitted. Idempotent — fine to call on every gesture.
 export const unlockAudioOnGesture = () => {
   const ctx = ensureContext()
   if (!ctx) return
-  if (ctx.state === 'suspended') {
+  if (isContextStalled(ctx) && ctx.state !== 'closed') {
     ctx.resume().catch(() => {
       // Ignore — user can try again on next gesture.
     })
@@ -218,9 +294,17 @@ const playOneShot = (key: SoundKey) => {
   if (muted) return
   const ctx = audioContext
   if (!ctx || !masterGainNode) return
-  // If the user gesture hasn't unlocked the context yet, bail rather
-  // than try to start a source that the browser would silently mute.
-  if (ctx.state !== 'running') return
+  // If the context is stalled (suspended on first load, interrupted
+  // by another iOS audio session, etc.) kick off a resume and bail
+  // for THIS frame. The next play after resume completes will land —
+  // we deliberately don't queue this sound because by the time the
+  // resume promise resolves the action it represented is stale.
+  if (ctx.state !== 'running') {
+    if (isContextStalled(ctx) && ctx.state !== 'closed') {
+      resumeAudioIfNeeded()
+    }
+    return
+  }
   const buf = buffers[key]
   if (!buf) return
   try {
@@ -248,7 +332,12 @@ export const playBreakAfterClear = (delayMs = 80) => {
   if (muted) return
   const ctx = audioContext
   if (!ctx || !masterGainNode) return
-  if (ctx.state !== 'running') return
+  if (ctx.state !== 'running') {
+    if (isContextStalled(ctx) && ctx.state !== 'closed') {
+      resumeAudioIfNeeded()
+    }
+    return
+  }
   const buf = buffers.break
   if (!buf) return
   try {
@@ -272,7 +361,12 @@ export const playUiClick = () => {
   if (muted) return
   const ctx = audioContext
   if (!ctx || !masterGainNode) return
-  if (ctx.state !== 'running') return
+  if (ctx.state !== 'running') {
+    if (isContextStalled(ctx) && ctx.state !== 'closed') {
+      resumeAudioIfNeeded()
+    }
+    return
+  }
   const downBuf = buffers.clickDown
   const upBuf = buffers.clickUp
   if (!downBuf || !upBuf) return
