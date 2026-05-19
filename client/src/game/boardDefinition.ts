@@ -167,12 +167,33 @@ export const buildBoardDefinition = ({
     }
   }
 
-  // Second pass: scoring lines are the longest line per axis, derived
-  // from geometry instead of being hard-coded. Standard board: 7.
-  // Big board: 15.
+  // Second pass: pick scoring lines. Every emitted line is already the
+  // full extent of its own parallel track (the generator only starts at
+  // cells with no predecessor in the direction), so each line is "as
+  // long as it can be" for that track. We then filter to tracks whose
+  // length is within `flowerRadius` of the global maximum.
+  //
+  // Why the tolerance? On a flower-of-flowers shape, tracks that miss
+  // the central rosette by one ring fall short by exactly one ruby per
+  // ring of bypassed flowers — i.e. up to `flowerRadius` cells. Those
+  // tracks still visually span the board side-to-side, so a player
+  // filling them legitimately expects a line clear.
+  //
+  //   Standard board (r=1): max=7, threshold=7  → 15 length-7 lines.
+  //                         Length-5 / length-2 are short edge tracks
+  //                         that never cross center, kept out.
+  //   Big board (r=2):      max=12, threshold=11 → 12 length-12 + 15
+  //                         length-11 lines. Without this tolerance the
+  //                         15 length-11 tracks were silently un-
+  //                         clearable, even though they look identical
+  //                         to length-12 lines on the big board.
   const scoringLineIds: string[] = []
+  const minScoringLineLength = Math.max(1, maxLineLength - flowerRadius + 1)
   for (const pattern of patterns) {
-    if (pattern.type === 'line' && pattern.cellIds.length === maxLineLength) {
+    if (
+      pattern.type === 'line' &&
+      pattern.cellIds.length >= minScoringLineLength
+    ) {
       scoringLineIds.push(pattern.id)
     }
   }
