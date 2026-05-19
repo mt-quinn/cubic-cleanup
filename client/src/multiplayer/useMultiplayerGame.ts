@@ -39,28 +39,33 @@ export type UseMultiplayerGameResult = {
   code: string | null
   game: GameState | null
   selfPlayer: MultiplayerPlayer | null
-  partnerPlayer: MultiplayerPlayer | null
-  // Both seats sorted by slot, so callers (e.g. the co-op leaderboard
+  // Every non-self seated player, ordered by (slot - selfSlot) mod N
+  // so each viewer's first entry is "the next seat after mine".
+  // Indices in this array line up with hue assignments in
+  // `hueShiftByPlayerId` (entry i gets (i + 1) * HUE_STEP_DEG).
+  otherPlayers: MultiplayerPlayer[]
+  // All seats sorted by slot, so callers (e.g. the co-op leaderboard
   // submission) can build a stable "Alice & Bob" display name that
-  // reads identically to both clients regardless of who joined first.
+  // reads identically to every client regardless of join order.
   allPlayers: MultiplayerPlayer[]
   // Server-stamped time of the most recent room mutation. Used as the
-  // canonical "this run finished at" marker when both clients race to
+  // canonical "this run finished at" marker when every client races to
   // submit the gameover to the global co-op leaderboard.
   updatedAt: number | null
   lastPlacement: MultiplayerLastPlacement | null
   // cellId -> playerId map for partner-piece tinting on the shared
   // board. Empty / undefined when single-player.
   cellOwners: Record<string, string>
-  // Latest partner emote (or null if none / they haven't sent one).
+  // Latest emote per playerId (room.lastEmotes flattened to a map).
   // Clients enforce the 10s display window themselves so a stale ts
   // simply renders as "no emote" without needing a server cleanup.
-  partnerEmote: MultiplayerEmote | null
-  // Latest emote *this* client sent — surfaced so the local smiley
-  // button can render a small "you sent this" corner badge while
-  // the partner is still seeing the emoji on their side. Same 10s
-  // display window as `partnerEmote`.
-  selfEmote: MultiplayerEmote | null
+  // Self's id is also a key in this map — its EmoteBar uses it to
+  // mirror the emote it just sent.
+  emoteByPlayerId: Record<string, MultiplayerEmote>
+  // Hue rotation (in degrees) to apply to each player's placed cubes
+  // when rendered for *this* viewer. Self maps to 0; otherPlayers[i]
+  // maps to (i + 1) * 15. Drives the per-player cube tinting in App.
+  hueShiftByPlayerId: Record<string, number>
   placePiece: (pieceId: string, cellId: string) => Promise<void>
   sendEmote: (emoji: string) => Promise<void>
   setName: (name: string) => Promise<void>
@@ -69,6 +74,12 @@ export type UseMultiplayerGameResult = {
 }
 
 const HEARTBEAT_INTERVAL_MS = 8_000
+
+// Per-step hue rotation (degrees) for partner cube tinting.
+// Self renders at 0; the first partner at HUE_STEP_DEG, the second at
+// 2 * HUE_STEP_DEG, etc. Picked so 8 seats fit comfortably under
+// 360° and stay visually distinct against each other.
+export const HUE_STEP_DEG = 15
 
 // Synthesize a GameState off the live room snapshot so the rest of the app
 // can keep reading from a single shape regardless of mode. Only the
@@ -136,20 +147,6 @@ export const useMultiplayerGame = ({
     }
   }, [room, playerId])
 
-  const partnerPlayer = useMemo<MultiplayerPlayer | null>(() => {
-    if (!room) return null
-    const partner = room.players.find((p) => p.playerId !== playerId)
-    if (!partner) return null
-    return {
-      playerId: partner.playerId,
-      name: partner.name,
-      slot: partner.slot,
-      hand: partner.hand as ActivePiece[],
-      handSlots: partner.handSlots as (string | null)[],
-      isSelf: false,
-    }
-  }, [room, playerId])
-
   const allPlayers = useMemo<MultiplayerPlayer[]>(() => {
     if (!room) return []
     return [...room.players]
@@ -163,6 +160,38 @@ export const useMultiplayerGame = ({
         isSelf: p.playerId === playerId,
       }))
   }, [room, playerId])
+
+  // Every non-self player ordered by (slot - selfSlot + N) mod N.
+  // That ordering means each viewer's first partner is "the next
+  // seat after mine in the ring" and is stable across re-renders, so
+  // hue assignments don't shuffle when somebody else's hand updates.
+  // When self isn't seated yet (e.g. the room view briefly appears
+  // before joinRoom finishes), we fall back to slot order.
+  const otherPlayers = useMemo<MultiplayerPlayer[]>(() => {
+    if (allPlayers.length === 0) return []
+    const self = allPlayers.find((p) => p.isSelf)
+    if (!self) return allPlayers.filter((p) => !p.isSelf)
+    const N = allPlayers.length
+    const ringIndex = (p: MultiplayerPlayer) =>
+      (p.slot - self.slot + N) % N
+    return allPlayers
+      .filter((p) => !p.isSelf)
+      .sort((a, b) => ringIndex(a) - ringIndex(b))
+  }, [allPlayers])
+
+  // Hue per playerId for THIS viewer. Self → 0°, otherPlayers[i] →
+  // (i + 1) * HUE_STEP_DEG. Two viewers see each other at the same
+  // first-partner step; a third party may see them differently
+  // depending on their own ring position — this is the documented
+  // trade-off for "self always renders at default hue".
+  const hueShiftByPlayerId = useMemo<Record<string, number>>(() => {
+    const out: Record<string, number> = {}
+    if (selfPlayer) out[selfPlayer.playerId] = 0
+    otherPlayers.forEach((p, i) => {
+      out[p.playerId] = (i + 1) * HUE_STEP_DEG
+    })
+    return out
+  }, [selfPlayer, otherPlayers])
 
   const game = useMemo<GameState | null>(() => {
     if (!room || !selfPlayer) return null
@@ -219,36 +248,27 @@ export const useMultiplayerGame = ({
     return room.cellOwners
   }, [room])
 
-  const partnerEmote = useMemo<MultiplayerEmote | null>(() => {
-    if (!room || !partnerPlayer) return null
-    const emote = (room.lastEmotes ?? []).find(
-      (e) => e.playerId === partnerPlayer.playerId,
-    )
-    if (!emote) return null
-    return { emoji: emote.emoji, ts: emote.ts }
-  }, [room, partnerPlayer])
-
-  const selfEmote = useMemo<MultiplayerEmote | null>(() => {
-    if (!room) return null
-    const emote = (room.lastEmotes ?? []).find(
-      (e) => e.playerId === playerId,
-    )
-    if (!emote) return null
-    return { emoji: emote.emoji, ts: emote.ts }
-  }, [room, playerId])
+  const emoteByPlayerId = useMemo<Record<string, MultiplayerEmote>>(() => {
+    if (!room) return {}
+    const out: Record<string, MultiplayerEmote> = {}
+    for (const e of room.lastEmotes ?? []) {
+      out[e.playerId] = { emoji: e.emoji, ts: e.ts }
+    }
+    return out
+  }, [room])
 
   return {
     status,
     code,
     game,
     selfPlayer,
-    partnerPlayer,
+    otherPlayers,
     allPlayers,
     updatedAt: room?.updatedAt ?? null,
     lastPlacement: room?.lastPlacement ?? null,
     cellOwners,
-    partnerEmote,
-    selfEmote,
+    emoteByPlayerId,
+    hueShiftByPlayerId,
     placePiece,
     sendEmote,
     setName,

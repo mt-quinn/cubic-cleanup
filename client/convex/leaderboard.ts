@@ -12,10 +12,14 @@ const MAX_NAME_LENGTH = 20
 const ENDLESS_TOP_N = 100
 const DAILY_TOP_N = 100
 const COOP_TOP_N = 100
-// Combined co-op display name: "Alice & Bob". Each half is sanitized
-// independently and capped at MAX_NAME_LENGTH so a 20-char name on
-// each side max out at 43 chars total ("X" * 20 + " & " + "Y" * 20).
+// Combined co-op display name: joined with ` & ` between every pair
+// of player names — "Alice & Bob & Carol" for an N-player room.
+// Each name is sanitized independently and capped at
+// MAX_NAME_LENGTH; the final combined string is also capped at
+// MAX_COMBINED_NAME_LENGTH so an 8-seat room can't spew a 180-char
+// row onto the leaderboard.
 const COOP_NAME_SEPARATOR = ' & '
+const MAX_COMBINED_NAME_LENGTH = 80
 
 const sanitizeName = (raw: string): string => {
   const trimmed = (raw ?? '').trim()
@@ -148,9 +152,16 @@ export const submitCoopScore = mutation({
       .first()
     if (existing) return null
     const sorted = [...players].sort((a, b) => a.slot - b.slot)
-    const combinedName = sorted
+    const fullCombined = sorted
       .map((p) => sanitizeName(p.name))
       .join(COOP_NAME_SEPARATOR)
+    // Hard length cap with an ellipsis so 8-seat rooms don't blow
+    // out the leaderboard row. We keep the full name in the common
+    // 2-3 player case (well under 80 chars).
+    const combinedName =
+      fullCombined.length > MAX_COMBINED_NAME_LENGTH
+        ? fullCombined.slice(0, MAX_COMBINED_NAME_LENGTH - 1) + '…'
+        : fullCombined
     await ctx.db.insert('coopScores', {
       roomCode,
       finishedAt,

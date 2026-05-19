@@ -548,12 +548,14 @@ const CubeLines = ({
   variant = 'normal',
   dailyHits,
   extraClasses = [],
+  style,
 }: {
   cx: number
   cy: number
   variant?: 'normal' | 'dailyTarget' | 'golden'
   dailyHits?: number
   extraClasses?: string[]
+  style?: React.CSSProperties
 }) => {
   const vertices: { x: number; y: number }[] = []
   const radius = HEX_SIZE
@@ -582,7 +584,7 @@ const CubeLines = ({
   const cubeClassName = [variantClass, ...extraClasses].join(' ')
 
   return (
-    <g className={cubeClassName}>
+    <g className={cubeClassName} style={style}>
       {/* Inner wrapper so we can apply a unified wiggle/rotation to the cube
           without fighting the parent scale transform on the whole piece. */}
       <g className="hexaclear-cube-wiggle-wrap">
@@ -640,31 +642,41 @@ const EMOTE_OPTIONS = [
   '🙂\u200d↔\ufe0f',
 ] as const
 
-type EmoteBarProps = {
+type SmileyRowPlayer = {
+  playerId: string
+  name: string
+}
+
+type SmileyRowProps = {
   show: boolean
   setShow: (v: boolean) => void
-  partnerEmote: { emoji: string; ts: number } | null
-  // Emoji THIS client most recently sent — surfaced as a small
-  // dimmed corner badge so the sender can see what their partner is
-  // currently looking at. Mirrors the partner-emote display window.
-  selfEmote: { emoji: string; ts: number } | null
+  // The local player. Their tile is the interactive trigger that
+  // opens the emote panel and shows the emote *they* most recently
+  // sent (so the sender can see what their partners are looking at).
+  selfPlayer: SmileyRowPlayer | null
+  // Every non-self seated player, in ring order. Each gets a
+  // read-only smiley with their name underneath.
+  otherPlayers: SmileyRowPlayer[]
+  // Active (still-inside-the-10s-window) emote per playerId. Tiles
+  // not in this map render the default smiley face.
+  activeEmoteByPlayerId: Record<string, { emoji: string; ts: number }>
   onSend: (emoji: string) => void
   onToggle: () => void
 }
 
-const EmoteBar = ({
+const SmileyRow = ({
   show,
   setShow,
-  partnerEmote,
-  selfEmote,
+  selfPlayer,
+  otherPlayers,
+  activeEmoteByPlayerId,
   onToggle,
   onSend,
-}: EmoteBarProps) => {
+}: SmileyRowProps) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   // Close on outside click. Pointerdown so we beat the synthetic
   // click that would otherwise re-fire onToggle when the user taps
-  // outside the popover. The capture phase matters here because the
-  // emote buttons themselves want to handle their own click first.
+  // outside the popover.
   useEffect(() => {
     if (!show) return
     const onPointerDown = (e: PointerEvent) => {
@@ -676,74 +688,111 @@ const EmoteBar = ({
     window.addEventListener('pointerdown', onPointerDown)
     return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [show, setShow])
+  if (!selfPlayer) return null
+  const tiles: { player: SmileyRowPlayer; isSelf: boolean }[] = [
+    { player: selfPlayer, isSelf: true },
+    ...otherPlayers.map((p) => ({ player: p, isSelf: false })),
+  ]
   return (
-    <div className="hexaclear-emote-bar" ref={wrapperRef}>
-      <button
-        type="button"
-        className={[
-          'hexaclear-emote-trigger',
-          partnerEmote ? 'has-partner-emote' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        onClick={onToggle}
-        aria-label="Send an emote"
-        aria-expanded={show}
-      >
-        {/* In Win98 the trigger is the classic Minesweeper smiley
-            graphic. In every other theme we render a default 🙂
-            emoji so the button stays themed-button shaped. The CSS
-            shows/hides each variant via the parent [data-theme]. */}
-        <img
-          src="/smiley.png"
-          alt=""
-          aria-hidden="true"
-          className="hexaclear-emote-trigger-img"
-          draggable={false}
-        />
-        <span className="hexaclear-emote-trigger-default" aria-hidden="true">
-          🙂
-        </span>
-        {partnerEmote && (
-          <span
-            className="hexaclear-emote-trigger-overlay"
-            aria-label={`Partner sent ${partnerEmote.emoji}`}
+    <div
+      className={[
+        'hexaclear-smiley-row',
+        // The legacy class lets the existing absolute-centering
+        // anchor + Win98 chrome rules (which target
+        // `.hexaclear-emote-bar`) keep working unchanged.
+        'hexaclear-emote-bar',
+        tiles.length > 4 ? 'hexaclear-smiley-row-compact' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      ref={wrapperRef}
+    >
+      {tiles.map(({ player, isSelf }) => {
+        const emote = activeEmoteByPlayerId[player.playerId] ?? null
+        return (
+          <div
+            key={player.playerId}
+            className={[
+              'hexaclear-smiley-tile',
+              isSelf ? 'is-self' : 'is-partner',
+            ].join(' ')}
           >
-            {partnerEmote.emoji}
-          </span>
-        )}
-        {selfEmote && (
-          <span
-            className="hexaclear-emote-trigger-self"
-            aria-label={`You sent ${selfEmote.emoji}`}
-          >
-            {selfEmote.emoji}
-          </span>
-        )}
-      </button>
-      {show && (
-        <div
-          className="hexaclear-emote-panel"
-          role="dialog"
-          aria-label="Pick an emote"
-        >
-          <div className="hexaclear-emote-panel-title" aria-hidden="true">
-            Send how you feel!
-          </div>
-          <div className="hexaclear-emote-panel-grid">
-            {EMOTE_OPTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                className="hexaclear-emote-option"
-                onClick={() => onSend(emoji)}
+            <button
+              type="button"
+              className={[
+                'hexaclear-emote-trigger',
+                isSelf ? '' : 'is-readonly',
+                // Partner tiles get the existing pulse animation
+                // when their owner has an active emote, so the
+                // viewer's eye gets pulled to whoever just reacted.
+                !isSelf && emote ? 'has-partner-emote' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={isSelf ? onToggle : undefined}
+              aria-label={
+                isSelf
+                  ? 'Send an emote'
+                  : `${player.name}'s reactions`
+              }
+              aria-expanded={isSelf ? show : undefined}
+              aria-disabled={isSelf ? undefined : true}
+              tabIndex={isSelf ? 0 : -1}
+            >
+              <img
+                src="/smiley.png"
+                alt=""
+                aria-hidden="true"
+                className="hexaclear-emote-trigger-img"
+                draggable={false}
+              />
+              <span
+                className="hexaclear-emote-trigger-default"
+                aria-hidden="true"
               >
-                {emoji}
-              </button>
-            ))}
+                🙂
+              </span>
+              {emote && (
+                <span
+                  className="hexaclear-emote-trigger-overlay"
+                  aria-label={`${player.name} sent ${emote.emoji}`}
+                >
+                  {emote.emoji}
+                </span>
+              )}
+            </button>
+            <span className="hexaclear-smiley-name" aria-hidden="true">
+              {player.name}
+            </span>
+            {isSelf && show && (
+              <div
+                className="hexaclear-emote-panel"
+                role="dialog"
+                aria-label="Pick an emote"
+              >
+                <div
+                  className="hexaclear-emote-panel-title"
+                  aria-hidden="true"
+                >
+                  Send how you feel!
+                </div>
+                <div className="hexaclear-emote-panel-grid">
+                  {EMOTE_OPTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="hexaclear-emote-option"
+                      onClick={() => onSend(emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })}
     </div>
   )
 }
@@ -1125,63 +1174,70 @@ function App() {
     playerId,
     name: mpPlayerName,
   })
-  // Smiley/emote panel UI state. The smiley button lives in the score
-  // bar in MP only; clicking it opens a 3x3 grid of emotes that get
-  // pushed to the partner. The expiry tick is bumped when the
-  // partner's last emote crosses the 10s display window so the
-  // smiley face falls back to its default render.
+  // Smiley/emote panel UI state. Self's smiley button in the score
+  // bar in MP opens a 3x3 grid of emotes that get pushed to every
+  // other seat. The expiry tick is bumped each time an emote ages
+  // out of its 10s display window so each seat's smiley falls back
+  // to its default render at the right moment.
   const [showEmotePanel, setShowEmotePanel] = useState<boolean>(false)
   const [partnerEmoteExpiryTick, setPartnerEmoteExpiryTick] = useState(0)
-  // Set of cell ids owned by the partner. Re-derived only when the
-  // shared cellOwners map or the partner's id changes so the cube
-  // render loop can do a cheap O(1) `has` check per cell.
-  const partnerOwnedCellSet = useMemo<Set<string>>(() => {
-    if (!isMultiplayer) return new Set()
-    const partnerId = mp.partnerPlayer?.playerId
-    if (!partnerId) return new Set()
-    const out = new Set<string>()
+  // Per-cell hue rotation (deg) applied to non-self placements so
+  // each player's cubes wear a unique tint for THIS viewer. Self's
+  // cells are absent from the map (they render at hue 0 / default).
+  // Re-derived only when the cellOwners map or hue assignments
+  // change. We also keep a `nonSelfOwnedCells` set so the cube
+  // render loop can do a cheap `has` check before reaching for the
+  // hue lookup.
+  const cellHueByCellId = useMemo<Record<string, number>>(() => {
+    if (!isMultiplayer) return {}
+    const out: Record<string, number> = {}
+    const selfId = mp.selfPlayer?.playerId
     for (const [cellId, ownerId] of Object.entries(mp.cellOwners)) {
-      if (ownerId === partnerId) out.add(cellId)
+      if (!ownerId || ownerId === selfId) continue
+      const hue = mp.hueShiftByPlayerId[ownerId] ?? 0
+      if (hue !== 0) out[cellId] = hue
     }
     return out
-  }, [isMultiplayer, mp.cellOwners, mp.partnerPlayer])
-  // Partner emote that's still inside its 10s display window. Once
-  // the window closes the smiley button falls back to its default
-  // face. We re-evaluate whenever the partner sends a new emote and
-  // when the existing one ages out (via a one-shot timeout that
-  // bumps `partnerEmoteExpiryTick`).
+  }, [isMultiplayer, mp.cellOwners, mp.hueShiftByPlayerId, mp.selfPlayer])
+  const nonSelfOwnedCells = useMemo<Set<string>>(() => {
+    if (!isMultiplayer) return new Set()
+    const selfId = mp.selfPlayer?.playerId
+    const out = new Set<string>()
+    for (const [cellId, ownerId] of Object.entries(mp.cellOwners)) {
+      if (!ownerId || ownerId === selfId) continue
+      out.add(cellId)
+    }
+    return out
+  }, [isMultiplayer, mp.cellOwners, mp.selfPlayer])
+  // Per-playerId emote, narrowed to "still inside its 10s display
+  // window". Once the window closes the corresponding smiley falls
+  // back to its default face. The expiry tick forces a recompute
+  // when an active emote ages out.
   const PARTNER_EMOTE_TTL_MS = 10_000
-  const partnerEmoteActive = useMemo(() => {
-    if (!mp.partnerEmote) return null
-    if (Date.now() - mp.partnerEmote.ts >= PARTNER_EMOTE_TTL_MS) return null
-    return mp.partnerEmote
+  const activeEmoteByPlayerId = useMemo<
+    Record<string, { emoji: string; ts: number }>
+  >(() => {
+    const out: Record<string, { emoji: string; ts: number }> = {}
+    const now = Date.now()
+    for (const [pid, emote] of Object.entries(mp.emoteByPlayerId)) {
+      if (now - emote.ts < PARTNER_EMOTE_TTL_MS) out[pid] = emote
+    }
+    return out
     // partnerEmoteExpiryTick is in the dep list intentionally — its
-    // only job is to force a recompute when the active emote ages
+    // only job is to force a recompute when an active emote ages
     // out, even though it doesn't appear inside the function body.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.partnerEmote, partnerEmoteExpiryTick])
-  // Same window/TTL for the local "I sent this" badge so the corner
-  // sticker on our smiley button vanishes in lockstep with the
-  // partner's overlay clearing on their side.
-  const selfEmoteActive = useMemo(() => {
-    if (!mp.selfEmote) return null
-    if (Date.now() - mp.selfEmote.ts >= PARTNER_EMOTE_TTL_MS) return null
-    return mp.selfEmote
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.selfEmote, partnerEmoteExpiryTick])
+  }, [mp.emoteByPlayerId, partnerEmoteExpiryTick])
   useEffect(() => {
-    // Schedule expiry ticks for whichever side (self / partner /
-    // both) has an active emote, so the badge + overlay both fade
-    // out exactly when their TTL elapses. We pick the earliest
-    // pending expiry across the two so a single timer handles the
-    // common case where both sides have recent emotes.
+    // Schedule a single expiry tick at the earliest pending TTL
+    // across every active emote. One timer covers the common case
+    // where multiple seats sent emotes inside the same window; as
+    // soon as the earliest one fades, the recompute either renders
+    // a smaller active set or schedules the next.
     const expiries: number[] = []
-    if (mp.partnerEmote) {
-      const r = PARTNER_EMOTE_TTL_MS - (Date.now() - mp.partnerEmote.ts)
-      if (r > 0) expiries.push(r)
-    }
-    if (mp.selfEmote) {
-      const r = PARTNER_EMOTE_TTL_MS - (Date.now() - mp.selfEmote.ts)
+    const now = Date.now()
+    for (const emote of Object.values(mp.emoteByPlayerId)) {
+      const r = PARTNER_EMOTE_TTL_MS - (now - emote.ts)
       if (r > 0) expiries.push(r)
     }
     if (expiries.length === 0) return
@@ -1190,7 +1246,7 @@ function App() {
       setPartnerEmoteExpiryTick((t) => t + 1)
     }, remaining + 16)
     return () => window.clearTimeout(id)
-  }, [mp.partnerEmote, mp.selfEmote])
+  }, [mp.emoteByPlayerId])
   // Auto-close the emote panel when MP ends so we don't leave a
   // dangling popover floating in single-player mode.
   useEffect(() => {
@@ -1420,6 +1476,14 @@ function App() {
   >([])
   const [showScoring, setShowScoring] = useState(false)
   const [showHighScores, setShowHighScores] = useState(false)
+  // Which leaderboard tab the High Scores modal is currently showing.
+  // The modal used to stack endless + daily (+ co-op when global was
+  // on) end-to-end, which made the page get long. Now we render
+  // exactly one board at a time and let the player flip between
+  // them via a tab strip. The 'coop' tab is only available while
+  // the global toggle is on (there is no local co-op store).
+  type HighScoreTab = 'endless' | 'daily' | 'coop'
+  const [highScoreTab, setHighScoreTab] = useState<HighScoreTab>('endless')
   // When on, the high-scores card swaps the local lists for live
   // global queries. Local stays first-class — we never wipe local
   // entries when the toggle flips. Defaults to ON for new players so
@@ -1669,35 +1733,57 @@ function App() {
     | null
   >(() => {
     if (!isMultiplayer) return null
-    if (!mp.selfPlayer || !mp.partnerPlayer) return null
+    if (!mp.selfPlayer || mp.otherPlayers.length === 0) return null
     if (game.gameOver) return null
     const selfCanMove = hasAnyValidMove(
       game.board,
       mp.selfPlayer.hand,
       game.mode,
     )
-    const partnerCanMove = hasAnyValidMove(
-      game.board,
-      mp.partnerPlayer.hand,
-      game.mode,
-    )
-    if (!selfCanMove && partnerCanMove) {
-      return {
-        kind: 'self-stuck',
-        message: `${mp.partnerPlayer.name} still has valid moves`,
+    // Other-side "stuck" detection across all non-self seats. We
+    // treat the room as "partner can move" if ANY other player has
+    // a valid move, and partition the message accordingly. With >2
+    // seats we name up to two stuck partners and switch to a count
+    // string after that to keep the banner from wrapping.
+    const stuckOthers: typeof mp.otherPlayers = []
+    let anyOtherCanMove = false
+    for (const op of mp.otherPlayers) {
+      if (hasAnyValidMove(game.board, op.hand, game.mode)) {
+        anyOtherCanMove = true
+      } else {
+        stuckOthers.push(op)
       }
     }
-    if (selfCanMove && !partnerCanMove) {
+    const formatNames = (xs: typeof mp.otherPlayers): string => {
+      if (xs.length === 0) return ''
+      if (xs.length === 1) return xs[0].name
+      if (xs.length === 2) return `${xs[0].name} & ${xs[1].name}`
+      return `${xs.length} other players`
+    }
+    if (!selfCanMove && anyOtherCanMove) {
+      const movers = mp.otherPlayers.filter(
+        (p) => !stuckOthers.some((s) => s.playerId === p.playerId),
+      )
+      return {
+        kind: 'self-stuck',
+        message: `${formatNames(movers)} still ${
+          movers.length === 1 ? 'has' : 'have'
+        } valid moves`,
+      }
+    }
+    if (selfCanMove && !anyOtherCanMove) {
       return {
         kind: 'partner-stuck',
-        message: `${mp.partnerPlayer.name} has no valid moves`,
+        message: `${formatNames(stuckOthers)} ${
+          stuckOthers.length === 1 ? 'has' : 'have'
+        } no valid moves`,
       }
     }
     return null
   }, [
     isMultiplayer,
     mp.selfPlayer,
-    mp.partnerPlayer,
+    mp.otherPlayers,
     game.board,
     game.mode,
     game.gameOver,
@@ -3627,27 +3713,18 @@ function App() {
           <header className="hexaclear-header">
             <div className="hexaclear-header-main">
               <div className="hexaclear-title">Cubekill</div>
-              {/* Co-op partner-name HUD. Centered above the smiley
-                  in both themes; CSS positions it relative to the
-                  title row (wood) or the menu-bar row (win98), where
-                  it bottom-aligns just above the LCD row's smiley.
-                  Renders "Waiting for Partner" while we're alone in
-                  the room, then swaps to "{Partner} Feels:" once a
-                  second player has joined. The slot stays mounted
-                  the whole time so the layout doesn't shift when a
-                  partner shows up. */}
-              {isMultiplayer && (
+              {/* Names for non-self players are now surfaced under
+                  each smiley in the SmileyRow below; the singular
+                  "{partner} Feels:" HUD has been retired. With 0
+                  other seats, we still want a "waiting for partner"
+                  affordance, which we render compactly above the
+                  Cubekill title in MP. */}
+              {isMultiplayer && mp.otherPlayers.length === 0 && (
                 <div
                   className="hexaclear-coop-hud"
-                  aria-label={
-                    mp.partnerPlayer
-                      ? `Partner ${mp.partnerPlayer.name}`
-                      : 'Waiting for partner'
-                  }
+                  aria-label="Waiting for partner"
                 >
-                  {mp.partnerPlayer
-                    ? `${mp.partnerPlayer.name} Feels:`
-                    : 'Waiting for Partner'}
+                  Waiting for Partner
                 </div>
               )}
               <div className="hexaclear-header-main-right">
@@ -3736,23 +3813,24 @@ function App() {
                   </button>
                 </div>
               )}
-              {/* Wood theme renders the smiley/emote bar here in
-                  the controls row. The Win98 theme renders a sibling
-                  copy of the same EmoteBar inside the LCD row below
+              {/* Wood theme renders the smiley row here in the
+                  controls row. The Win98 theme renders a sibling
+                  copy of the same SmileyRow inside the LCD row below
                   (gated by `theme === 'win98'`) — its `display:
                   contents` ancestors break the absolute-centering
                   anchor we need, so we explicitly mount it under a
                   `position: relative` parent there instead. */}
               {isMultiplayer && theme !== 'win98' && (
-                <EmoteBar
+                <SmileyRow
                   show={showEmotePanel}
                   setShow={setShowEmotePanel}
-                  partnerEmote={partnerEmoteActive}
-                  selfEmote={selfEmoteActive}
+                  selfPlayer={mp.selfPlayer}
+                  otherPlayers={mp.otherPlayers}
+                  activeEmoteByPlayerId={activeEmoteByPlayerId}
                   onSend={(emoji) => {
                     playUiClick()
                     mp.sendEmote(emoji).catch(() => {
-                      // The mutation can fail if the partner already
+                      // The mutation can fail if a partner already
                       // left the room. We silently swallow it — the
                       // emote panel will close and life goes on.
                     })
@@ -3833,16 +3911,17 @@ function App() {
                 <span className="lcd-digits">{liveDigits}</span>
               </span>
             </div>
-            {/* Win98 smiley + emote panel. Sits centered between the
-                two LCDs (Minesweeper layout). Conditional on theme so
-                only one EmoteBar lives in the DOM at a time — keeps
-                the outside-click detector unambiguous. */}
+            {/* Win98 smiley row + emote panel. Sits centered between
+                the two LCDs (Minesweeper layout). Conditional on
+                theme so only one SmileyRow lives in the DOM at a
+                time — keeps the outside-click detector unambiguous. */}
             {isMultiplayer && theme === 'win98' && (
-              <EmoteBar
+              <SmileyRow
                 show={showEmotePanel}
                 setShow={setShowEmotePanel}
-                partnerEmote={partnerEmoteActive}
-                selfEmote={selfEmoteActive}
+                selfPlayer={mp.selfPlayer}
+                otherPlayers={mp.otherPlayers}
+                activeEmoteByPlayerId={activeEmoteByPlayerId}
                 onSend={(emoji) => {
                   playUiClick()
                   mp.sendEmote(emoji).catch(() => {})
@@ -3859,11 +3938,37 @@ function App() {
       })()}
 
       {adPreviews && (
-        <img
-          className="hexaclear-banner-ad"
-          src="/banner_ad.png"
-          alt="Sponsored banner ad preview"
-        />
+        <>
+          {/* Two layout variants drive a single source asset:
+              - `.hexaclear-banner-ad` runs full-width inline between
+                the header and the board, used when the viewport has
+                vertical room to spare (mobile portrait).
+              - `.hexaclear-banner-ad-side` is a fixed-position strip
+                rotated 90° on the right edge of the viewport, used
+                when horizontal space is plentiful and vertical
+                space is tight (desktop / landscape tablets).
+              The CSS in `index.css` switches which one is visible
+              based on `(orientation: landscape) and (min-width: …)`,
+              so only one paints at a time. Both share the same
+              gating React condition so the player only sees an ad
+              when they've explicitly opted in. */}
+          <img
+            className="hexaclear-banner-ad"
+            src="/banner_ad.png"
+            alt="Sponsored banner ad preview"
+          />
+          <div
+            className="hexaclear-banner-ad-side-frame"
+            aria-hidden="true"
+          >
+            <img
+              className="hexaclear-banner-ad-side"
+              src="/banner_ad.png"
+              alt=""
+              draggable={false}
+            />
+          </div>
+        </>
       )}
 
       <main className="hexaclear-main">
@@ -3979,14 +4084,23 @@ function App() {
                     ? clearingGoldenCellIds.includes(cell.id)
                     : game.goldenCellIds.includes(cell.id))
 
-                // In MP co-op we tint the partner's pieces a lighter
-                // shade so each player can see at a glance which cubes
-                // they placed. Self-placed cells stay in the default
-                // palette. Rubies render in their own palette already
-                // and aren't owned by either player, so we leave them
-                // untinted regardless.
+                // In MP co-op we tint each non-self placement so a
+                // viewer can see at a glance who placed which cube.
+                // The `partner-piece` class drives a lightening pass
+                // (brightness/saturate) and the inline hue-rotate
+                // filter rotates the underlying palette by the per-
+                // player offset assigned in the hook. Self-placed
+                // cells stay in the default palette. Rubies have
+                // their own palette and aren't owned by any player,
+                // so we leave them untinted regardless.
                 const isPartnerOwned =
-                  isMultiplayer && !isGolden && partnerOwnedCellSet.has(cell.id)
+                  isMultiplayer && !isGolden && nonSelfOwnedCells.has(cell.id)
+                const partnerHueShift =
+                  isPartnerOwned ? cellHueByCellId[cell.id] ?? 0 : 0
+                const partnerHueStyle =
+                  partnerHueShift !== 0
+                    ? { filter: `hue-rotate(${partnerHueShift}deg)` }
+                    : undefined
 
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
@@ -4019,6 +4133,7 @@ function App() {
                       ]
                         .filter(Boolean)
                         .join(' ')}
+                      style={partnerHueStyle}
                       role="button"
                       tabIndex={0}
                       aria-label={`${
@@ -4085,6 +4200,7 @@ function App() {
                             : '',
                           isPartnerOwned ? 'partner-piece' : '',
                         ].filter(Boolean)}
+                        style={partnerHueStyle}
                       />
                     )}
                     {(game.mode === 'endless' || game.mode === 'big') &&
@@ -4342,11 +4458,12 @@ function App() {
               </div>
             )}
             {/* Copy Link CTA only renders when an invite is actually
-                useful: solo Co-op (pre-room) or in MP but waiting on
-                a partner. Once the second seat is filled, the button
+                useful: solo Co-op (pre-room) or in MP with at least
+                one open seat left. Once the room is full, the button
                 steps out of the way — sharing the link again would
                 only invite an evictor at that point. */}
-            {game.mode === 'big' && !mp.partnerPlayer && (
+            {game.mode === 'big' &&
+              (!isMultiplayer || mp.allPlayers.length < 8) && (
               <div className="board-hud-block right hexaclear-coop-block">
                 <button
                   type="button"
@@ -5221,6 +5338,34 @@ function App() {
                 : rank <= 3
                   ? 'hexaclear-chip-gold'
                   : 'hexaclear-chip-neutral'
+            // The co-op tab only makes sense when the global toggle
+            // is on (there is no local co-op storage). If the player
+            // flips global off while sitting on the co-op tab, snap
+            // them back to endless on the next render so the modal
+            // doesn't show a stale empty board.
+            const effectiveTab: HighScoreTab =
+              highScoreTab === 'coop' && !showGlobalLeaderboard
+                ? 'endless'
+                : highScoreTab
+            const tabButton = (id: HighScoreTab, label: string) => (
+              <button
+                key={id}
+                type="button"
+                className={[
+                  'hexaclear-scores-tab',
+                  effectiveTab === id ? 'is-active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  playUiClick()
+                  setHighScoreTab(id)
+                }}
+                aria-pressed={effectiveTab === id}
+              >
+                {label}
+              </button>
+            )
             return (
               <div className="hexaclear-overlay">
                 <div className="hexaclear-overlay-card hexaclear-scores-card">
@@ -5238,152 +5383,166 @@ function App() {
                     <span>Show global</span>
                   </label>
 
-                  <div className="hexaclear-scores-section">
-                    <div className="hexaclear-scores-section-label">
-                      Endless · highest score
-                      {showGlobalLeaderboard ? ' (global)' : ''}
-                    </div>
-                    {globalLoading ? (
-                      <p className="hexaclear-scores-empty">Loading global scores…</p>
-                    ) : sortedEndless.length === 0 ? (
-                      <p className="hexaclear-scores-empty">
-                        {showGlobalLeaderboard
-                          ? 'No global endless scores yet.'
-                          : 'No endless scores yet. Play a game!'}
-                      </p>
-                    ) : (
-                      <ol className="hexaclear-scores-list">
-                        {sortedEndless.map((entry, idx) => {
-                          const isRecent =
-                            highScoreSaved &&
-                            lastSavedHighScoreDate !== null &&
-                            entry.date === lastSavedHighScoreDate
-                          const rank = idx + 1
-                          return (
-                            <li
-                              key={entry.date + entry.name + idx}
-                              className={
-                                'hexaclear-scores-row' +
-                                (isRecent ? ' recent' : '')
-                              }
-                            >
-                              <span
-                                className={`hexaclear-rank-chip ${rankClass(rank)}`}
-                                aria-hidden="true"
-                              >
-                                {rank}
-                              </span>
-                              <span className="hexaclear-scores-name">
-                                {entry.name}
-                              </span>
-                              <span className="hexaclear-scores-value">
-                                {entry.score}
-                              </span>
-                            </li>
-                          )
-                        })}
-                      </ol>
-                    )}
+                  <div
+                    className="hexaclear-scores-tabs"
+                    role="tablist"
+                    aria-label="Leaderboard"
+                  >
+                    {tabButton('endless', 'Endless')}
+                    {tabButton('daily', 'Daily')}
+                    {showGlobalLeaderboard && tabButton('coop', 'Co-op')}
                   </div>
 
-                  <div className="hexaclear-scores-section">
-                    <div className="hexaclear-scores-section-label">
-                      Daily · fewest moves
-                      {showGlobalLeaderboard ? ' (global · today)' : ''}
-                    </div>
-                    {!showGlobalLeaderboard && (
-                    <div className="hexaclear-scores-date-stepper">
-                      <button
-                        type="button"
-                        className="hexaclear-scores-date-step"
-                        aria-label="Previous day"
-                        onClick={() => {
-                          playUiClick()
-                          setDailyScoresDateKey((prev) =>
-                            shiftDateKey(prev || getTodayKey(), -1),
-                          )
-                        }}
-                      >
-                        ‹
-                      </button>
-                      <span className="hexaclear-scores-date-label">
-                        {dailyScoresDateKey}
-                      </span>
-                      <button
-                        type="button"
-                        className="hexaclear-scores-date-step"
-                        aria-label="Next day"
-                        onClick={() => {
-                          playUiClick()
-                          const today = getTodayKey()
-                          setDailyScoresDateKey((prev) => {
-                            const next = shiftDateKey(prev || today, 1)
-                            return next > today ? today : next
-                          })
-                        }}
-                        disabled={dailyScoresDateKey >= todayKey}
-                      >
-                        ›
-                      </button>
-                    </div>
-                    )}
-                    {globalLoading ? (
-                      <p className="hexaclear-scores-empty">Loading global scores…</p>
-                    ) : dailyEntriesForDay.length === 0 ? (
-                      <p className="hexaclear-scores-empty">
-                        No scores stored for this date
-                        {dailyDateKeyForDisplay === todayKey
-                          ? ". Play today's puzzle!"
-                          : '.'}
-                      </p>
-                    ) : (
-                      <ol className="hexaclear-scores-list">
-                        {dailyEntriesForDay.map((entry, idx) => {
-                          const isRecent =
-                            dailyHighScoreSaved &&
-                            lastSavedDailyHighScoreDate !== null &&
-                            entry.date === lastSavedDailyHighScoreDate
-                          const rank = idx + 1
-                          return (
-                            <li
-                              key={entry.date + entry.name + idx}
-                              className={
-                                'hexaclear-scores-row' +
-                                (isRecent ? ' recent' : '')
-                              }
-                            >
-                              <span
-                                className={`hexaclear-rank-chip ${rankClass(rank)}`}
-                                aria-hidden="true"
+                  {effectiveTab === 'endless' && (
+                    <div className="hexaclear-scores-section">
+                      <div className="hexaclear-scores-section-label">
+                        Endless · highest score
+                        {showGlobalLeaderboard ? ' (global)' : ''}
+                      </div>
+                      {globalLoading ? (
+                        <p className="hexaclear-scores-empty">Loading global scores…</p>
+                      ) : sortedEndless.length === 0 ? (
+                        <p className="hexaclear-scores-empty">
+                          {showGlobalLeaderboard
+                            ? 'No global endless scores yet.'
+                            : 'No endless scores yet. Play a game!'}
+                        </p>
+                      ) : (
+                        <ol className="hexaclear-scores-list">
+                          {sortedEndless.map((entry, idx) => {
+                            const isRecent =
+                              highScoreSaved &&
+                              lastSavedHighScoreDate !== null &&
+                              entry.date === lastSavedHighScoreDate
+                            const rank = idx + 1
+                            return (
+                              <li
+                                key={entry.date + entry.name + idx}
+                                className={
+                                  'hexaclear-scores-row' +
+                                  (isRecent ? ' recent' : '')
+                                }
                               >
-                                {rank}
-                              </span>
-                              <span className="hexaclear-scores-name">
-                                {entry.name}
-                              </span>
-                              <span className="hexaclear-scores-value">
-                                {entry.moves} moves
-                              </span>
-                            </li>
-                          )
-                        })}
-                      </ol>
-                    )}
-                    {!showGlobalLeaderboard && dailyScoresDateKey !== todayKey && (
-                      <button
-                        type="button"
-                        className="hexaclear-menu-link hexaclear-scores-today-link"
-                        onClick={() => {
-                          playUiClick()
-                          setDailyScoresDateKey(todayKey)
-                        }}
-                      >
-                        Jump to today
-                      </button>
-                    )}
-                  </div>
+                                <span
+                                  className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                  aria-hidden="true"
+                                >
+                                  {rank}
+                                </span>
+                                <span className="hexaclear-scores-name">
+                                  {entry.name}
+                                </span>
+                                <span className="hexaclear-scores-value">
+                                  {entry.score}
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      )}
+                    </div>
+                  )}
 
-                  {showGlobalLeaderboard && (
+                  {effectiveTab === 'daily' && (
+                    <div className="hexaclear-scores-section">
+                      <div className="hexaclear-scores-section-label">
+                        Daily · fewest moves
+                        {showGlobalLeaderboard ? ' (global · today)' : ''}
+                      </div>
+                      {!showGlobalLeaderboard && (
+                      <div className="hexaclear-scores-date-stepper">
+                        <button
+                          type="button"
+                          className="hexaclear-scores-date-step"
+                          aria-label="Previous day"
+                          onClick={() => {
+                            playUiClick()
+                            setDailyScoresDateKey((prev) =>
+                              shiftDateKey(prev || getTodayKey(), -1),
+                            )
+                          }}
+                        >
+                          ‹
+                        </button>
+                        <span className="hexaclear-scores-date-label">
+                          {dailyScoresDateKey}
+                        </span>
+                        <button
+                          type="button"
+                          className="hexaclear-scores-date-step"
+                          aria-label="Next day"
+                          onClick={() => {
+                            playUiClick()
+                            const today = getTodayKey()
+                            setDailyScoresDateKey((prev) => {
+                              const next = shiftDateKey(prev || today, 1)
+                              return next > today ? today : next
+                            })
+                          }}
+                          disabled={dailyScoresDateKey >= todayKey}
+                        >
+                          ›
+                        </button>
+                      </div>
+                      )}
+                      {globalLoading ? (
+                        <p className="hexaclear-scores-empty">Loading global scores…</p>
+                      ) : dailyEntriesForDay.length === 0 ? (
+                        <p className="hexaclear-scores-empty">
+                          No scores stored for this date
+                          {dailyDateKeyForDisplay === todayKey
+                            ? ". Play today's puzzle!"
+                            : '.'}
+                        </p>
+                      ) : (
+                        <ol className="hexaclear-scores-list">
+                          {dailyEntriesForDay.map((entry, idx) => {
+                            const isRecent =
+                              dailyHighScoreSaved &&
+                              lastSavedDailyHighScoreDate !== null &&
+                              entry.date === lastSavedDailyHighScoreDate
+                            const rank = idx + 1
+                            return (
+                              <li
+                                key={entry.date + entry.name + idx}
+                                className={
+                                  'hexaclear-scores-row' +
+                                  (isRecent ? ' recent' : '')
+                                }
+                              >
+                                <span
+                                  className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                  aria-hidden="true"
+                                >
+                                  {rank}
+                                </span>
+                                <span className="hexaclear-scores-name">
+                                  {entry.name}
+                                </span>
+                                <span className="hexaclear-scores-value">
+                                  {entry.moves} moves
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      )}
+                      {!showGlobalLeaderboard && dailyScoresDateKey !== todayKey && (
+                        <button
+                          type="button"
+                          className="hexaclear-menu-link hexaclear-scores-today-link"
+                          onClick={() => {
+                            playUiClick()
+                            setDailyScoresDateKey(todayKey)
+                          }}
+                        >
+                          Jump to today
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {effectiveTab === 'coop' && showGlobalLeaderboard && (
                     <div className="hexaclear-scores-section">
                       <div className="hexaclear-scores-section-label">
                         Co-op · highest score (global)

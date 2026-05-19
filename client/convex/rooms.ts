@@ -27,7 +27,13 @@ const generateRoomCode = (): string => {
 }
 
 const MODE: GameMode = 'big'
-const MAX_PLAYERS = 2
+// Up to 8 seats per room. Picked so the +15° hue ladder stays well
+// under the 360° wrap (8 × 15° = 120°), and so the SmileyRow header
+// stays readable in both themes without needing to two-row in the
+// common case. Bumping this further is safe at the schema level —
+// every server path already iterates `room.players` — but the
+// header chrome would need a wrap pass.
+const MAX_PLAYERS = 8
 
 const sanitizeName = (raw: string): string => {
   const trimmed = (raw ?? '').trim()
@@ -193,13 +199,10 @@ export const joinRoom = mutation({
           ? { ...p, lastSeen: now, name: sanitizeName(name) }
           : p,
       )
-      // If we were sitting in 'waiting' but reconnect happens to
-      // bring us back to a fresh quorum, flip back to 'playing'.
-      const freshCount = players.filter(
-        (p) => now - p.lastSeen < STALE_PLAYER_MS,
-      ).length
-      const nextState =
-        freshCount >= MAX_PLAYERS ? 'playing' : 'waiting'
+      // With N-seat rooms the "waiting" gate is purely "no one is
+      // here yet". Any seated player can play solo on the shared
+      // board, so we flip to 'playing' as soon as anyone is in.
+      const nextState = players.length >= 1 ? 'playing' : 'waiting'
       await ctx.db.patch(room._id, {
         players,
         state: nextState,
@@ -226,7 +229,7 @@ export const joinRoom = mutation({
       ]
       await ctx.db.patch(room._id, {
         players,
-        state: players.length >= MAX_PLAYERS ? 'playing' : 'waiting',
+        state: players.length >= 1 ? 'playing' : 'waiting',
         updatedAt: now,
       })
       return { code, joinedAsSlot: slot, reconnect: false }
@@ -373,21 +376,13 @@ export const placePiece = mutation({
     const newScore = room.score + result.pointsGained + piece.shape.size
     const newMoves = room.moves + 1
 
-    // Game over when neither player has any valid move on their hand.
-    const otherPlayer = updatedPlayers.find((_, i) => i !== playerIndex)
-    const playerCanMove = hasAnyValidMove(
-      result.board,
-      newHand as ActivePiece[],
-      MODE,
+    // Game over when EVERY seated player is out of valid moves on
+    // their current hand. With N-seat rooms we have to scan all of
+    // them — the old "find the other seat" check was 2-player only.
+    const anyoneCanMove = updatedPlayers.some((p) =>
+      hasAnyValidMove(result.board, p.hand as ActivePiece[], MODE),
     )
-    const otherCanMove = otherPlayer
-      ? hasAnyValidMove(
-          result.board,
-          otherPlayer.hand as ActivePiece[],
-          MODE,
-        )
-      : true
-    const gameOver = !(playerCanMove || otherCanMove)
+    const gameOver = !anyoneCanMove
 
     const now = Date.now()
 
@@ -547,7 +542,7 @@ export const restartRoom = mutation({
       lastPlacement: null,
       cellOwners: {},
       lastEmotes: [],
-      state: players.length >= MAX_PLAYERS ? 'playing' : 'waiting',
+      state: players.length >= 1 ? 'playing' : 'waiting',
       updatedAt: now,
     })
     return null

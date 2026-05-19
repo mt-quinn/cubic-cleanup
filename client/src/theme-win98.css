@@ -302,7 +302,8 @@
    same border idiom so the aesthetic survives. */
 
 [data-theme="win98"] .hexaclear-mode-toggle .mode-pill,
-[data-theme="win98"] .hexaclear-menu-button {
+[data-theme="win98"] .hexaclear-menu-button,
+[data-theme="win98"] .hexaclear-scores-tab {
   appearance: none;
   background: var(--w98-surface) !important;
   color: var(--w98-text) !important;
@@ -333,7 +334,8 @@
    buttons. (For the active mode pill this is the resting state,
    handled below.) */
 [data-theme="win98"] .hexaclear-mode-toggle .mode-pill:active,
-[data-theme="win98"] .hexaclear-menu-button:active {
+[data-theme="win98"] .hexaclear-menu-button:active,
+[data-theme="win98"] .hexaclear-scores-tab:active {
   border-color:
     var(--w98-deep-shadow)
     var(--w98-highlight)
@@ -345,10 +347,12 @@
   padding: 9px 15px 7px 17px;
 }
 
-/* The active mode pill stays visually depressed — that's how the
-   toggle communicates which mode is selected. Bold weight reinforces
-   the selection without changing the button geometry. */
-[data-theme="win98"] .hexaclear-mode-toggle .mode-pill.active {
+/* The active mode pill / active leaderboard tab stays visually
+   depressed — that's how the toggle communicates which option is
+   selected. Bold weight reinforces the selection without changing
+   geometry. */
+[data-theme="win98"] .hexaclear-mode-toggle .mode-pill.active,
+[data-theme="win98"] .hexaclear-scores-tab.is-active {
   border-color:
     var(--w98-deep-shadow)
     var(--w98-highlight)
@@ -359,6 +363,15 @@
     inset -1px -1px 0 var(--w98-surface) !important;
   font-weight: 700;
   padding: 9px 15px 7px 17px;
+}
+
+/* Win98 tab strip: drop the cream-pill chrome from the wood theme
+   so the tab buttons sit flush on the dialog surface. */
+[data-theme="win98"] .hexaclear-scores-tabs {
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 0;
 }
 
 /* Menu button is order:99 so it lands at the right end of the bar
@@ -421,12 +434,24 @@
 }
 
 /* Co-op session: pad the LCD row out a bit so the centered smiley
-   button isn't sitting flush against the LCD frames. Triggers off
-   the smiley element actually being mounted in the row, so it only
-   applies in MP. */
+   row isn't sitting flush against the LCD frames. The SmileyRow
+   stacks each smiley over a small name label, so we leave a bit
+   more vertical breathing room than the single-smiley layout
+   originally needed. Triggers off the smiley element actually
+   being mounted in the row, so it only applies in MP. */
 [data-theme="win98"] .hexaclear-win98-lcds:has(.hexaclear-emote-bar) {
-  padding-top: 9px;
-  padding-bottom: 9px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+/* SmileyRow per-player name label — needs a Win98-appropriate font
+   colour so it reads on the gray surface. We keep the size tight
+   so 4–8 player rooms still fit. */
+[data-theme="win98"] .hexaclear-smiley-name {
+  color: var(--w98-text);
+  font-family: var(--w98-font);
+  font-weight: 700;
+  text-shadow: none;
 }
 
 /* Each LCD module wraps its red-on-black digit window plus a label

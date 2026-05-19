@@ -231,13 +231,12 @@ body {
 }
 
 /* Joke banner-ad preview strip. Sits between the header and the
-   board when the menu's "Ad previews" toggle is on. We render the
-   PNG full-bleed across the page column so the ad reads as a
-   classic horizontal sponsorship rectangle, with no clipping
-   regardless of viewport width. The image keeps its native
-   aspect ratio so we don't squish the artwork. A tiny vertical
-   margin matches the gap between the header and the board so
-   we don't break the column rhythm. */
+   board when the menu's "Ad previews" toggle is on AND the
+   viewport has vertical room to spare. Once we go landscape with
+   non-trivial horizontal space we hide this in favor of the
+   fixed-position rotated variant defined further below — the
+   inline banner would steal vertical space the board is already
+   fighting for on short / wide displays. */
 .hexaclear-banner-ad {
   display: block;
   width: 100%;
@@ -252,6 +251,59 @@ body {
 [data-theme="win98"] .hexaclear-banner-ad {
   border-radius: 0;
   margin: 4px 0;
+}
+
+/* Side-banner variant: shown only on landscape viewports with
+   enough horizontal room (laptops / desktops / wide tablets), where
+   stacking the banner on top of the board would squeeze the
+   already-cramped vertical real estate. Rotated 90° clockwise so
+   the original wide-rectangle artwork reads as a vertical strip
+   anchored to the right edge of the viewport.
+
+   Layout trick: the image's pre-rotation width is set to ~100vh
+   so that AFTER `transform: rotate(90deg)` the visible "height"
+   (which is the source's pre-rotation width) fills the viewport.
+   The frame container is fixed-position with a width tuned so the
+   rotated artwork sits comfortably inside it. */
+.hexaclear-banner-ad-side-frame {
+  display: none;
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: clamp(110px, 14vw, 200px);
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  overflow: hidden;
+}
+.hexaclear-banner-ad-side {
+  display: block;
+  height: auto;
+  width: clamp(420px, 100vh, 1200px);
+  transform: rotate(90deg);
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  border-radius: 0.4rem;
+}
+[data-theme="win98"] .hexaclear-banner-ad-side {
+  border-radius: 0;
+}
+
+/* Switch which banner variant is visible.
+   Default state: inline banner shown, side banner hidden.
+   Landscape AND a roomy viewport: hide inline, show side strip. */
+@media (orientation: landscape) and (min-width: 720px) {
+  .hexaclear-banner-ad {
+    display: none;
+  }
+  .hexaclear-banner-ad-side-frame {
+    display: flex;
+  }
 }
 
 .hexaclear-main {
@@ -783,9 +835,62 @@ body {
   top: 50%;
   transform: translate(-50%, -50%);
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 5;
+}
+
+/* SmileyRow lays its per-player tiles out as a centered horizontal
+   flex strip. Each tile stacks the smiley button over a small name
+   label. With many seats the row may grow wider than the surrounding
+   chrome — the absolute centering still keeps it anchored on the
+   midline; we tighten the gap and shrink the name font in
+   `-compact` mode (>4 tiles) so 5–8 player rooms still fit. */
+.hexaclear-smiley-row {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.45rem;
+}
+.hexaclear-smiley-row.hexaclear-smiley-row-compact {
+  gap: 0.25rem;
+}
+.hexaclear-smiley-tile {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  /* Anchor for the emote panel popover (which is `position:
+     absolute; top: 100%`), so it drops out from the *self* tile
+     specifically rather than from the row as a whole. */
+}
+.hexaclear-smiley-name {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: #ffe6c2;
+  max-width: 5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  user-select: none;
+}
+.hexaclear-smiley-row-compact .hexaclear-smiley-name {
+  font-size: 0.6rem;
+  max-width: 3.6rem;
+}
+/* Read-only partner tiles render the smiley button with the same
+   chrome as self's, but cursor changes to default and the active
+   press transform is suppressed so it doesn't read as clickable. */
+.hexaclear-emote-trigger.is-readonly {
+  cursor: default;
+}
+.hexaclear-emote-trigger.is-readonly:active {
+  transform: none;
 }
 .hexaclear-emote-trigger {
   position: relative;
@@ -1584,13 +1689,6 @@ body {
   --cube-golden-right: #b01232;
   --cube-golden-left: #e23c5c;
 
-  /* In MP co-op, partner-placed cubes wash toward cream so each
-     player can clearly distinguish their own work from their partner's
-     without losing the cube look. The palette stays in the same orange
-     family — just a lot brighter and lower-contrast. */
-  --cube-partner-top: #fff5d4;
-  --cube-partner-right: #d99467;
-  --cube-partner-left: #ffd198;
 }
 
 .hexaclear-hex-cube line {
@@ -1630,19 +1728,17 @@ body {
     drop-shadow(0 0 8px rgba(255, 120, 160, 0.65));
 }
 
-/* MP partner-tinted cubes (wood theme). Specificity beats the base
-   `.cube-top/.cube-right/.cube-left` rules above without needing
-   !important. Rubies (`.golden`) keep their pink palette since
-   they're neutral / unowned. Daily/clearing classes also win the
-   cascade naturally because they come after this block. */
-.hexaclear-hex-cube.partner-piece .cube-top {
-  fill: var(--cube-partner-top);
-}
-.hexaclear-hex-cube.partner-piece .cube-right {
-  fill: var(--cube-partner-right);
-}
-.hexaclear-hex-cube.partner-piece .cube-left {
-  fill: var(--cube-partner-left);
+/* MP partner-tinted cubes (wood theme). The `partner-piece` class
+   handles the *lightening* pass via a filter (any non-self placement
+   reads brighter and a touch desaturated, so it's visibly distinct
+   from your own pieces without abandoning the cube look). The actual
+   per-player *hue* shift comes from an inline `filter: hue-rotate()`
+   the per-cell renderer stamps onto the same `<g>` element — React
+   inline `style` overrides this class declaration, so we instead
+   apply the lightening to an inner wrapper. Rubies (`.golden`) bypass
+   this whole pass since they're neutral / unowned. */
+.hexaclear-hex-cube.partner-piece .hexaclear-cube-wiggle-wrap {
+  filter: brightness(1.18) saturate(0.85);
 }
 
 /* The +10 label sits on the ruby's bright pink top face. To make the
@@ -2800,6 +2896,50 @@ body {
   width: 1rem;
   height: 1rem;
   cursor: pointer;
+}
+
+/* Pill-style tab strip that paginates the High Scores modal between
+   Endless / Daily / Co-op. Mirrors the visual treatment of the
+   `.mode-pill` row in the header so the affordance reads as the
+   same "tab" idiom used elsewhere. The active tab gets a darker
+   background + cream stroke, inactive tabs sit in a muted state. */
+.hexaclear-scores-tabs {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 0.3rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(58, 18, 4, 0.55);
+  border: 1px solid rgba(255, 205, 143, 0.25);
+  align-self: center;
+  margin: 0.2rem 0 0.4rem;
+}
+.hexaclear-scores-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: rgba(255, 230, 194, 0.65);
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.hexaclear-scores-tab:hover {
+  color: #ffe6c2;
+}
+.hexaclear-scores-tab.is-active {
+  background: rgba(58, 18, 4, 0.95);
+  color: #ffe6c2;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 205, 143, 0.6),
+    0 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .hexaclear-scores-section-label {
