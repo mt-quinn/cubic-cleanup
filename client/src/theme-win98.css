@@ -558,6 +558,17 @@
    them do for these cells. Only `filter` keeps `!important`
    because we need to neutralize Wood's drop-shadow and nothing
    animates filter. */
+/* Win98 has no fill/stroke transitions on cells — every state
+   change is a hard snap, like real Minesweeper. The wood-theme
+   base rule sets a 0.15s fill transition that we deliberately
+   stomp here so mode toggles, ruby state changes, partner-piece
+   tints, etc. all paint in a single frame. Keyframe animations
+   (clearing, ripple, undo-fly) override this rule's `none` for
+   the duration of the animation, so this doesn't affect them. */
+[data-theme="win98"] .hexaclear-hex {
+  transition: none !important;
+}
+
 [data-theme="win98"] .hexaclear-hex.empty {
   fill: var(--w98-surface);
   stroke: var(--w98-deep-shadow);

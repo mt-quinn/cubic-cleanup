@@ -2770,32 +2770,46 @@ function App() {
 
   const toggleMode = (target: GameMode) => {
     if (game.mode === target) return
-    setGame((current) => {
-      // Stash the current run into its own slot so it can be restored
-      // when the player toggles back. Big mode also flushes through to
-      // its localStorage slot via the mirror effect above.
-      if (current.mode === 'endless') setSavedEndlessGame(current)
-      else if (current.mode === 'daily') setSavedDailyGame(current)
-      else if (current.mode === 'big') setSavedBigGame(current)
 
-      if (target === 'endless') {
-        if (savedEndlessGame) return savedEndlessGame
-        const endless = createInitialGameState()
-        setSavedEndlessGame(endless)
-        return endless
+    // Snapshot the run we're leaving so toggling back restores it.
+    // We do this OUTSIDE setGame's updater because calling other
+    // setState functions inside an updater is an antipattern (React
+    // may run the updater twice in dev / under concurrent rendering,
+    // causing duplicate side effects, and the batched commits can
+    // interleave in ways that make a class-driven CSS rule paint a
+    // frame behind). All saves and the next-mode resolution happen
+    // synchronously here so setGame receives a single, fully-resolved
+    // GameState.
+    if (game.mode === 'endless') setSavedEndlessGame(game)
+    else if (game.mode === 'daily') setSavedDailyGame(game)
+    else if (game.mode === 'big') setSavedBigGame(game)
+
+    let nextGame: GameState
+    if (target === 'endless') {
+      if (savedEndlessGame) {
+        nextGame = savedEndlessGame
+      } else {
+        nextGame = createInitialGameState()
+        setSavedEndlessGame(nextGame)
       }
-      if (target === 'daily') {
-        if (savedDailyGame) return savedDailyGame
-        const daily = createDailyGameState()
-        setSavedDailyGame(daily)
-        return daily
+    } else if (target === 'daily') {
+      if (savedDailyGame) {
+        nextGame = savedDailyGame
+      } else {
+        nextGame = createDailyGameState()
+        setSavedDailyGame(nextGame)
       }
+    } else {
       // target === 'big'
-      if (savedBigGame) return savedBigGame
-      const big = createBigGameState()
-      setSavedBigGame(big)
-      return big
-    })
+      if (savedBigGame) {
+        nextGame = savedBigGame
+      } else {
+        nextGame = createBigGameState()
+        setSavedBigGame(nextGame)
+      }
+    }
+
+    setGame(nextGame)
     setSelectedPieceId(null)
     setHover(null)
   }
