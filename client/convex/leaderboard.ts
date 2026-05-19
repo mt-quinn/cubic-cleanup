@@ -190,3 +190,59 @@ export const getTopCoopScores = query({
     }))
   },
 })
+
+// One-shot janitor for the heartbeat-bug duplicates that landed in
+// coopScores before the heartbeat-on-gameover no-op + lastPlacement.ts
+// dedupe-key fixes shipped. Each finished co-op run produces a stable
+// (roomCode, score) pair — the heartbeat re-fires re-stamped the same
+// score under different finishedAt values, so the buggy rows for one
+// run all share both fields. Genuine restartRoom re-runs almost always
+// land on a different score in the same roomCode, so they don't get
+// merged here.
+//
+// Strategy: group by (roomCode, score), keep the row with the earliest
+// finishedAt (the moment the run actually ended; later rows are
+// heartbeat re-fires of the same gameover), delete the rest. Returns
+// counts so the caller can confirm the cleanup did what was expected.
+//
+// Idempotent: re-running on already-clean data deletes 0 rows.
+//
+// Safe to leave deployed indefinitely; once the inserts stop happening
+// (which they have, post-fix), this mutation is a no-op.
+export const dedupeCoopScores = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query('coopScores').collect()
+    type Survivor = { id: typeof all[number]['_id']; finishedAt: number }
+    const survivors = new Map<string, Survivor>()
+    const toDelete: typeof all[number]['_id'][] = []
+
+    for (const row of all) {
+      const key = `${row.roomCode}@${row.score}`
+      const incumbent = survivors.get(key)
+      if (!incumbent) {
+        survivors.set(key, { id: row._id, finishedAt: row.finishedAt })
+        continue
+      }
+      // Earliest finishedAt wins — that row is the genuine
+      // gameover-instant entry; the others are post-gameover
+      // heartbeat re-fires.
+      if (row.finishedAt < incumbent.finishedAt) {
+        toDelete.push(incumbent.id)
+        survivors.set(key, { id: row._id, finishedAt: row.finishedAt })
+      } else {
+        toDelete.push(row._id)
+      }
+    }
+
+    for (const id of toDelete) {
+      await ctx.db.delete(id)
+    }
+
+    return {
+      scanned: all.length,
+      kept: survivors.size,
+      deleted: toDelete.length,
+    }
+  },
+})

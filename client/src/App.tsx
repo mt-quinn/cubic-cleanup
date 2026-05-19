@@ -3080,21 +3080,44 @@ function App() {
 
   // Broadcast our local "I'm currently considering this piece on
   // this cell" to the room so partners can see a tinted ghost of
-  // what we're about to drop, in close to real time. We send at
-  // most one update per HOVER_THROTTLE_MS — that's enough to feel
-  // live to the partner while keeping mutation pressure on Convex
-  // bounded (most cell crossings end up coalesced into one write).
-  // The trailing edge is important: if the player's last action is
-  // landing on a new cell and then idling there, we still need to
-  // emit that final state so the partner ghost lands in the right
-  // spot. We re-stamp every ~stale-window/2 while idle so the
-  // partner's stale-out timer doesn't fire mid-think. Pass null /
-  // null when there's nothing to ghost so the server strips the
-  // entry instead of leaking a "phantom" hover for the throttle
-  // window.
+  // what we're about to drop, in close to real time.
+  //
+  // Three subtleties this effect has to get right to avoid a flickery
+  // ghost on the partner's screen:
+  //
+  // 1. The local `hover` state goes briefly null between cells —
+  //    `onMouseLeave(cellA)` fires before `onMouseEnter(cellB)`, so
+  //    there's a sub-50ms window where `hover.cellId === null` even
+  //    though the player is mid-drag. Forwarding that null instantly
+  //    flashes the ghost out and back in for the partner. We debounce
+  //    transitions-to-null via HOVER_NULL_DEBOUNCE_MS: if a non-null
+  //    cell shows up in that window we just throttle to it; if not,
+  //    we send the null for real (drag actually ended, cancel-zone,
+  //    deselected, etc).
+  //
+  // 2. The trailing flush has to read the LATEST desired state at
+  //    fire time, not at scheduling time. We hold the desired pair in
+  //    a ref so the timer's callback always picks up the freshest
+  //    value, regardless of how many cells the cursor crossed during
+  //    the throttle window.
+  //
+  // 3. Identical re-emits should be cheap: skip if we already told
+  //    the server about this exact (pieceId, cellId) within the
+  //    refresh window. The HOVER_REFRESH_MS heartbeat (handled by a
+  //    separate effect below) keeps the partner's TTL alive when the
+  //    player is idling on one cell.
   const HOVER_THROTTLE_MS = 100
+  const HOVER_NULL_DEBOUNCE_MS = 220
   const HOVER_REFRESH_MS = 1500
-  const lastHoverSentRef = useRef<{ pieceId: string | null; cellId: string | null; ts: number } | null>(null)
+  const desiredHoverRef = useRef<{
+    pieceId: string | null
+    cellId: string | null
+  }>({ pieceId: null, cellId: null })
+  const lastHoverSentRef = useRef<{
+    pieceId: string | null
+    cellId: string | null
+    ts: number
+  } | null>(null)
   const hoverTrailingTimerRef = useRef<number | null>(null)
   const mpSetHover = mp.setHover
   useEffect(() => {
@@ -3104,6 +3127,12 @@ function App() {
     const desiredCellId =
       desiredPieceId && hover?.cellId ? hover.cellId : null
 
+    const prev = desiredHoverRef.current
+    desiredHoverRef.current = {
+      pieceId: desiredPieceId,
+      cellId: desiredCellId,
+    }
+
     const now = Date.now()
     const last = lastHoverSentRef.current
     const sameAsLast =
@@ -3111,31 +3140,59 @@ function App() {
       last.pieceId === desiredPieceId &&
       last.cellId === desiredCellId
     const sinceLast = last ? now - last.ts : Infinity
-    const needsRefresh =
-      sameAsLast && desiredPieceId !== null && sinceLast >= HOVER_REFRESH_MS
+    if (sameAsLast && sinceLast < HOVER_REFRESH_MS) {
+      return
+    }
 
-    if (sameAsLast && !needsRefresh) return
+    if (hoverTrailingTimerRef.current !== null) {
+      window.clearTimeout(hoverTrailingTimerRef.current)
+      hoverTrailingTimerRef.current = null
+    }
 
+    // Read desired from the ref at fire time — not at schedule time —
+    // so a fast-moving cursor doesn't pin the trailing flush to an
+    // intermediate cell it's already left.
     const flush = () => {
       hoverTrailingTimerRef.current = null
+      const cur = desiredHoverRef.current
+      const lst = lastHoverSentRef.current
+      if (
+        lst &&
+        lst.pieceId === cur.pieceId &&
+        lst.cellId === cur.cellId &&
+        Date.now() - lst.ts < HOVER_REFRESH_MS
+      ) {
+        return
+      }
       lastHoverSentRef.current = {
-        pieceId: desiredPieceId,
-        cellId: desiredCellId,
+        pieceId: cur.pieceId,
+        cellId: cur.cellId,
         ts: Date.now(),
       }
-      mpSetHover(desiredPieceId, desiredCellId).catch(() => {})
+      mpSetHover(cur.pieceId, cur.cellId).catch(() => {})
+    }
+
+    // Debounce only the "going to null while still holding a piece"
+    // transition — that's the one the local mouseLeave/Enter pair
+    // creates between cells. Other transitions (new cell, releasing
+    // the piece, switching pieces) flush at the normal throttle rate.
+    const isTransientNull =
+      desiredPieceId !== null &&
+      desiredCellId === null &&
+      prev.cellId !== null
+    if (isTransientNull) {
+      hoverTrailingTimerRef.current = window.setTimeout(
+        flush,
+        HOVER_NULL_DEBOUNCE_MS,
+      )
+      return
     }
 
     if (sinceLast >= HOVER_THROTTLE_MS) {
-      if (hoverTrailingTimerRef.current !== null) {
-        window.clearTimeout(hoverTrailingTimerRef.current)
-        hoverTrailingTimerRef.current = null
-      }
       flush()
       return
     }
 
-    if (hoverTrailingTimerRef.current !== null) return
     hoverTrailingTimerRef.current = window.setTimeout(
       flush,
       HOVER_THROTTLE_MS - sinceLast,

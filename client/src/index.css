@@ -1754,20 +1754,21 @@ body {
 
 /* Live partner-hover ghosts. Translucent silhouette of the piece
    the partner is currently dragging / hovering — same per-player
-   hue as their placed cubes via `--partner-hue`, plus a soft pulse
-   so it reads as "considering" rather than "committed". The
-   off-board variant fades further: it's purely informational
-   ("they're aiming past the edge") and shouldn't compete visually
-   with the on-board portion of the same footprint. We disable
-   pointer events so the ghost never intercepts a click meant for
-   the underlying cell. The default theme uses the cube-line
-   silhouette; the flat polygon companion (`.hexaclear-partner-
-   ghost-fill`) is hidden here and only revealed by the win98 theme
-   (which in turn hides the cube faces). */
+   hue as their placed cubes via `--partner-hue`. We render at a
+   fixed opacity (no pulse) so the ghost reads as a stable "they're
+   considering this" marker; an animated pulse on top of the natural
+   network jitter from re-syncs would compound into perceptible
+   flicker. The off-board variant fades further: it's purely
+   informational ("they're aiming past the edge") and shouldn't
+   compete visually with the on-board portion of the same footprint.
+   Pointer events are disabled so the ghost never intercepts a
+   click meant for the underlying cell. The default theme uses the
+   cube-line silhouette; the flat polygon companion
+   (`.hexaclear-partner-ghost-fill`) is hidden here and only
+   revealed by the win98 theme (which in turn hides cube faces). */
 .hexaclear-hex-cube.partner-ghost {
-  opacity: 0.55;
+  opacity: 0.65;
   pointer-events: none;
-  animation: hexaclear-partner-ghost-pulse 1.6s ease-in-out infinite;
 }
 .hexaclear-hex-cube.partner-ghost .hexaclear-cube-wiggle-wrap {
   filter:
@@ -1776,28 +1777,18 @@ body {
     hue-rotate(var(--partner-hue, 0deg));
 }
 .hexaclear-hex-cube.partner-ghost.partner-ghost-offboard {
-  opacity: 0.3;
+  opacity: 0.32;
 }
 .hexaclear-partner-ghost-fill {
   display: none;
-  fill: rgba(255, 200, 130, 0.55);
+  fill: rgba(255, 200, 130, 0.6);
   stroke: rgba(40, 20, 10, 0.45);
   stroke-width: 1.5;
   pointer-events: none;
   filter: hue-rotate(var(--partner-hue, 0deg));
-  animation: hexaclear-partner-ghost-pulse 1.6s ease-in-out infinite;
 }
 .hexaclear-partner-ghost-fill.partner-ghost-offboard {
   opacity: 0.5;
-}
-@keyframes hexaclear-partner-ghost-pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 0.78; }
-}
-.cubic-viewport.reduced-motion
-  .hexaclear-hex-cube.partner-ghost,
-.cubic-viewport.reduced-motion .hexaclear-partner-ghost-fill {
-  animation: none;
 }
 
 /* The +10 label sits on the ruby's bright pink top face. To make the
