@@ -3077,6 +3077,50 @@ body {
   margin-top: 0.1rem;
 }
 
+/* Pagination strip under each leaderboard list. Reuses the visual
+   idiom of the date stepper above so the two affordances feel
+   consistent — pill chrome, chevron buttons, tabular-numerals
+   readout in the middle. We also reuse the same disabled-button
+   styling by giving the chevrons the existing `.date-step` class
+   shape (separate class, common cascade). */
+.hexaclear-scores-pagination {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 205, 143, 0.06);
+  border: 1px solid rgba(255, 205, 143, 0.18);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: #ffe8c7;
+  margin: 0.4rem 0 0.05rem;
+}
+
+.hexaclear-overlay-card button.hexaclear-scores-page-step {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.05rem 0.3rem !important;
+  color: #ffd9a3 !important;
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  border-radius: 0 !important;
+  min-width: 0 !important;
+}
+
+.hexaclear-overlay-card button.hexaclear-scores-page-step:disabled {
+  color: rgba(255, 217, 163, 0.3) !important;
+  cursor: not-allowed;
+}
+
+.hexaclear-scores-page-label {
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 .hexaclear-scores-confirm {
   display: flex;
   flex-direction: column;

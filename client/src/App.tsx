@@ -1484,6 +1484,16 @@ function App() {
   // the global toggle is on (there is no local co-op store).
   type HighScoreTab = 'endless' | 'daily' | 'coop'
   const [highScoreTab, setHighScoreTab] = useState<HighScoreTab>('endless')
+  // Within each tab the leaderboard is paginated 10 at a time so the
+  // modal height stays predictable even at the daily / endless
+  // 100-entry global cap. Page index is per-tab and zero-based; the
+  // reset effect that snaps every page back to 0 on context-switch
+  // lives further down (near the other high-scores effects), since
+  // it reads `showGlobalLeaderboard` / `dailyScoresDateKey` which
+  // get declared after this block.
+  const [highScorePages, setHighScorePages] = useState<
+    Record<HighScoreTab, number>
+  >({ endless: 0, daily: 0, coop: 0 })
   // When on, the high-scores card swaps the local lists for live
   // global queries. Local stays first-class — we never wipe local
   // entries when the toggle flips. Defaults to ON for new players so
@@ -3321,6 +3331,17 @@ function App() {
       setDailyScoresDateKey(getTodayKey())
     }
   }, [showHighScores])
+
+  // Snap every leaderboard tab back to page 0 whenever the
+  // underlying entry list identity changes — re-opening the modal,
+  // flipping the global toggle, or stepping the daily date all
+  // swap the data the lists are reading from, so the previous page
+  // index is meaningless. (The page-state itself is declared up
+  // near the high-scores tab state; only the reset effect lives
+  // here, where its dependencies are in scope.)
+  useEffect(() => {
+    setHighScorePages({ endless: 0, daily: 0, coop: 0 })
+  }, [showHighScores, showGlobalLeaderboard, dailyScoresDateKey])
 
   // Persist the current game state on every change so that a refresh
   // resumes exactly where the player left off. Each mode owns its own
@@ -5366,6 +5387,90 @@ function App() {
                 {label}
               </button>
             )
+            // Pagination plumbing shared by every tab. Each tab keeps
+            // its own page index in `highScorePages`. The slice +
+            // `pageStart` math lets each visible row carry its true
+            // global rank (1-based) regardless of which page is
+            // currently rendered.
+            const PAGE_SIZE = 10
+            const setPageFor = (id: HighScoreTab, next: number) => {
+              setHighScorePages((prev) => ({ ...prev, [id]: next }))
+            }
+            const buildPageWindow = <T,>(
+              entries: T[],
+              tab: HighScoreTab,
+            ): {
+              window: T[]
+              pageIndex: number
+              pageCount: number
+              pageStart: number
+            } => {
+              const total = entries.length
+              const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+              // Clamp the stored page in case the entry list shrank
+              // (e.g. global query returned fewer rows on refetch)
+              // out from under whatever page we used to be on.
+              const rawPage = highScorePages[tab] ?? 0
+              const pageIndex = Math.min(Math.max(0, rawPage), pageCount - 1)
+              const pageStart = pageIndex * PAGE_SIZE
+              return {
+                window: entries.slice(pageStart, pageStart + PAGE_SIZE),
+                pageIndex,
+                pageCount,
+                pageStart,
+              }
+            }
+            const PageControls = ({
+              tab,
+              pageIndex,
+              pageCount,
+              pageStart,
+              total,
+            }: {
+              tab: HighScoreTab
+              pageIndex: number
+              pageCount: number
+              pageStart: number
+              total: number
+            }) => {
+              if (pageCount <= 1) return null
+              const rangeStart = pageStart + 1
+              const rangeEnd = Math.min(pageStart + PAGE_SIZE, total)
+              return (
+                <div className="hexaclear-scores-pagination">
+                  <button
+                    type="button"
+                    className="hexaclear-scores-page-step"
+                    aria-label="Previous page"
+                    onClick={() => {
+                      playUiClick()
+                      setPageFor(tab, Math.max(0, pageIndex - 1))
+                    }}
+                    disabled={pageIndex === 0}
+                  >
+                    ‹
+                  </button>
+                  <span className="hexaclear-scores-page-label">
+                    {rangeStart}–{rangeEnd} of {total}
+                  </span>
+                  <button
+                    type="button"
+                    className="hexaclear-scores-page-step"
+                    aria-label="Next page"
+                    onClick={() => {
+                      playUiClick()
+                      setPageFor(tab, Math.min(pageCount - 1, pageIndex + 1))
+                    }}
+                    disabled={pageIndex >= pageCount - 1}
+                  >
+                    ›
+                  </button>
+                </div>
+              )
+            }
+            const endlessPage = buildPageWindow(sortedEndless, 'endless')
+            const dailyPage = buildPageWindow(dailyEntriesForDay, 'daily')
+            const coopPage = buildPageWindow(sortedCoop, 'coop')
             return (
               <div className="hexaclear-overlay">
                 <div className="hexaclear-overlay-card hexaclear-scores-card">
@@ -5408,37 +5513,46 @@ function App() {
                             : 'No endless scores yet. Play a game!'}
                         </p>
                       ) : (
-                        <ol className="hexaclear-scores-list">
-                          {sortedEndless.map((entry, idx) => {
-                            const isRecent =
-                              highScoreSaved &&
-                              lastSavedHighScoreDate !== null &&
-                              entry.date === lastSavedHighScoreDate
-                            const rank = idx + 1
-                            return (
-                              <li
-                                key={entry.date + entry.name + idx}
-                                className={
-                                  'hexaclear-scores-row' +
-                                  (isRecent ? ' recent' : '')
-                                }
-                              >
-                                <span
-                                  className={`hexaclear-rank-chip ${rankClass(rank)}`}
-                                  aria-hidden="true"
+                        <>
+                          <ol className="hexaclear-scores-list">
+                            {endlessPage.window.map((entry, idx) => {
+                              const isRecent =
+                                highScoreSaved &&
+                                lastSavedHighScoreDate !== null &&
+                                entry.date === lastSavedHighScoreDate
+                              const rank = endlessPage.pageStart + idx + 1
+                              return (
+                                <li
+                                  key={entry.date + entry.name + rank}
+                                  className={
+                                    'hexaclear-scores-row' +
+                                    (isRecent ? ' recent' : '')
+                                  }
                                 >
-                                  {rank}
-                                </span>
-                                <span className="hexaclear-scores-name">
-                                  {entry.name}
-                                </span>
-                                <span className="hexaclear-scores-value">
-                                  {entry.score}
-                                </span>
-                              </li>
-                            )
-                          })}
-                        </ol>
+                                  <span
+                                    className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                    aria-hidden="true"
+                                  >
+                                    {rank}
+                                  </span>
+                                  <span className="hexaclear-scores-name">
+                                    {entry.name}
+                                  </span>
+                                  <span className="hexaclear-scores-value">
+                                    {entry.score}
+                                  </span>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                          <PageControls
+                            tab="endless"
+                            pageIndex={endlessPage.pageIndex}
+                            pageCount={endlessPage.pageCount}
+                            pageStart={endlessPage.pageStart}
+                            total={sortedEndless.length}
+                          />
+                        </>
                       )}
                     </div>
                   )}
@@ -5495,37 +5609,46 @@ function App() {
                             : '.'}
                         </p>
                       ) : (
-                        <ol className="hexaclear-scores-list">
-                          {dailyEntriesForDay.map((entry, idx) => {
-                            const isRecent =
-                              dailyHighScoreSaved &&
-                              lastSavedDailyHighScoreDate !== null &&
-                              entry.date === lastSavedDailyHighScoreDate
-                            const rank = idx + 1
-                            return (
-                              <li
-                                key={entry.date + entry.name + idx}
-                                className={
-                                  'hexaclear-scores-row' +
-                                  (isRecent ? ' recent' : '')
-                                }
-                              >
-                                <span
-                                  className={`hexaclear-rank-chip ${rankClass(rank)}`}
-                                  aria-hidden="true"
+                        <>
+                          <ol className="hexaclear-scores-list">
+                            {dailyPage.window.map((entry, idx) => {
+                              const isRecent =
+                                dailyHighScoreSaved &&
+                                lastSavedDailyHighScoreDate !== null &&
+                                entry.date === lastSavedDailyHighScoreDate
+                              const rank = dailyPage.pageStart + idx + 1
+                              return (
+                                <li
+                                  key={entry.date + entry.name + rank}
+                                  className={
+                                    'hexaclear-scores-row' +
+                                    (isRecent ? ' recent' : '')
+                                  }
                                 >
-                                  {rank}
-                                </span>
-                                <span className="hexaclear-scores-name">
-                                  {entry.name}
-                                </span>
-                                <span className="hexaclear-scores-value">
-                                  {entry.moves} moves
-                                </span>
-                              </li>
-                            )
-                          })}
-                        </ol>
+                                  <span
+                                    className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                    aria-hidden="true"
+                                  >
+                                    {rank}
+                                  </span>
+                                  <span className="hexaclear-scores-name">
+                                    {entry.name}
+                                  </span>
+                                  <span className="hexaclear-scores-value">
+                                    {entry.moves} moves
+                                  </span>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                          <PageControls
+                            tab="daily"
+                            pageIndex={dailyPage.pageIndex}
+                            pageCount={dailyPage.pageCount}
+                            pageStart={dailyPage.pageStart}
+                            total={dailyEntriesForDay.length}
+                          />
+                        </>
                       )}
                       {!showGlobalLeaderboard && dailyScoresDateKey !== todayKey && (
                         <button
@@ -5556,30 +5679,39 @@ function App() {
                           No co-op finishes yet. Grab a friend!
                         </p>
                       ) : (
-                        <ol className="hexaclear-scores-list">
-                          {sortedCoop.map((entry, idx) => {
-                            const rank = idx + 1
-                            return (
-                              <li
-                                key={entry.date + entry.name + idx}
-                                className="hexaclear-scores-row"
-                              >
-                                <span
-                                  className={`hexaclear-rank-chip ${rankClass(rank)}`}
-                                  aria-hidden="true"
+                        <>
+                          <ol className="hexaclear-scores-list">
+                            {coopPage.window.map((entry, idx) => {
+                              const rank = coopPage.pageStart + idx + 1
+                              return (
+                                <li
+                                  key={entry.date + entry.name + rank}
+                                  className="hexaclear-scores-row"
                                 >
-                                  {rank}
-                                </span>
-                                <span className="hexaclear-scores-name">
-                                  {entry.name}
-                                </span>
-                                <span className="hexaclear-scores-value">
-                                  {entry.score}
-                                </span>
-                              </li>
-                            )
-                          })}
-                        </ol>
+                                  <span
+                                    className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                    aria-hidden="true"
+                                  >
+                                    {rank}
+                                  </span>
+                                  <span className="hexaclear-scores-name">
+                                    {entry.name}
+                                  </span>
+                                  <span className="hexaclear-scores-value">
+                                    {entry.score}
+                                  </span>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                          <PageControls
+                            tab="coop"
+                            pageIndex={coopPage.pageIndex}
+                            pageCount={coopPage.pageCount}
+                            pageStart={coopPage.pageStart}
+                            total={sortedCoop.length}
+                          />
+                        </>
                       )}
                     </div>
                   )}
