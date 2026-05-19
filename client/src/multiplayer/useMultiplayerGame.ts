@@ -107,11 +107,14 @@ export const HOVER_STALE_MS = 3_000
 
 // Per-step hue rotation (degrees) for partner cube tinting.
 // Self renders at 0; the first partner at HUE_STEP_DEG, the second at
-// 2 * HUE_STEP_DEG, etc. 54° = 15% of the 360° wheel, which keeps
-// each step visibly distinct against the warm-orange cube palette
-// while still leaving 8 seats spread across most of the wheel
-// (54, 108, 162, 216, 270, 324, 378→18) before any wraparound.
-export const HUE_STEP_DEG = 54
+// 2 * HUE_STEP_DEG, etc. 15° per step is plenty visible now that we
+// bake the rotation directly into the output color in JS (HSL hue
+// rotation produces dramatic, clearly-distinct shifts even at small
+// angles — far more than CSS `filter: hue-rotate()` did). Eight
+// seats land at 0/15/30/45/60/75/90/105°, keeping every partner in
+// the same warm half of the wheel as self instead of jumping into
+// alien blues/greens.
+export const HUE_STEP_DEG = 15
 
 // Synthesize a GameState off the live room snapshot so the rest of the app
 // can keep reading from a single shape regardless of mode. Only the
