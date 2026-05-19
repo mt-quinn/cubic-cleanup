@@ -1284,6 +1284,7 @@ function App() {
   // so we don't pay for a subscription while the menu is closed.
   const submitEndlessGlobal = useMutation(api.leaderboard.submitEndlessScore)
   const submitDailyGlobal = useMutation(api.leaderboard.submitDailyScore)
+  const submitCoopGlobal = useMutation(api.leaderboard.submitCoopScore)
   // Track whether we've already attempted to join the current room so a
   // single failure or a full-room error doesn't get retried in a loop on
   // every render.
@@ -1523,6 +1524,10 @@ function App() {
     showHighScores && showGlobalLeaderboard
       ? { dateKey: getTodayKey() }
       : 'skip',
+  )
+  const globalCoopScores = useQuery(
+    api.leaderboard.getTopCoopScores,
+    showHighScores && showGlobalLeaderboard ? {} : 'skip',
   )
   const [goldenPopupCellIds, setGoldenPopupCellIds] = useState<string[]>([])
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
@@ -2565,6 +2570,49 @@ function App() {
     setUndoStack([])
     void code
   }
+
+  // Mirror finished co-op runs to the global leaderboard. Both clients
+  // see `mp.status === 'gameover'` simultaneously and race-fire the
+  // mutation; the server dedupes on (roomCode, finishedAt) so only one
+  // row lands. We also guard locally with a ref keyed on the same pair
+  // so a re-renders during the gameover-modal lifetime don't keep
+  // re-firing the mutation.
+  const coopScoreSubmittedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isMultiplayer) return
+    if (mp.status !== 'gameover') return
+    if (!mpRoomCode) return
+    if (mp.updatedAt === null) return
+    if (mp.allPlayers.length === 0) return
+    if (mp.game === null) return
+    const dedupeKey = `${mpRoomCode}@${mp.updatedAt}`
+    if (coopScoreSubmittedRef.current === dedupeKey) return
+    coopScoreSubmittedRef.current = dedupeKey
+    submitCoopGlobal({
+      roomCode: mpRoomCode,
+      finishedAt: mp.updatedAt,
+      score: mp.game.score,
+      players: mp.allPlayers.map((p) => ({
+        playerId: p.playerId,
+        name: p.name,
+        slot: p.slot,
+      })),
+    }).catch(() => {
+      // If the network was flaky, allow a retry on the next render —
+      // server-side dedup will still no-op a successful resend.
+      coopScoreSubmittedRef.current = null
+    })
+    // mp.allPlayers identity changes per render but the underlying data
+    // is stable until the room mutates; updatedAt+roomCode is enough
+    // to gate this safely.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMultiplayer, mp.status, mpRoomCode, mp.updatedAt])
+
+  // Reset the dedup ref when the player leaves the room so re-joining
+  // a *different* room and finishing it submits cleanly.
+  useEffect(() => {
+    if (!mpRoomCode) coopScoreSubmittedRef.current = null
+  }, [mpRoomCode])
 
   // Single-action "Copy Link" used from the co-op HUD. If we're not
   // already in a room, we lazily spin one up so the link points at a
@@ -5069,10 +5117,18 @@ function App() {
                       dailyScoresDateKey,
                   )
                   .sort((a, b) => a.moves - b.moves || a.date - b.date)
+            const sortedCoop = showGlobalLeaderboard
+              ? (globalCoopScores ?? []).map((e) => ({
+                  name: e.name,
+                  score: e.score,
+                  date: e.finishedAt,
+                }))
+              : []
             const globalLoading =
               showGlobalLeaderboard &&
               (globalEndlessScores === undefined ||
-                globalDailyScores === undefined)
+                globalDailyScores === undefined ||
+                globalCoopScores === undefined)
             const dailyDateKeyForDisplay = showGlobalLeaderboard
               ? todayKey
               : dailyScoresDateKey
@@ -5243,6 +5299,48 @@ function App() {
                       </button>
                     )}
                   </div>
+
+                  {showGlobalLeaderboard && (
+                    <div className="hexaclear-scores-section">
+                      <div className="hexaclear-scores-section-label">
+                        Co-op · highest score (global)
+                      </div>
+                      {globalLoading ? (
+                        <p className="hexaclear-scores-empty">
+                          Loading global scores…
+                        </p>
+                      ) : sortedCoop.length === 0 ? (
+                        <p className="hexaclear-scores-empty">
+                          No co-op finishes yet. Grab a friend!
+                        </p>
+                      ) : (
+                        <ol className="hexaclear-scores-list">
+                          {sortedCoop.map((entry, idx) => {
+                            const rank = idx + 1
+                            return (
+                              <li
+                                key={entry.date + entry.name + idx}
+                                className="hexaclear-scores-row"
+                              >
+                                <span
+                                  className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                  aria-hidden="true"
+                                >
+                                  {rank}
+                                </span>
+                                <span className="hexaclear-scores-name">
+                                  {entry.name}
+                                </span>
+                                <span className="hexaclear-scores-value">
+                                  {entry.score}
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      )}
+                    </div>
+                  )}
 
                   {!showResetConfirm ? (
                     <button

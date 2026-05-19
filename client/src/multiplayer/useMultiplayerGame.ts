@@ -40,6 +40,14 @@ export type UseMultiplayerGameResult = {
   game: GameState | null
   selfPlayer: MultiplayerPlayer | null
   partnerPlayer: MultiplayerPlayer | null
+  // Both seats sorted by slot, so callers (e.g. the co-op leaderboard
+  // submission) can build a stable "Alice & Bob" display name that
+  // reads identically to both clients regardless of who joined first.
+  allPlayers: MultiplayerPlayer[]
+  // Server-stamped time of the most recent room mutation. Used as the
+  // canonical "this run finished at" marker when both clients race to
+  // submit the gameover to the global co-op leaderboard.
+  updatedAt: number | null
   lastPlacement: MultiplayerLastPlacement | null
   // cellId -> playerId map for partner-piece tinting on the shared
   // board. Empty / undefined when single-player.
@@ -142,6 +150,20 @@ export const useMultiplayerGame = ({
     }
   }, [room, playerId])
 
+  const allPlayers = useMemo<MultiplayerPlayer[]>(() => {
+    if (!room) return []
+    return [...room.players]
+      .sort((a, b) => a.slot - b.slot)
+      .map((p) => ({
+        playerId: p.playerId,
+        name: p.name,
+        slot: p.slot,
+        hand: p.hand as ActivePiece[],
+        handSlots: p.handSlots as (string | null)[],
+        isSelf: p.playerId === playerId,
+      }))
+  }, [room, playerId])
+
   const game = useMemo<GameState | null>(() => {
     if (!room || !selfPlayer) return null
     return buildGameStateFromRoom(
@@ -221,6 +243,8 @@ export const useMultiplayerGame = ({
     game,
     selfPlayer,
     partnerPlayer,
+    allPlayers,
+    updatedAt: room?.updatedAt ?? null,
     lastPlacement: room?.lastPlacement ?? null,
     cellOwners,
     partnerEmote,

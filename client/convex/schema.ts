@@ -120,4 +120,21 @@ export default defineSchema({
   })
     .index('by_dateKey_moves', ['dateKey', 'moves'])
     .index('by_player_saved', ['playerId', 'savedAt']),
+
+  // Global co-op leaderboard. Scope: a single (room, finishedAt)
+  // partnership produces ONE row, regardless of which client first
+  // submits it (both clients race-fire at gameover). `name` is the
+  // pre-baked "Eli & Thomas" string built from the room's slot order
+  // so the rendered name reads identically to both players. We keep
+  // `playerIds` around so we can later attribute / filter by player
+  // without re-parsing the display name.
+  coopScores: defineTable({
+    roomCode: v.string(),
+    finishedAt: v.number(),
+    name: v.string(),
+    score: v.number(),
+    playerIds: v.array(v.string()),
+  })
+    .index('by_score', ['score'])
+    .index('by_room_finished', ['roomCode', 'finishedAt']),
 })

@@ -11,6 +11,11 @@ import { v } from 'convex/values'
 const MAX_NAME_LENGTH = 20
 const ENDLESS_TOP_N = 100
 const DAILY_TOP_N = 100
+const COOP_TOP_N = 100
+// Combined co-op display name: "Alice & Bob". Each half is sanitized
+// independently and capped at MAX_NAME_LENGTH so a 20-char name on
+// each side max out at 43 chars total ("X" * 20 + " & " + "Y" * 20).
+const COOP_NAME_SEPARATOR = ' & '
 
 const sanitizeName = (raw: string): string => {
   const trimmed = (raw ?? '').trim()
@@ -107,6 +112,70 @@ export const getTopDailyScoresForDate = query({
       moves: e.moves,
       dateKey: e.dateKey,
       savedAt: e.savedAt,
+    }))
+  },
+})
+
+// Finalize a co-op run on the global board. Both clients race-fire
+// this on gameover with the same (roomCode, finishedAt) pair —
+// whichever lands first wins, the other is a no-op. We rebuild the
+// combined name server-side from the player list rather than trusting
+// either client's pre-formatted string so we know the slot order is
+// canonical and the per-half names are length-capped.
+export const submitCoopScore = mutation({
+  args: {
+    roomCode: v.string(),
+    finishedAt: v.number(),
+    score: v.number(),
+    // Sorted by slot client-side already, but we re-sort here so a
+    // bad client can't reorder the display name.
+    players: v.array(
+      v.object({
+        playerId: v.string(),
+        name: v.string(),
+        slot: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, { roomCode, finishedAt, score, players }) => {
+    if (!Number.isFinite(score) || score < 0) return null
+    if (players.length === 0) return null
+    const existing = await ctx.db
+      .query('coopScores')
+      .withIndex('by_room_finished', (q) =>
+        q.eq('roomCode', roomCode).eq('finishedAt', finishedAt),
+      )
+      .first()
+    if (existing) return null
+    const sorted = [...players].sort((a, b) => a.slot - b.slot)
+    const combinedName = sorted
+      .map((p) => sanitizeName(p.name))
+      .join(COOP_NAME_SEPARATOR)
+    await ctx.db.insert('coopScores', {
+      roomCode,
+      finishedAt,
+      name: combinedName,
+      score: Math.floor(score),
+      playerIds: sorted.map((p) => p.playerId),
+    })
+    return null
+  },
+})
+
+export const getTopCoopScores = query({
+  args: {},
+  handler: async (ctx) => {
+    const entries = await ctx.db
+      .query('coopScores')
+      .withIndex('by_score')
+      .order('desc')
+      .take(COOP_TOP_N)
+    return entries.map((e) => ({
+      roomCode: e.roomCode,
+      name: e.name,
+      score: e.score,
+      finishedAt: e.finishedAt,
+      playerIds: e.playerIds,
     }))
   },
 })
