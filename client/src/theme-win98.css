@@ -1669,7 +1669,9 @@
     inset -1px -1px 0 var(--w98-surface) !important;
   border-radius: 0 !important;
   font-family: inherit !important;
-  font-size: 14px !important;
+  /* 16px floor (vs the previous 14px) so iOS Safari doesn't zoom
+     the viewport when the input takes focus. */
+  font-size: 16px !important;
   padding: 6px 10px !important;
   min-height: 32px;
 }
