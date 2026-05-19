@@ -620,13 +620,30 @@
   fill: var(--w98-ruby-fill);
 }
 
-/* MP partner-piece tint: lighter teal on the filled face. We don't
-   apply this to .golden cells because rubies are neutral / unowned
-   and should keep their flag-red regardless of who triggered the
-   spawn. The clearing animation already starts from --w98-magenta
-   and ends at --w98-surface, so it overrides this fine. */
+/* MP partner-piece tint: lighter teal on the filled face plus a
+   per-player hue rotation driven by the inline `--partner-hue`
+   variable, so each seat reads as a distinct color. We don't apply
+   this to .golden cells because rubies are neutral / unowned and
+   should keep their flag-red regardless of who triggered the spawn.
+   The clearing animation already starts from --w98-magenta and ends
+   at --w98-surface, so it overrides this fine. */
 [data-theme="win98"] .hexaclear-hex.filled.partner-piece {
   fill: var(--w98-cube-fill-partner);
+  filter: hue-rotate(var(--partner-hue, 0deg));
+}
+
+/* Live partner-hover ghosts in Win98: the cube-faces silhouette
+   used by the wood theme is `display: none` here (cube faces are
+   hidden globally in Win98), so we instead reveal the flat polygon
+   companion stamped alongside each ghost cell. Use the same
+   washed-out teal as placed partner cubes so the visual language
+   stays consistent — placed cubes and "considering" ghosts share a
+   palette, with the ghost just being more transparent and pulsing. */
+[data-theme="win98"] .hexaclear-partner-ghost-fill {
+  display: block;
+  fill: var(--w98-cube-fill-partner);
+  stroke: var(--w98-text);
+  stroke-width: 1;
 }
 
 /* Win98 smiley button + emote panel. The trigger is a classic

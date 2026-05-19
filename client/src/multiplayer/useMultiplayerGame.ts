@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { ActivePiece, GameState } from '../game/gameLogic'
@@ -34,6 +34,16 @@ export type MultiplayerEmote = {
   ts: number
 }
 
+// Live "where is this player hovering?" snapshot. Stripped down to
+// just what the renderer needs to draw a ghost: which piece, which
+// origin cell. We carry the timestamp so the consumer can fade out
+// stale entries without coordinating with the server.
+export type MultiplayerHover = {
+  pieceId: string
+  cellId: string
+  ts: number
+}
+
 export type UseMultiplayerGameResult = {
   status: MultiplayerStatus
   code: string | null
@@ -62,24 +72,46 @@ export type UseMultiplayerGameResult = {
   // Self's id is also a key in this map — its EmoteBar uses it to
   // mirror the emote it just sent.
   emoteByPlayerId: Record<string, MultiplayerEmote>
+  // Live hover positions per partner playerId (self is excluded).
+  // Stale entries (older than HOVER_STALE_MS) are dropped client-
+  // side so a backgrounded tab stops projecting a ghost. The
+  // consumer renders a tinted piece footprint at `cellId` for each
+  // entry to give the room a "what is my partner thinking?" feel.
+  hoverByPlayerId: Record<string, MultiplayerHover>
   // Hue rotation (in degrees) to apply to each player's placed cubes
   // when rendered for *this* viewer. Self maps to 0; otherPlayers[i]
-  // maps to (i + 1) * 15. Drives the per-player cube tinting in App.
+  // maps to (i + 1) * HUE_STEP_DEG. Drives the per-player cube
+  // tinting in App.
   hueShiftByPlayerId: Record<string, number>
   placePiece: (pieceId: string, cellId: string) => Promise<void>
   sendEmote: (emoji: string) => Promise<void>
   setName: (name: string) => Promise<void>
   restart: () => Promise<void>
   leave: () => Promise<void>
+  // Broadcast that *this viewer* is currently hovering pieceId over
+  // cellId. Pass null/null to signal "I'm not hovering anything"
+  // (drag ended off-board, mouse left, etc). Idempotent; the caller
+  // throttles. The mutation is intentionally cheap-to-call so we can
+  // fire it on most cell crossings without ceremony.
+  setHover: (pieceId: string | null, cellId: string | null) => Promise<void>
 }
 
 const HEARTBEAT_INTERVAL_MS = 8_000
 
+// How long a hover entry stays "live" client-side. The throttled
+// sender re-stamps every ~100ms while you're actively hovering, so
+// a 3s grace window means you only need to land one update inside
+// that window to keep the ghost alive — and crash-quit / tab-close
+// scenarios flush within 3s without any explicit teardown.
+export const HOVER_STALE_MS = 3_000
+
 // Per-step hue rotation (degrees) for partner cube tinting.
 // Self renders at 0; the first partner at HUE_STEP_DEG, the second at
-// 2 * HUE_STEP_DEG, etc. Picked so 8 seats fit comfortably under
-// 360° and stay visually distinct against each other.
-export const HUE_STEP_DEG = 15
+// 2 * HUE_STEP_DEG, etc. 54° = 15% of the 360° wheel, which keeps
+// each step visibly distinct against the warm-orange cube palette
+// while still leaving 8 seats spread across most of the wheel
+// (54, 108, 162, 216, 270, 324, 378→18) before any wraparound.
+export const HUE_STEP_DEG = 54
 
 // Synthesize a GameState off the live room snapshot so the rest of the app
 // can keep reading from a single shape regardless of mode. Only the
@@ -120,6 +152,7 @@ export const useMultiplayerGame = ({
   const sendEmoteMutation = useMutation(api.rooms.sendEmote)
   const setNameMutation = useMutation(api.rooms.setPlayerName)
   const restartMutation = useMutation(api.rooms.restartRoom)
+  const setHoverMutation = useMutation(api.rooms.setHover)
 
   // Periodic presence ping so the partner can tell when someone has
   // gone idle (closing tab, lost connection, etc).
@@ -257,6 +290,46 @@ export const useMultiplayerGame = ({
     return out
   }, [room])
 
+  // Hover ghosts for *partners only*. Self is filtered out so the
+  // local renderer never has to subtract its own entry — and since
+  // the local hover preview is already driven by client state, we
+  // wouldn't want it round-tripping through the server anyway.
+  // Stale entries are dropped here rather than on the server so we
+  // can keep the throttle TTL purely client-side and avoid bumping
+  // updatedAt on every cell crossing. We re-render once per second
+  // via the staleTick state so a ghost reliably ages out even if no
+  // other room mutation lands during the grace window.
+  const [staleTick, setStaleTick] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setStaleTick((n) => n + 1)
+    }, 1_000)
+    return () => window.clearInterval(id)
+  }, [])
+  const hoverByPlayerId = useMemo<Record<string, MultiplayerHover>>(() => {
+    if (!room) return {}
+    const out: Record<string, MultiplayerHover> = {}
+    const cutoff = Date.now() - HOVER_STALE_MS
+    for (const h of room.hovers ?? []) {
+      if (h.playerId === playerId) continue
+      if (h.ts < cutoff) continue
+      out[h.playerId] = { pieceId: h.pieceId, cellId: h.cellId, ts: h.ts }
+    }
+    return out
+    // staleTick is a deliberate dep — it's how we re-evaluate the
+    // cutoff once per second when no other room mutation has
+    // arrived to refresh `room`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room, playerId, staleTick])
+
+  const setHover = async (
+    pieceId: string | null,
+    cellId: string | null,
+  ) => {
+    if (!code) return
+    await setHoverMutation({ code, playerId, pieceId, cellId })
+  }
+
   return {
     status,
     code,
@@ -268,11 +341,13 @@ export const useMultiplayerGame = ({
     lastPlacement: room?.lastPlacement ?? null,
     cellOwners,
     emoteByPlayerId,
+    hoverByPlayerId,
     hueShiftByPlayerId,
     placePiece,
     sendEmote,
     setName,
     restart,
     leave,
+    setHover,
   }
 }

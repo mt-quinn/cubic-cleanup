@@ -263,9 +263,15 @@ export const joinRoom = mutation({
     for (const [cellId, ownerId] of Object.entries(cellOwners)) {
       if (ownerId === stalest.playerId) cellOwners[cellId] = playerId
     }
+    // Drop any stale hover the evicted player left behind so the
+    // new occupant's first frame doesn't inherit a ghost.
+    const hovers = (room.hovers ?? []).filter(
+      (h) => h.playerId !== stalest.playerId,
+    )
     await ctx.db.patch(room._id, {
       players,
       cellOwners,
+      hovers,
       state: 'playing',
       updatedAt: now,
     })
@@ -281,6 +287,16 @@ export const heartbeat = mutation({
       .withIndex('by_code', (q) => q.eq('code', code))
       .unique()
     if (!room) return null
+    // Once a game is over, heartbeats stop serving any purpose:
+    // there's no stale-seat eviction to trigger, no presence to
+    // track. We deliberately no-op here so `room.updatedAt` stays
+    // pinned at the moment the gameover-triggering placement
+    // landed. That matters because the co-op leaderboard uses
+    // `lastPlacement.ts` (which equals updatedAt at gameover) as
+    // the dedupe key, and any post-gameover updatedAt churn
+    // re-triggers the client's "submit my run" effect with a
+    // *different* key, leaking duplicate rows onto the board.
+    if (room.state === 'gameover') return null
     const now = Date.now()
     const players = room.players.map((p) =>
       p.playerId === playerId ? { ...p, lastSeen: now } : p,
@@ -405,6 +421,13 @@ export const placePiece = mutation({
       ts: now,
     }
 
+    // The piece this player was hovering with just got placed (or
+    // discarded if their hand redealt), so its hover entry is now
+    // stale by definition. Strip it so partners don't see the ghost
+    // linger for the throttle window after the placement has
+    // already animated in.
+    const hovers = (room.hovers ?? []).filter((h) => h.playerId !== playerId)
+
     await ctx.db.patch(room._id, {
       board: result.board,
       goldenCellIds: result.goldenCellIds,
@@ -414,6 +437,7 @@ export const placePiece = mutation({
       players: updatedPlayers,
       lastPlacement,
       cellOwners,
+      hovers,
       state: gameOver ? 'gameover' : 'playing',
       updatedAt: now,
     })
@@ -542,9 +566,54 @@ export const restartRoom = mutation({
       lastPlacement: null,
       cellOwners: {},
       lastEmotes: [],
+      hovers: [],
       state: players.length >= 1 ? 'playing' : 'waiting',
       updatedAt: now,
     })
+    return null
+  },
+})
+
+// Live hover broadcast. Each client throttles this to ~10 Hz while
+// dragging / hovering a piece so partners can see a tinted ghost of
+// what the player is about to drop, in close to real time. Clients
+// fade out hovers older than ~3s themselves so an abandoned tab
+// stops projecting a ghost without us needing a server cleanup.
+//
+// `pieceId === null` is the "I'm no longer hovering anything" signal
+// (mouse left the board, drag ended without a placement, etc) and
+// strips the entry. Any other call upserts the player's entry with a
+// fresh timestamp.
+export const setHover = mutation({
+  args: {
+    code: v.string(),
+    playerId: v.string(),
+    pieceId: v.union(v.string(), v.null()),
+    cellId: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, { code, playerId, pieceId, cellId }) => {
+    const room = await ctx.db
+      .query('rooms')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .unique()
+    if (!room) return null
+    if (!room.players.some((p) => p.playerId === playerId)) {
+      return null
+    }
+    const now = Date.now()
+    const others = (room.hovers ?? []).filter(
+      (h) => h.playerId !== playerId,
+    )
+    const next =
+      pieceId && cellId
+        ? [...others, { playerId, pieceId, cellId, ts: now }]
+        : others
+    // Don't bump `updatedAt` on hover-only changes — every cell
+    // crossing would otherwise look like a fresh "this room is
+    // active" signal to the daily janitor and to any other code
+    // keying off updatedAt. Hovers are pure presence noise; the
+    // existing heartbeat already covers liveness.
+    await ctx.db.patch(room._id, { hovers: next })
     return null
   },
 })
@@ -570,8 +639,10 @@ export const leaveRoom = mutation({
       await ctx.db.delete(room._id)
       return null
     }
+    const hovers = (room.hovers ?? []).filter((h) => h.playerId !== playerId)
     await ctx.db.patch(room._id, {
       players: remaining,
+      hovers,
       state: room.state === 'gameover' ? 'gameover' : 'waiting',
       updatedAt: Date.now(),
     })

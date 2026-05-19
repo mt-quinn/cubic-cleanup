@@ -256,35 +256,40 @@ body {
 /* Side-banner variant: shown only on landscape viewports with
    enough horizontal room (laptops / desktops / wide tablets), where
    stacking the banner on top of the board would squeeze the
-   already-cramped vertical real estate. Rotated 90° clockwise so
-   the original wide-rectangle artwork reads as a vertical strip
-   anchored to the right edge of the viewport.
+   already-cramped vertical real estate. The frame is absolutely
+   positioned against `.hexaclear-board-wrapper` so its visible
+   height tracks the board exactly, with a small horizontal gap.
 
-   Layout trick: the image's pre-rotation width is set to ~100vh
-   so that AFTER `transform: rotate(90deg)` the visible "height"
-   (which is the source's pre-rotation width) fills the viewport.
-   The frame container is fixed-position with a width tuned so the
-   rotated artwork sits comfortably inside it. */
+   Sizing trick: the source artwork is 5:1 (1920×384). The frame
+   declares `aspect-ratio: 1 / 5` so its width is height/5, matching
+   the rotated artwork's footprint. Container queries (`cqh`) let
+   the inner image scale relative to the frame's height: setting
+   the unrotated image width to 100cqh (= frame height) makes the
+   post-rotation visual height fill the frame perfectly, and natural
+   aspect handles the rotated visual width. */
 .hexaclear-banner-ad-side-frame {
   display: none;
-  position: fixed;
-  right: 0;
+  position: absolute;
   top: 0;
   bottom: 0;
-  width: clamp(110px, 14vw, 200px);
+  left: 100%;
+  margin-left: 0.75rem;
+  aspect-ratio: 1 / 5;
   align-items: center;
   justify-content: center;
   pointer-events: none;
   user-select: none;
+  container-type: size;
   z-index: 1;
-  overflow: hidden;
 }
 .hexaclear-banner-ad-side {
   display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100cqh;
   height: auto;
-  width: clamp(420px, 100vh, 1200px);
-  transform: rotate(90deg);
-  transform-origin: center center;
+  transform: translate(-50%, -50%) rotate(90deg);
   user-select: none;
   -webkit-user-drag: none;
   pointer-events: none;
@@ -1731,14 +1736,68 @@ body {
 /* MP partner-tinted cubes (wood theme). The `partner-piece` class
    handles the *lightening* pass via a filter (any non-self placement
    reads brighter and a touch desaturated, so it's visibly distinct
-   from your own pieces without abandoning the cube look). The actual
-   per-player *hue* shift comes from an inline `filter: hue-rotate()`
-   the per-cell renderer stamps onto the same `<g>` element — React
-   inline `style` overrides this class declaration, so we instead
-   apply the lightening to an inner wrapper. Rubies (`.golden`) bypass
-   this whole pass since they're neutral / unowned. */
+   from the player's own pieces) AND splices in a per-player
+   `hue-rotate` driven by the inline `--partner-hue` variable so each
+   seat lands on its own clearly-different color. Combining all
+   three functions in one filter chain is critical: stacking the
+   hue-rotate on the outer SVG `<g>` while the brightness/saturate
+   sits on the inner wrapper doesn't compose reliably (the SVG
+   ancestor's filter region doesn't always pick up the rasterized
+   inner filter), so we keep them on the same element here. Rubies
+   (`.golden`) bypass this whole pass since they're neutral / unowned. */
 .hexaclear-hex-cube.partner-piece .hexaclear-cube-wiggle-wrap {
-  filter: brightness(1.18) saturate(0.85);
+  filter:
+    brightness(1.18)
+    saturate(0.85)
+    hue-rotate(var(--partner-hue, 0deg));
+}
+
+/* Live partner-hover ghosts. Translucent silhouette of the piece
+   the partner is currently dragging / hovering — same per-player
+   hue as their placed cubes via `--partner-hue`, plus a soft pulse
+   so it reads as "considering" rather than "committed". The
+   off-board variant fades further: it's purely informational
+   ("they're aiming past the edge") and shouldn't compete visually
+   with the on-board portion of the same footprint. We disable
+   pointer events so the ghost never intercepts a click meant for
+   the underlying cell. The default theme uses the cube-line
+   silhouette; the flat polygon companion (`.hexaclear-partner-
+   ghost-fill`) is hidden here and only revealed by the win98 theme
+   (which in turn hides the cube faces). */
+.hexaclear-hex-cube.partner-ghost {
+  opacity: 0.55;
+  pointer-events: none;
+  animation: hexaclear-partner-ghost-pulse 1.6s ease-in-out infinite;
+}
+.hexaclear-hex-cube.partner-ghost .hexaclear-cube-wiggle-wrap {
+  filter:
+    brightness(1.05)
+    saturate(0.75)
+    hue-rotate(var(--partner-hue, 0deg));
+}
+.hexaclear-hex-cube.partner-ghost.partner-ghost-offboard {
+  opacity: 0.3;
+}
+.hexaclear-partner-ghost-fill {
+  display: none;
+  fill: rgba(255, 200, 130, 0.55);
+  stroke: rgba(40, 20, 10, 0.45);
+  stroke-width: 1.5;
+  pointer-events: none;
+  filter: hue-rotate(var(--partner-hue, 0deg));
+  animation: hexaclear-partner-ghost-pulse 1.6s ease-in-out infinite;
+}
+.hexaclear-partner-ghost-fill.partner-ghost-offboard {
+  opacity: 0.5;
+}
+@keyframes hexaclear-partner-ghost-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.78; }
+}
+.cubic-viewport.reduced-motion
+  .hexaclear-hex-cube.partner-ghost,
+.cubic-viewport.reduced-motion .hexaclear-partner-ghost-fill {
+  animation: none;
 }
 
 /* The +10 label sits on the ruby's bright pink top face. To make the

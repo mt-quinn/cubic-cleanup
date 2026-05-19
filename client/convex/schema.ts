@@ -74,6 +74,23 @@ const emoteValidator = v.object({
   ts: v.number(),
 })
 
+// Live "where each player is hovering" presence. Each entry is a
+// (playerId, pieceId, cellId) triple stamped with `ts` so clients
+// can fade out stale entries without needing a server-side cleanup.
+// `pieceId` is the id of the piece currently held / about to be
+// dropped; `cellId` is the cell under the cursor or the touch
+// preview. We render a tinted ghost of that piece footprint for
+// every other viewer so they can see what their partner is
+// considering before it's actually placed. Optional + array-shaped
+// so older rooms (created before this field existed) keep
+// validating.
+const hoverValidator = v.object({
+  playerId: v.string(),
+  pieceId: v.string(),
+  cellId: v.string(),
+  ts: v.number(),
+})
+
 export default defineSchema({
   rooms: defineTable({
     code: v.string(),
@@ -91,6 +108,7 @@ export default defineSchema({
     lastPlacement: v.union(v.null(), lastPlacementValidator),
     cellOwners: cellOwnersValidator,
     lastEmotes: v.optional(v.array(emoteValidator)),
+    hovers: v.optional(v.array(hoverValidator)),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_code', ['code']),

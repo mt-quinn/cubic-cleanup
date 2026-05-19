@@ -1209,6 +1209,7 @@ function App() {
     }
     return out
   }, [isMultiplayer, mp.cellOwners, mp.selfPlayer])
+
   // Per-playerId emote, narrowed to "still inside its 10s display
   // window". Once the window closes the corresponding smiley falls
   // back to its default face. The expiry tick forces a recompute
@@ -2709,22 +2710,37 @@ function App() {
   // see `mp.status === 'gameover'` simultaneously and race-fire the
   // mutation; the server dedupes on (roomCode, finishedAt) so only one
   // row lands. We also guard locally with a ref keyed on the same pair
-  // so a re-renders during the gameover-modal lifetime don't keep
+  // so re-renders during the gameover-modal lifetime don't keep
   // re-firing the mutation.
+  //
+  // CRITICAL: `finishedAt` here is `lastPlacement.ts` — the server-
+  // stamped time of the placement that ended the game — not the
+  // room's `updatedAt`. The two are equal at the moment of gameover,
+  // but `updatedAt` can later be patched by other writes (e.g. an
+  // emote sent into the gameover modal), which would shift the dedupe
+  // key and slip a duplicate row past the server's
+  // (roomCode, finishedAt) check. `lastPlacement.ts` is the actual
+  // "this game ended" timestamp and is stable for the lifetime of
+  // the finished run.
   const coopScoreSubmittedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isMultiplayer) return
     if (mp.status !== 'gameover') return
     if (!mpRoomCode) return
-    if (mp.updatedAt === null) return
     if (mp.allPlayers.length === 0) return
     if (mp.game === null) return
-    const dedupeKey = `${mpRoomCode}@${mp.updatedAt}`
+    // lastPlacement is set whenever a placement lands, and the only
+    // way to enter gameover is via a placement, so we can rely on it
+    // here. Fall back to updatedAt purely as a defensive shim for
+    // any pre-existing rooms whose lastPlacement somehow drifted.
+    const finishedAt = mp.lastPlacement?.ts ?? mp.updatedAt
+    if (finishedAt === null) return
+    const dedupeKey = `${mpRoomCode}@${finishedAt}`
     if (coopScoreSubmittedRef.current === dedupeKey) return
     coopScoreSubmittedRef.current = dedupeKey
     submitCoopGlobal({
       roomCode: mpRoomCode,
-      finishedAt: mp.updatedAt,
+      finishedAt,
       score: mp.game.score,
       players: mp.allPlayers.map((p) => ({
         playerId: p.playerId,
@@ -2737,10 +2753,10 @@ function App() {
       coopScoreSubmittedRef.current = null
     })
     // mp.allPlayers identity changes per render but the underlying data
-    // is stable until the room mutates; updatedAt+roomCode is enough
-    // to gate this safely.
+    // is stable until the room mutates; lastPlacement.ts + roomCode is
+    // enough to gate this safely.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMultiplayer, mp.status, mpRoomCode, mp.updatedAt])
+  }, [isMultiplayer, mp.status, mpRoomCode, mp.lastPlacement?.ts])
 
   // Reset the dedup ref when the player leaves the room so re-joining
   // a *different* room and finishing it submits cleanly.
@@ -3013,6 +3029,154 @@ function App() {
         : null,
     [hover, selectedPiece, game],
   )
+
+  // Per-partner ghost overlays: for each non-self player who's
+  // currently hovering a piece, resolve their (pieceId, originCellId)
+  // pair into the list of cells the piece footprint would occupy
+  // and stamp the per-player hue onto each one. We tolerate partial
+  // off-board footprints by computing positions directly from the
+  // axial coords — the partner is "thinking about" placing here, so
+  // the player should see exactly the footprint they're aiming at,
+  // even if a cell falls outside the board. If the piece is no
+  // longer in the partner's hand (race: they placed it, hover
+  // hasn't cleared yet), we drop the ghost entirely rather than
+  // render a stale silhouette.
+  const partnerGhosts = useMemo(() => {
+    if (!isMultiplayer) return []
+    type Ghost = {
+      playerId: string
+      hue: number
+      cells: { q: number; r: number; cellId: string; onBoard: boolean }[]
+    }
+    const out: Ghost[] = []
+    const boardDef = getBoardDefinitionForMode(game.mode)
+    const cellById = new Map(boardDef.cells.map((c) => [c.id, c]))
+    for (const [hoverPlayerId, hover] of Object.entries(mp.hoverByPlayerId)) {
+      const partner = mp.allPlayers.find(
+        (p) => p.playerId === hoverPlayerId,
+      )
+      if (!partner) continue
+      const piece = partner.hand.find((p) => p.id === hover.pieceId)
+      if (!piece) continue
+      const origin = cellById.get(hover.cellId)
+      if (!origin) continue
+      const hue = mp.hueShiftByPlayerId[hoverPlayerId] ?? 0
+      const cells = piece.shape.cells.map((rel) => {
+        const q = origin.coord.q + rel.q
+        const r = origin.coord.r + rel.r
+        const cellId = axialToId({ q, r })
+        return { q, r, cellId, onBoard: cellById.has(cellId) }
+      })
+      out.push({ playerId: hoverPlayerId, hue, cells })
+    }
+    return out
+  }, [
+    isMultiplayer,
+    mp.hoverByPlayerId,
+    mp.allPlayers,
+    mp.hueShiftByPlayerId,
+    game.mode,
+  ])
+
+  // Broadcast our local "I'm currently considering this piece on
+  // this cell" to the room so partners can see a tinted ghost of
+  // what we're about to drop, in close to real time. We send at
+  // most one update per HOVER_THROTTLE_MS — that's enough to feel
+  // live to the partner while keeping mutation pressure on Convex
+  // bounded (most cell crossings end up coalesced into one write).
+  // The trailing edge is important: if the player's last action is
+  // landing on a new cell and then idling there, we still need to
+  // emit that final state so the partner ghost lands in the right
+  // spot. We re-stamp every ~stale-window/2 while idle so the
+  // partner's stale-out timer doesn't fire mid-think. Pass null /
+  // null when there's nothing to ghost so the server strips the
+  // entry instead of leaking a "phantom" hover for the throttle
+  // window.
+  const HOVER_THROTTLE_MS = 100
+  const HOVER_REFRESH_MS = 1500
+  const lastHoverSentRef = useRef<{ pieceId: string | null; cellId: string | null; ts: number } | null>(null)
+  const hoverTrailingTimerRef = useRef<number | null>(null)
+  const mpSetHover = mp.setHover
+  useEffect(() => {
+    if (!isMultiplayer) return
+
+    const desiredPieceId = selectedPieceId ?? null
+    const desiredCellId =
+      desiredPieceId && hover?.cellId ? hover.cellId : null
+
+    const now = Date.now()
+    const last = lastHoverSentRef.current
+    const sameAsLast =
+      last !== null &&
+      last.pieceId === desiredPieceId &&
+      last.cellId === desiredCellId
+    const sinceLast = last ? now - last.ts : Infinity
+    const needsRefresh =
+      sameAsLast && desiredPieceId !== null && sinceLast >= HOVER_REFRESH_MS
+
+    if (sameAsLast && !needsRefresh) return
+
+    const flush = () => {
+      hoverTrailingTimerRef.current = null
+      lastHoverSentRef.current = {
+        pieceId: desiredPieceId,
+        cellId: desiredCellId,
+        ts: Date.now(),
+      }
+      mpSetHover(desiredPieceId, desiredCellId).catch(() => {})
+    }
+
+    if (sinceLast >= HOVER_THROTTLE_MS) {
+      if (hoverTrailingTimerRef.current !== null) {
+        window.clearTimeout(hoverTrailingTimerRef.current)
+        hoverTrailingTimerRef.current = null
+      }
+      flush()
+      return
+    }
+
+    if (hoverTrailingTimerRef.current !== null) return
+    hoverTrailingTimerRef.current = window.setTimeout(
+      flush,
+      HOVER_THROTTLE_MS - sinceLast,
+    )
+  }, [isMultiplayer, selectedPieceId, hover?.cellId, mpSetHover])
+
+  // Re-emit the current hover periodically while it's stationary so
+  // partners' stale-out timers (HOVER_STALE_MS in the hook) don't
+  // fire mid-think. Without this, a player who selects a piece and
+  // mouses over one cell without moving for >3s would see their
+  // ghost vanish for the partner.
+  useEffect(() => {
+    if (!isMultiplayer) return
+    const id = window.setInterval(() => {
+      const last = lastHoverSentRef.current
+      if (!last) return
+      if (last.pieceId === null && last.cellId === null) return
+      if (Date.now() - last.ts < HOVER_REFRESH_MS) return
+      lastHoverSentRef.current = { ...last, ts: Date.now() }
+      mpSetHover(last.pieceId, last.cellId).catch(() => {})
+    }, HOVER_REFRESH_MS)
+    return () => window.clearInterval(id)
+  }, [isMultiplayer, mpSetHover])
+
+  // On unmount / room exit, drop any lingering ghost so a partner
+  // doesn't see us frozen on our last cell for the stale-out grace
+  // window.
+  useEffect(() => {
+    if (!isMultiplayer) return
+    return () => {
+      if (hoverTrailingTimerRef.current !== null) {
+        window.clearTimeout(hoverTrailingTimerRef.current)
+        hoverTrailingTimerRef.current = null
+      }
+      const last = lastHoverSentRef.current
+      if (last && (last.pieceId !== null || last.cellId !== null)) {
+        mpSetHover(null, null).catch(() => {})
+        lastHoverSentRef.current = { pieceId: null, cellId: null, ts: Date.now() }
+      }
+    }
+  }, [isMultiplayer, mpSetHover])
 
   useEffect(() => {
     if (game.moves > 0) {
@@ -3959,37 +4123,11 @@ function App() {
       })()}
 
       {adPreviews && (
-        <>
-          {/* Two layout variants drive a single source asset:
-              - `.hexaclear-banner-ad` runs full-width inline between
-                the header and the board, used when the viewport has
-                vertical room to spare (mobile portrait).
-              - `.hexaclear-banner-ad-side` is a fixed-position strip
-                rotated 90° on the right edge of the viewport, used
-                when horizontal space is plentiful and vertical
-                space is tight (desktop / landscape tablets).
-              The CSS in `index.css` switches which one is visible
-              based on `(orientation: landscape) and (min-width: …)`,
-              so only one paints at a time. Both share the same
-              gating React condition so the player only sees an ad
-              when they've explicitly opted in. */}
-          <img
-            className="hexaclear-banner-ad"
-            src="/banner_ad.png"
-            alt="Sponsored banner ad preview"
-          />
-          <div
-            className="hexaclear-banner-ad-side-frame"
-            aria-hidden="true"
-          >
-            <img
-              className="hexaclear-banner-ad-side"
-              src="/banner_ad.png"
-              alt=""
-              draggable={false}
-            />
-          </div>
-        </>
+        <img
+          className="hexaclear-banner-ad"
+          src="/banner_ad.png"
+          alt="Sponsored banner ad preview"
+        />
       )}
 
       <main className="hexaclear-main">
@@ -4010,6 +4148,24 @@ function App() {
           }}
           ref={boardWrapperRef}
         >
+          {adPreviews && (
+            // Landscape companion ad: rotated 90° and pinned to the
+            // right edge of the board wrapper so its visual height
+            // tracks the board exactly, with a small gap. The CSS
+            // hides this in portrait and reveals it once the
+            // viewport has room to spare horizontally.
+            <div
+              className="hexaclear-banner-ad-side-frame"
+              aria-hidden="true"
+            >
+              <img
+                className="hexaclear-banner-ad-side"
+                src="/banner_ad.png"
+                alt=""
+                draggable={false}
+              />
+            </div>
+          )}
           <svg
             className="hexaclear-board"
             ref={svgRef}
@@ -4108,20 +4264,26 @@ function App() {
                 // In MP co-op we tint each non-self placement so a
                 // viewer can see at a glance who placed which cube.
                 // The `partner-piece` class drives a lightening pass
-                // (brightness/saturate) and the inline hue-rotate
-                // filter rotates the underlying palette by the per-
-                // player offset assigned in the hook. Self-placed
-                // cells stay in the default palette. Rubies have
-                // their own palette and aren't owned by any player,
-                // so we leave them untinted regardless.
+                // (brightness/saturate) AND the hue rotation as a
+                // single combined filter chain — composing two
+                // separate filters across an SVG ancestor and its
+                // descendant doesn't render reliably (especially in
+                // the wood theme's nested `<g>` cubes), so we drive
+                // the per-player offset through a CSS variable that
+                // the partner-piece rule splices into its existing
+                // brightness/saturate filter. Self-placed cells stay
+                // in the default palette. Rubies have their own
+                // palette and aren't owned by any player, so we
+                // leave them untinted regardless.
                 const isPartnerOwned =
                   isMultiplayer && !isGolden && nonSelfOwnedCells.has(cell.id)
                 const partnerHueShift =
                   isPartnerOwned ? cellHueByCellId[cell.id] ?? 0 : 0
-                const partnerHueStyle =
-                  partnerHueShift !== 0
-                    ? { filter: `hue-rotate(${partnerHueShift}deg)` }
-                    : undefined
+                const partnerHueStyle = isPartnerOwned
+                  ? ({
+                      '--partner-hue': `${partnerHueShift}deg`,
+                    } as React.CSSProperties)
+                  : undefined
 
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
@@ -4277,6 +4439,64 @@ function App() {
                     />
                   )
                 })}
+              </g>
+            )}
+
+            {/* Live partner-hover ghosts. One translucent piece
+                footprint per non-self player, colored with their
+                per-viewer hue (same `--partner-hue` variable that
+                drives placed-cube tinting, so a partner's ghost
+                matches the cubes they end up dropping). We render
+                BOTH a flat polygon (visible only in win98, where
+                cube faces are display:none) and a CubeLines (visible
+                only in wood, where the polygon is empty / unfilled
+                under a ghost). Each cell renders both shapes; CSS
+                picks the right one per theme. Off-board cells in
+                the footprint still render so the player can see
+                that their partner is aiming at an edge — no
+                validity check on purpose; these are exploratory
+                previews, not commitments. */}
+            {partnerGhosts.length > 0 && (
+              <g className="hexaclear-partner-ghosts" pointerEvents="none">
+                {partnerGhosts.map((ghost) =>
+                  ghost.cells.map((c) => {
+                    const { x, y } = axialToPixel(c.q, c.r)
+                    const cx = x + boardLayout.offsetX
+                    const cy = y + boardLayout.offsetY
+                    const points = buildHexPoints(cx, cy)
+                    const offboardClass = c.onBoard
+                      ? ''
+                      : 'partner-ghost-offboard'
+                    const hueStyle = {
+                      '--partner-hue': `${ghost.hue}deg`,
+                    } as React.CSSProperties
+                    return (
+                      <g
+                        key={`partner-ghost-${ghost.playerId}-${c.cellId}`}
+                        style={hueStyle}
+                      >
+                        <polygon
+                          className={[
+                            'hexaclear-partner-ghost-fill',
+                            offboardClass,
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          points={points}
+                        />
+                        <CubeLines
+                          cx={cx}
+                          cy={cy}
+                          variant="normal"
+                          extraClasses={[
+                            'partner-ghost',
+                            offboardClass,
+                          ].filter(Boolean)}
+                        />
+                      </g>
+                    )
+                  }),
+                )}
               </g>
             )}
 
