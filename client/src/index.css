@@ -2018,6 +2018,15 @@ body {
   cursor: grabbing;
 }
 
+/* While dragging, the × cancel marker IS the highlight — suppress
+   the larger .selected outline on the slot so we don't read as two
+   nested boxes (the marker has its own dashed border that doubles
+   as the hit-zone affordance). */
+.hexaclear-piece-button.dragging.selected {
+  background: transparent;
+  box-shadow: none;
+}
+
 /* The × that appears in the slot a drag started in. Acts as both a
    visual affordance ("releasing here cancels the drag") and the
    actual cancel hit zone — pointer-up inside this element's
