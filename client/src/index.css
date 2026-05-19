@@ -230,6 +230,30 @@ body {
   color: #3a1204;
 }
 
+/* Joke banner-ad preview strip. Sits between the header and the
+   board when the menu's "Ad previews" toggle is on. We render the
+   PNG full-bleed across the page column so the ad reads as a
+   classic horizontal sponsorship rectangle, with no clipping
+   regardless of viewport width. The image keeps its native
+   aspect ratio so we don't squish the artwork. A tiny vertical
+   margin matches the gap between the header and the board so
+   we don't break the column rhythm. */
+.hexaclear-banner-ad {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.4rem;
+  margin: 0.4rem 0;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+[data-theme="win98"] .hexaclear-banner-ad {
+  border-radius: 0;
+  margin: 4px 0;
+}
+
 .hexaclear-main {
   flex: 1;
   display: flex;

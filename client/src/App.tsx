@@ -1468,6 +1468,15 @@ function App() {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('cubic-reduced-motion') === 'true'
   })
+  // Joke "ad previews" preview-mode. When on, a parody banner-ad
+  // image gets stamped between the header chrome and the board so we
+  // can mock up what a freemium / monetized build of Cubekill might
+  // look like. Off by default; persisted under cubic-ad-previews so
+  // the player's choice survives reloads.
+  const [adPreviews, setAdPreviews] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('cubic-ad-previews') === 'true'
+  })
   // Theme engine: which visual theme is active. Wood is the original
   // warm cream/gold treatment; win98 is the Windows 98 / Minesweeper
   // homage. Stored as a flat string so we can add more themes later
@@ -2992,6 +3001,19 @@ function App() {
     }
   }, [reducedMotion])
 
+  // Persist the ad-previews toggle alongside the other prefs.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        'cubic-ad-previews',
+        adPreviews ? 'true' : 'false',
+      )
+    } catch {
+      // Best-effort persistence.
+    }
+  }, [adPreviews])
+
   // Apply the active theme to <html data-theme="..."> and persist it.
   // Every theme override in CSS is scoped under that selector so
   // switching is purely a single attribute write — no remount needed,
@@ -3835,6 +3857,14 @@ function App() {
           </div>
         )
       })()}
+
+      {adPreviews && (
+        <img
+          className="hexaclear-banner-ad"
+          src="/banner_ad.png"
+          alt="Sponsored banner ad preview"
+        />
+      )}
 
       <main className="hexaclear-main">
         <div
@@ -4847,6 +4877,19 @@ function App() {
                       checked={reducedMotion}
                       onChange={(e) => {
                         setReducedMotion(e.target.checked)
+                        playUiClick()
+                      }}
+                    />
+                  </label>
+                  <label className="hexaclear-menu-row">
+                    <span className="hexaclear-menu-row-label">
+                      Ad previews
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={adPreviews}
+                      onChange={(e) => {
+                        setAdPreviews(e.target.checked)
                         playUiClick()
                       }}
                     />
