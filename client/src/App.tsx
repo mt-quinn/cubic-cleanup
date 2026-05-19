@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BOARD_DEFINITION } from './game/boardDefinition'
+import {
+  getBoardDefinitionForMode,
+  getBoardGeometryForMode,
+} from './game/boardDefinition'
+import type { BoardGeometry } from './game/boardDefinition'
 import {
   applyPlacement,
   canPlacePiece,
+  createBigGameState,
   createInitialGameState,
   createDailyGameState,
   dealPlayableHand,
@@ -11,7 +16,7 @@ import {
 } from './game/gameLogic'
 import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
-import type { Axial } from './game/hexTypes'
+import type { BoardDefinition } from './game/hexTypes'
 import {
   getMasterVolume,
   getMuted,
@@ -78,23 +83,21 @@ const DEBUG_SHOW_COORDS = false
 // directions (1,0), (0,1), (-1,1), (-1,0), (0,-1), (1,-1) respectively.
 const EDGE_DIRECTION_INDEX = [0, 5, 4, 3, 2, 1] as const
 
-const FLOWER_CENTERS: Axial[] = [
-  { q: 0, r: 0 },
-  { q: 1, r: 2 },
-  { q: -2, r: 3 },
-  { q: -3, r: 1 },
-  { q: -1, r: -2 },
-  { q: 2, r: -3 },
-  { q: 3, r: -1 },
-]
-
 const axialToPixel = (q: number, r: number) => {
   const x = HEX_SIZE * (SQRT3 * q + (SQRT3 / 2) * r)
   const y = HEX_SIZE * (1.5 * r)
   return { x, y }
 }
 
-const buildLayout = () => {
+type BoardLayout = {
+  positions: Record<string, { x: number; y: number }>
+  width: number
+  height: number
+  offsetX: number
+  offsetY: number
+}
+
+const buildLayout = (boardDef: BoardDefinition): BoardLayout => {
   let minX = Infinity
   let maxX = -Infinity
   let minY = Infinity
@@ -102,7 +105,7 @@ const buildLayout = () => {
 
   const positions: Record<string, { x: number; y: number }> = {}
 
-  for (const cell of BOARD_DEFINITION.cells) {
+  for (const cell of boardDef.cells) {
     const { x, y } = axialToPixel(cell.coord.q, cell.coord.r)
     positions[cell.id] = { x, y }
     minX = Math.min(minX, x)
@@ -114,12 +117,14 @@ const buildLayout = () => {
   const width = maxX - minX + HEX_SIZE * 2.5
   const height = maxY - minY + HEX_SIZE * 2.5
 
-  return { positions, width, height, offsetX: -minX + HEX_SIZE * 1.25, offsetY: -minY + HEX_SIZE * 1.25 }
+  return {
+    positions,
+    width,
+    height,
+    offsetX: -minX + HEX_SIZE * 1.25,
+    offsetY: -minY + HEX_SIZE * 1.25,
+  }
 }
-
-const BOARD_LAYOUT = buildLayout()
-const BOARD_RIPPLE_RADIUS =
-  Math.max(BOARD_LAYOUT.width, BOARD_LAYOUT.height) * 0.7
 
 type Segment = { x1: number; y1: number; x2: number; y2: number }
 
@@ -132,26 +137,37 @@ type Segment = { x1: number; y1: number; x2: number; y2: number }
 const ROSETTE_GROOVE_DARK_INSET = 5.5
 const ROSETTE_GROOVE_LIGHT_INSET = 7
 
-const FLOWER_BOUNDARY_SEGMENTS: Segment[] = (() => {
+// Build the perimeter segments for every rosette in the board. Used by
+// the Wood theme to lightly outline each flower group of cells. Walks
+// every cell inside the rosette (radius-r hex region) and emits the
+// edges that border a non-rosette cell. Works for any flower radius.
+const buildFlowerBoundarySegments = (
+  boardDef: BoardDefinition,
+  layout: BoardLayout,
+  geometry: BoardGeometry,
+): Segment[] => {
   const segments: Segment[] = []
   const idToCell = new Map(
-    BOARD_DEFINITION.cells.map((c) => [c.id, c] as const),
+    boardDef.cells.map((c) => [c.id, c] as const),
   )
 
-  for (const center of FLOWER_CENTERS) {
-    const centerId = axialToId(center)
-    const neighborIds = directions.map((d) =>
-      axialToId(addAxial(center, d)),
-    )
-    const cellIds = [centerId, ...neighborIds]
+  for (const center of geometry.flowerCenters) {
+    const cellIds: string[] = []
+    for (let dq = -geometry.flowerRadius; dq <= geometry.flowerRadius; dq++) {
+      const drMin = Math.max(-geometry.flowerRadius, -dq - geometry.flowerRadius)
+      const drMax = Math.min(geometry.flowerRadius, -dq + geometry.flowerRadius)
+      for (let dr = drMin; dr <= drMax; dr++) {
+        cellIds.push(axialToId({ q: center.q + dq, r: center.r + dr }))
+      }
+    }
     const cellSet = new Set(cellIds)
 
     for (const cellId of cellIds) {
       const cell = idToCell.get(cellId)
       if (!cell) continue
-      const pos = BOARD_LAYOUT.positions[cellId]
-      const cx = pos.x + BOARD_LAYOUT.offsetX
-      const cy = pos.y + BOARD_LAYOUT.offsetY
+      const pos = layout.positions[cellId]
+      const cx = pos.x + layout.offsetX
+      const cy = pos.y + layout.offsetY
 
       for (let side = 0; side < 6; side++) {
         const dir = directions[EDGE_DIRECTION_INDEX[side]]
@@ -173,7 +189,7 @@ const FLOWER_BOUNDARY_SEGMENTS: Segment[] = (() => {
   }
 
   return segments
-})()
+}
 
 // Closed-loop rosette boundaries with proper inset polygons for
 // the Win98 etched-groove rendering. For each rosette we:
@@ -294,27 +310,40 @@ const insetClosedLoop = (
   return result
 }
 
-const FLOWER_BOUNDARY_LOOPS: { dark: Vec2[]; light: Vec2[] }[] = (() => {
+// Closed-loop, etched-groove polygons for every rosette. Stitches each
+// rosette's perimeter into a continuous loop, then offsets it inward by
+// two perpendicular distances for the dark/light groove pair. Same
+// idea as buildFlowerBoundarySegments above, just walked through the
+// stitcher so consecutive segments share a vertex.
+const buildFlowerBoundaryLoops = (
+  boardDef: BoardDefinition,
+  layout: BoardLayout,
+  geometry: BoardGeometry,
+): { dark: Vec2[]; light: Vec2[] }[] => {
   const loops: { dark: Vec2[]; light: Vec2[] }[] = []
   const idToCell = new Map(
-    BOARD_DEFINITION.cells.map((c) => [c.id, c] as const),
+    boardDef.cells.map((c) => [c.id, c] as const),
   )
 
-  for (const center of FLOWER_CENTERS) {
+  for (const center of geometry.flowerCenters) {
     const centerId = axialToId(center)
-    const neighborIds = directions.map((d) =>
-      axialToId(addAxial(center, d)),
-    )
-    const cellIds = [centerId, ...neighborIds]
+    const cellIds: string[] = []
+    for (let dq = -geometry.flowerRadius; dq <= geometry.flowerRadius; dq++) {
+      const drMin = Math.max(-geometry.flowerRadius, -dq - geometry.flowerRadius)
+      const drMax = Math.min(geometry.flowerRadius, -dq + geometry.flowerRadius)
+      for (let dr = drMin; dr <= drMax; dr++) {
+        cellIds.push(axialToId({ q: center.q + dq, r: center.r + dr }))
+      }
+    }
     const cellSet = new Set(cellIds)
 
     const segs: Segment[] = []
     for (const cellId of cellIds) {
       const cell = idToCell.get(cellId)
       if (!cell) continue
-      const pos = BOARD_LAYOUT.positions[cellId]
-      const cx = pos.x + BOARD_LAYOUT.offsetX
-      const cy = pos.y + BOARD_LAYOUT.offsetY
+      const pos = layout.positions[cellId]
+      const cx = pos.x + layout.offsetX
+      const cy = pos.y + layout.offsetY
       for (let side = 0; side < 6; side++) {
         const dir = directions[EDGE_DIRECTION_INDEX[side]]
         const neighborCoord = addAxial(cell.coord, dir)
@@ -337,10 +366,10 @@ const FLOWER_BOUNDARY_LOOPS: { dark: Vec2[]; light: Vec2[] }[] = (() => {
     }
 
     const ordered = stitchClosedLoop(segs)
-    const centerPos = BOARD_LAYOUT.positions[centerId]
+    const centerPos = layout.positions[centerId]
     const inwardRef: Vec2 = {
-      x: centerPos.x + BOARD_LAYOUT.offsetX,
-      y: centerPos.y + BOARD_LAYOUT.offsetY,
+      x: centerPos.x + layout.offsetX,
+      y: centerPos.y + layout.offsetY,
     }
     loops.push({
       dark: insetClosedLoop(
@@ -357,19 +386,22 @@ const FLOWER_BOUNDARY_LOOPS: { dark: Vec2[]; light: Vec2[] }[] = (() => {
   }
 
   return loops
-})()
+}
 
 // Exterior outline of the whole board: all hex edges whose neighbor is not
 // another board cell, de-duped so we get a single continuous hex-shaped hull.
-const BOARD_OUTLINE_SEGMENTS: Segment[] = (() => {
+const buildBoardOutlineSegments = (
+  boardDef: BoardDefinition,
+  layout: BoardLayout,
+): Segment[] => {
   const segments: Segment[] = []
-  const cellSet = new Set(BOARD_DEFINITION.cells.map((c) => c.id))
+  const cellSet = new Set(boardDef.cells.map((c) => c.id))
   const seen = new Set<string>()
 
-  for (const cell of BOARD_DEFINITION.cells) {
-    const pos = BOARD_LAYOUT.positions[cell.id]
-    const cx = pos.x + BOARD_LAYOUT.offsetX
-    const cy = pos.y + BOARD_LAYOUT.offsetY
+  for (const cell of boardDef.cells) {
+    const pos = layout.positions[cell.id]
+    const cx = pos.x + layout.offsetX
+    const cy = pos.y + layout.offsetY
 
     for (let side = 0; side < 6; side++) {
       const dir = directions[EDGE_DIRECTION_INDEX[side]]
@@ -400,7 +432,50 @@ const BOARD_OUTLINE_SEGMENTS: Segment[] = (() => {
   }
 
   return segments
-})()
+}
+
+// Bundle of pre-baked render data for one board. We compute one of
+// these per mode at module load and pick the right one based on
+// `game.mode` at render time. Keeps the per-render cost flat — the
+// only thing that varies is which constant we point at.
+type BoardRenderData = {
+  boardDef: BoardDefinition
+  layout: BoardLayout
+  rippleRadius: number
+  flowerBoundarySegments: Segment[]
+  flowerBoundaryLoops: { dark: Vec2[]; light: Vec2[] }[]
+  outlineSegments: Segment[]
+  geometry: BoardGeometry
+}
+
+const buildBoardRenderData = (mode: GameMode): BoardRenderData => {
+  const boardDef = getBoardDefinitionForMode(mode)
+  const geometry = getBoardGeometryForMode(mode)
+  const layout = buildLayout(boardDef)
+  return {
+    boardDef,
+    layout,
+    rippleRadius: Math.max(layout.width, layout.height) * 0.7,
+    flowerBoundarySegments: buildFlowerBoundarySegments(
+      boardDef,
+      layout,
+      geometry,
+    ),
+    flowerBoundaryLoops: buildFlowerBoundaryLoops(
+      boardDef,
+      layout,
+      geometry,
+    ),
+    outlineSegments: buildBoardOutlineSegments(boardDef, layout),
+    geometry,
+  }
+}
+
+const STANDARD_RENDER_DATA = buildBoardRenderData('endless')
+const BIG_RENDER_DATA = buildBoardRenderData('big')
+
+const getRenderDataForMode = (mode: GameMode): BoardRenderData =>
+  mode === 'big' ? BIG_RENDER_DATA : STANDARD_RENDER_DATA
 
 const buildHexPoints = (cx: number, cy: number): string => {
   const points: string[] = []
@@ -567,12 +642,16 @@ const PlacementGhost = ({
   originCellId,
   piece,
   valid,
+  boardDef,
+  layout,
 }: {
   originCellId: string
   piece: ActivePiece
   valid: boolean
+  boardDef: BoardDefinition
+  layout: BoardLayout
 }) => {
-  const originCell = BOARD_DEFINITION.cells.find((c) => c.id === originCellId)
+  const originCell = boardDef.cells.find((c) => c.id === originCellId)
   if (!originCell) return null
 
   return (
@@ -581,8 +660,8 @@ const PlacementGhost = ({
         const targetQ = originCell.coord.q + rel.q
         const targetR = originCell.coord.r + rel.r
         const { x, y } = axialToPixel(targetQ, targetR)
-        const cx = x + BOARD_LAYOUT.offsetX
-        const cy = y + BOARD_LAYOUT.offsetY
+        const cx = x + layout.offsetX
+        const cy = y + layout.offsetY
         const points = buildHexPoints(cx, cy)
         return (
           <polygon
@@ -610,7 +689,8 @@ const getBestPlacementPreview = (
 ) => {
   if (!hoveredCellId || !selectedPiece) return null
 
-  const originCell = BOARD_DEFINITION.cells.find((c) => c.id === hoveredCellId)
+  const boardDef = getBoardDefinitionForMode(game.mode)
+  const originCell = boardDef.cells.find((c) => c.id === hoveredCellId)
   if (!originCell) return null
 
   const targetIds: string[] = []
@@ -784,30 +864,89 @@ type PersistedGameEnvelope = {
   dateKey?: string
 }
 
+const PERSIST_KEY_BY_MODE: Record<GameMode, string> = {
+  endless: 'cubic-current-game-endless',
+  daily: 'cubic-current-game-daily',
+  big: 'cubic-current-game-big',
+}
+
+const ACTIVE_MODE_KEY = 'cubic-active-mode'
+
+// Try to migrate the pre-multi-mode single-key save into per-mode
+// slots. If both the legacy key and a per-mode key exist, the per-mode
+// key wins (it's been kept in sync more recently). Idempotent: deletes
+// the legacy key after migrating so subsequent reads short-circuit.
+const migrateLegacyPersistedGame = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = window.localStorage.getItem('cubic-current-game')
+    if (!raw) return
+    const parsed = JSON.parse(raw) as PersistedGameEnvelope
+    if (!parsed || parsed.version !== 1 || !parsed.game) {
+      window.localStorage.removeItem('cubic-current-game')
+      return
+    }
+    const targetKey = PERSIST_KEY_BY_MODE[parsed.mode]
+    if (targetKey && !window.localStorage.getItem(targetKey)) {
+      window.localStorage.setItem(targetKey, raw)
+    }
+    if (!window.localStorage.getItem(ACTIVE_MODE_KEY)) {
+      window.localStorage.setItem(ACTIVE_MODE_KEY, parsed.mode)
+    }
+    window.localStorage.removeItem('cubic-current-game')
+  } catch {
+    // Best-effort migration; ignore parse failures.
+  }
+}
+
+const loadGameForMode = (mode: GameMode): GameState | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(PERSIST_KEY_BY_MODE[mode])
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as PersistedGameEnvelope
+    if (!parsed || parsed.version !== 1 || !parsed.game) return null
+    if (mode === 'daily') {
+      const todayKey = getTodayKey()
+      if (parsed.dateKey && parsed.dateKey !== todayKey) {
+        return null
+      }
+    }
+    // Backfill fields added since older saves were written so we don't crash on
+    // legacy state shapes (e.g. pre-multi-ruby saves had `goldenCellId`).
+    const game = parsed.game as GameState & {
+      goldenCellId?: string | null
+    }
+    if (!Array.isArray(game.goldenCellIds)) {
+      const legacyId = game.goldenCellId
+      game.goldenCellIds =
+        typeof legacyId === 'string' && legacyId.length > 0 ? [legacyId] : []
+    }
+    if (typeof game.mode !== 'string') {
+      game.mode = mode
+    }
+    return game
+  } catch {
+    return null
+  }
+}
+
 const loadInitialGameFromStorage = (): GameState => {
   if (typeof window === 'undefined') {
     return createInitialGameState()
   }
-  try {
-    const raw = window.localStorage.getItem('cubic-current-game')
-    if (!raw) return createInitialGameState()
-    const parsed = JSON.parse(raw) as PersistedGameEnvelope
-    if (!parsed || parsed.version !== 1 || !parsed.game) {
-      return createInitialGameState()
-    }
-
-    // For daily games, only restore if the stored date matches today.
-    if (parsed.mode === 'daily') {
-      const todayKey = getTodayKey()
-      if (parsed.dateKey && parsed.dateKey !== todayKey) {
-        return createDailyGameState()
-      }
-    }
-
-    return parsed.game
-  } catch {
-    return createInitialGameState()
+  migrateLegacyPersistedGame()
+  let activeMode = (window.localStorage.getItem(ACTIVE_MODE_KEY) as
+    | GameMode
+    | null) ?? 'endless'
+  if (activeMode !== 'endless' && activeMode !== 'daily' && activeMode !== 'big') {
+    activeMode = 'endless'
   }
+  const stored = loadGameForMode(activeMode)
+  if (stored) return stored
+  if (activeMode === 'daily') return createDailyGameState()
+  if (activeMode === 'big') return createBigGameState()
+  return createInitialGameState()
 }
 
 // Both pickup and placement get the same heavy bump per game design.
@@ -823,6 +962,18 @@ const triggerGrabHaptic = () => {
 
 function App() {
   const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
+  // All board-shape data (cell positions, layout dimensions, rosette
+  // boundaries, etc.) is precomputed once per mode at module load and
+  // re-pointed at when the active mode changes. Everything below uses
+  // `boardDef` / `boardLayout` rather than the legacy module-level
+  // BOARD_DEFINITION / BOARD_LAYOUT constants so big mode can reuse the
+  // entire render tree with its own cells.
+  const boardRender = useMemo(
+    () => getRenderDataForMode(game.mode),
+    [game.mode],
+  )
+  const boardDef = boardRender.boardDef
+  const boardLayout = boardRender.layout
   // True iff the player committed to a session this load — either by having
   // an in-progress game restored from storage, or by explicitly starting /
   // resetting a run from the menu, or by placing their first piece. Once
@@ -844,14 +995,19 @@ function App() {
   const [clearingClassesByCell, setClearingClassesByCell] = useState<
     Record<string, string[]>
   >({})
-  const [clearingGoldenCellId, setClearingGoldenCellId] = useState<string | null>(null)
-  // If the ruby (golden cube) respawns onto an empty cell, game logic marks that
-  // destination cell as filled immediately. During the clear animation we keep
-  // the ruby highlight on the *previous* cell, so we hide the destination cube
-  // until the clear animation finishes to avoid a brief "normal cube" flash.
-  const [pendingGoldenSpawnCellId, setPendingGoldenSpawnCellId] = useState<
-    string | null
-  >(null)
+  // Ruby cells participating in the *current* clear animation. Tracked
+  // as a list so big-board placements that sweep up multiple rubies in
+  // one move can keep the ruby decoration on every cleared cell, not
+  // just the first one.
+  const [clearingGoldenCellIds, setClearingGoldenCellIds] = useState<string[]>([])
+  // If a ruby (golden cube) respawns onto an empty cell, game logic
+  // marks that destination cell as filled immediately. During the clear
+  // animation we keep the ruby highlight on the *previous* cells, so we
+  // hide each destination cube until the animation finishes to avoid a
+  // brief "normal cube" flash. Big board can spawn several at once.
+  const [pendingGoldenSpawnCellIds, setPendingGoldenSpawnCellIds] = useState<
+    string[]
+  >([])
   const [recentlyPlacedCells, setRecentlyPlacedCells] = useState<string[]>([])
   // Screenshake & hitstop are driven by tokens that increment per event so
   // we can retrigger CSS animations without remounting the wrapper element.
@@ -888,13 +1044,13 @@ function App() {
       return { token: handFlyInToken, done: nextDone }
     })
   }
-  // Radial particle burst that fires at the ruby's old position when it
-  // gets cleared. Token bumps so consecutive captures restart cleanly.
-  const [rubyBurst, setRubyBurst] = useState<{
-    token: number
-    x: number
-    y: number
-  } | null>(null)
+  // Radial particle bursts that fire at each ruby's old position when
+  // it gets cleared. Each burst has a unique token; big-board moves can
+  // queue several at once and they all animate independently before
+  // expiring together when the list resets.
+  const [rubyBursts, setRubyBursts] = useState<
+    Array<{ token: number; x: number; y: number }>
+  >([])
   // While true, the game-over modal is suppressed and the board is in
   // its wind-down phase (desaturating, hand pieces shaking).
   const [gameOverWindingDown, setGameOverWindingDown] = useState(false)
@@ -978,10 +1134,19 @@ function App() {
     const stored = window.localStorage.getItem('hexaclear-best-score')
     return stored ? Number(stored) : null
   })
+  // Each mode persists into its own localStorage slot so toggling
+  // between modes (or refreshing while in a different mode) never
+  // throws away the others' in-progress runs. The React state cache is
+  // hydrated from those slots on first render.
   const [savedEndlessGame, setSavedEndlessGame] = useState<GameState | null>(
-    null,
+    () => loadGameForMode('endless'),
   )
-  const [savedDailyGame, setSavedDailyGame] = useState<GameState | null>(null)
+  const [savedDailyGame, setSavedDailyGame] = useState<GameState | null>(
+    () => loadGameForMode('daily'),
+  )
+  const [savedBigGame, setSavedBigGame] = useState<GameState | null>(
+    () => loadGameForMode('big'),
+  )
   const [todayDailyBestMoves, setTodayDailyBestMoves] = useState<number | null>(
     () => {
       if (typeof window === 'undefined') return null
@@ -997,7 +1162,7 @@ function App() {
   const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
     getTodayKey(),
   )
-  const [goldenPopupCellId, setGoldenPopupCellId] = useState<string | null>(null)
+  const [goldenPopupCellIds, setGoldenPopupCellIds] = useState<string[]>([])
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
   const [dailyHitPulseCells, setDailyHitPulseCells] = useState<string[]>([])
   const [rippleCells, setRippleCells] = useState<string[]>([])
@@ -1005,7 +1170,7 @@ function App() {
   const [rippleCenter, setRippleCenter] = useState<{ x: number; y: number } | null>(null)
   const [rippleToken, setRippleToken] = useState(0)
   const rippleRadiusRef = useRef(0)
-  const rippleMaxRadiusRef = useRef(BOARD_RIPPLE_RADIUS * 2)
+  const rippleMaxRadiusRef = useRef(boardRender.rippleRadius * 2)
   const CLEAR_RIPPLE_DURATION_MS = 900
   const dailyCubesRemaining = useMemo(() => {
     if (game.mode !== 'daily') return 0
@@ -1072,15 +1237,15 @@ function App() {
   const playablePieceIds = useMemo<Set<string>>(() => {
     const playable = new Set<string>()
     for (const piece of game.hand) {
-      for (const cell of BOARD_DEFINITION.cells) {
-        if (canPlacePiece(game.board, piece.shape, cell.id)) {
+      for (const cell of boardDef.cells) {
+        if (canPlacePiece(game.board, piece.shape, cell.id, game.mode)) {
           playable.add(piece.id)
           break
         }
       }
     }
     return playable
-  }, [game.board, game.hand])
+  }, [game.board, game.hand, game.mode, boardDef])
 
   const findClosestCellIdFromClientPoint = (clientX: number, clientY: number): string | null => {
     const svg = svgRef.current
@@ -1094,10 +1259,14 @@ function App() {
 
     let bestId: string | null = null
     let bestDistSq = Infinity
-    for (const cell of BOARD_DEFINITION.cells) {
-      const pos = BOARD_LAYOUT.positions[cell.id]
-      const cx = pos.x + BOARD_LAYOUT.offsetX
-      const cy = pos.y + BOARD_LAYOUT.offsetY
+    for (const cell of boardDef.cells) {
+      const pos = boardLayout.positions[cell.id]
+      // Guard against stale closure mismatch between boardDef and boardLayout
+      // — if we somehow get a cell id without a layout entry, just skip it
+      // rather than crashing the whole render tree.
+      if (!pos) continue
+      const cx = pos.x + boardLayout.offsetX
+      const cy = pos.y + boardLayout.offsetY
       const dx = local.x - cx
       const dy = local.y - cy
       const distSq = dx * dx + dy * dy
@@ -1135,16 +1304,22 @@ function App() {
         return current
       }
 
-      if (
-        current.mode === 'endless' &&
-        result.goldenCleared &&
-        result.goldenCellId &&
-        before.board[result.goldenCellId] === 'empty' &&
-        !result.placedCellIds.includes(result.goldenCellId)
-      ) {
-        setPendingGoldenSpawnCellId(result.goldenCellId)
+      // Identify rubies that respawned onto previously-empty cells in
+      // this placement so we can hide each one until the clear animation
+      // finishes (otherwise the new ruby flashes as a normal cube). On
+      // big-board moves multiple rubies can respawn in the same step.
+      if (result.rubiesCleared > 0) {
+        const previousRubySet = new Set(current.goldenCellIds)
+        const placedSet = new Set(result.placedCellIds)
+        const newSpawns = result.goldenCellIds.filter(
+          (id) =>
+            !previousRubySet.has(id) &&
+            before.board[id] === 'empty' &&
+            !placedSet.has(id),
+        )
+        setPendingGoldenSpawnCellIds(newSpawns)
       } else {
-        setPendingGoldenSpawnCellId(null)
+        setPendingGoldenSpawnCellIds([])
       }
 
       // For VFX, only run the placement "pop" on the portion of the piece
@@ -1179,9 +1354,9 @@ function App() {
         let sumX = 0
         let sumY = 0
         for (const id of rippleFootprint) {
-          const pos = BOARD_LAYOUT.positions[id]
-          sumX += pos.x + BOARD_LAYOUT.offsetX
-          sumY += pos.y + BOARD_LAYOUT.offsetY
+          const pos = boardLayout.positions[id]
+          sumX += pos.x + boardLayout.offsetX
+          sumY += pos.y + boardLayout.offsetY
         }
         const cx = sumX / rippleFootprint.length
         const cy = sumY / rippleFootprint.length
@@ -1192,10 +1367,10 @@ function App() {
         // centroid to the furthest board cell center, plus a small margin
         // so the wave fully exits the board before being cleared.
         let maxDistSq = 0
-        for (const cell of BOARD_DEFINITION.cells) {
-          const pos = BOARD_LAYOUT.positions[cell.id]
-          const x = pos.x + BOARD_LAYOUT.offsetX
-          const y = pos.y + BOARD_LAYOUT.offsetY
+        for (const cell of boardDef.cells) {
+          const pos = boardLayout.positions[cell.id]
+          const x = pos.x + boardLayout.offsetX
+          const y = pos.y + boardLayout.offsetY
           const dx = x - cx
           const dy = y - cy
           const distSq = dx * dx + dy * dy
@@ -1286,7 +1461,12 @@ function App() {
           nextHandDealCount = (current.dailyHandDealCount ?? 0) + 1
           newHand = dealDailyHand(result.board, current.dailySeed, nextHandDealCount)
         } else {
-          newHand = dealPlayableHand(result.board)
+          newHand = dealPlayableHand(
+            result.board,
+            undefined,
+            undefined,
+            current.mode,
+          )
         }
         for (let i = 0; i < 3; i++) {
           updatedSlots[i] = newHand[i]?.id ?? null
@@ -1296,7 +1476,7 @@ function App() {
         setHandFlyInToken((t) => t + 1)
       }
 
-      const noMovesLeft = !hasAnyValidMove(result.board, newHand)
+      const noMovesLeft = !hasAnyValidMove(result.board, newHand, current.mode)
 
       if (current.mode === 'daily') {
         // Daily puzzles end either when all numbered targets are broken
@@ -1313,14 +1493,19 @@ function App() {
       let finalScore = current.score
       let shouldDelayScoreUpdate = false
       
-      if (current.mode === 'endless') {
+      // Big mode shares the same live-scoring loop as endless: piece
+      // placement adds flat points, clears spawn the score-fly particle,
+      // and the LCD updates as totals merge in. The high-score / best-
+      // score side effects are still gated on endless only further
+      // below — big mode is a playtest sandbox for now.
+      if (current.mode === 'endless' || current.mode === 'big') {
         const newScore = current.score + result.pointsGained
         const flatPoints = piece.shape.cells.length
         finalScore = newScore + flatPoints
 
         if (result.clearedPatterns.length > 0) {
           setClearingCells(result.clearedCellIds)
-          setClearingGoldenCellId(current.goldenCellId)
+          setClearingGoldenCellIds(current.goldenCellIds)
           
           // Calculate total score for this move (pointsGained + piece points)
           const totalScore = result.pointsGained + piece.shape.cells.length
@@ -1335,11 +1520,11 @@ function App() {
             let count = 0
             for (const pattern of result.clearedPatterns) {
               for (const cellId of pattern.cellIds) {
-                const cell = BOARD_DEFINITION.cells.find((c) => c.id === cellId)
+                const cell = boardDef.cells.find((c) => c.id === cellId)
                 if (cell) {
-                  const pos = BOARD_LAYOUT.positions[cell.id]
-                  sumX += pos.x + BOARD_LAYOUT.offsetX
-                  sumY += pos.y + BOARD_LAYOUT.offsetY
+                  const pos = boardLayout.positions[cell.id]
+                  sumX += pos.x + boardLayout.offsetX
+                  sumY += pos.y + boardLayout.offsetY
                   count++
                 }
               }
@@ -1408,7 +1593,11 @@ function App() {
                     window.setTimeout(() => {
                       if (scoreParticleGenerationRef.current !== generationAtStart) return
                       setGame((currentGame) => {
-                        if (currentGame.mode !== 'endless') return currentGame
+                        if (
+                          currentGame.mode !== 'endless' &&
+                          currentGame.mode !== 'big'
+                        )
+                          return currentGame
                         return {
                           ...currentGame,
                           score: currentGame.score + totalScore,
@@ -1453,37 +1642,65 @@ function App() {
           }
         }
 
-        setBestScore((prev) => {
-          if (prev === null || finalScore > prev) {
-            window.localStorage.setItem(
-              'hexaclear-best-score',
-              String(finalScore),
-            )
-            return finalScore
-          }
-          return prev
-        })
+        // Best-score tracking only for the original endless ladder for
+        // now; big-mode scores live on a separate scale and would
+        // otherwise dominate the all-time best LCD after a single run.
+        if (current.mode === 'endless') {
+          setBestScore((prev) => {
+            if (prev === null || finalScore > prev) {
+              window.localStorage.setItem(
+                'hexaclear-best-score',
+                String(finalScore),
+              )
+              return finalScore
+            }
+            return prev
+          })
+        }
 
-        // Golden cube bonus popup: when the golden cube is cleared in
-        // endless mode, show a local "+10" popup over that cell.
-        if (result.goldenCleared && current.goldenCellId) {
-          setGoldenPopupCellId(current.goldenCellId)
+        // Ruby capture popups + radial bursts: in big mode several
+        // rubies can be cleared in a single placement, each one earns
+        // its own local "+10" popup and shard burst at its previous
+        // position. Endless behaves as before with at most one.
+        const previousRubySet = new Set(current.goldenCellIds)
+        const newRubySet = new Set(result.goldenCellIds)
+        const clearedRubyIds = current.goldenCellIds.filter(
+          (id) => !newRubySet.has(id),
+        )
+        // Defensive: if for some reason the ruby was cleared but its id
+        // somehow still appears in the new list (shouldn't happen, but
+        // belt-and-braces), also include any clearedCellIds that were
+        // rubies before this placement.
+        if (clearedRubyIds.length === 0 && result.rubiesCleared > 0) {
+          for (const id of result.clearedCellIds) {
+            if (previousRubySet.has(id)) clearedRubyIds.push(id)
+          }
+        }
+        if (clearedRubyIds.length > 0) {
+          setGoldenPopupCellIds(clearedRubyIds)
           setGoldenPopupToken((t) => t + 1)
-          // Trigger a radial particle burst at the ruby's previous spot.
-          const rubyPos = BOARD_LAYOUT.positions[current.goldenCellId]
-          if (rubyPos) {
-            setRubyBurst((prev) => ({
-              token: (prev?.token ?? 0) + 1,
-              x: rubyPos.x + BOARD_LAYOUT.offsetX,
-              y: rubyPos.y + BOARD_LAYOUT.offsetY,
-            }))
+          const newBursts: Array<{ token: number; x: number; y: number }> = []
+          let nextToken = Date.now()
+          for (const rubyId of clearedRubyIds) {
+            const rubyPos = boardLayout.positions[rubyId]
+            if (rubyPos) {
+              newBursts.push({
+                token: nextToken++,
+                x: rubyPos.x + boardLayout.offsetX,
+                y: rubyPos.y + boardLayout.offsetY,
+              })
+            }
+          }
+          if (newBursts.length > 0) {
+            setRubyBursts((prev) => [...prev, ...newBursts])
           }
         }
       } else {
-        // Still show the clearing animation in daily mode.
+        // Daily mode: still show the clearing animation. Daily has no
+        // rubies, so clearingGoldenCellIds stays empty for that branch.
         if (result.clearedPatterns.length > 0) {
           setClearingCells(result.clearedCellIds)
-          setClearingGoldenCellId(current.goldenCellId)
+          setClearingGoldenCellIds(current.goldenCellIds)
         }
       }
 
@@ -1506,7 +1723,7 @@ function App() {
           // the shatter reads as a follow-up to the clear, not on top
           // of its attack. Skipped when the same placement also ends
           // the game (game-over SFX owns the moment).
-          if (result.goldenCleared) {
+          if (result.rubiesCleared > 0) {
             playBreakAfterClear(80)
           }
         }
@@ -1578,7 +1795,7 @@ function App() {
         dailyRemainingHits: result.dailyRemainingHits,
         dailyCompleted: result.dailyCompleted,
         dailyHandDealCount: nextHandDealCount,
-        goldenCellId: result.goldenCellId,
+        goldenCellIds: result.goldenCellIds,
       }
     })
   }
@@ -1606,6 +1823,10 @@ function App() {
       setGame(next)
       setSavedDailyGame(next)
       setDailyHighScoreSaved(false)
+    } else if (game.mode === 'big') {
+      const next = createBigGameState()
+      setGame(next)
+      setSavedBigGame(next)
     } else {
       const next = createInitialGameState()
       setGame(next)
@@ -1617,10 +1838,10 @@ function App() {
     setUndoStack([])
     setUndoAnimation(null)
     setPendingUndoRestoreSlotIndex(null)
-    setGoldenPopupCellId(null)
+    setGoldenPopupCellIds([])
     setClearingCells([])
-    setClearingGoldenCellId(null)
-    setPendingGoldenSpawnCellId(null)
+    setClearingGoldenCellIds([])
+    setPendingGoldenSpawnCellIds([])
     setScorePopup(null)
   }
 
@@ -1646,11 +1867,11 @@ function App() {
       let sumX = 0
       let sumY = 0
       for (const cellId of cellsToRemove) {
-        const cell = BOARD_DEFINITION.cells.find((c) => c.id === cellId)
+        const cell = boardDef.cells.find((c) => c.id === cellId)
         if (cell) {
-          const pos = BOARD_LAYOUT.positions[cell.id]
-          sumX += pos.x + BOARD_LAYOUT.offsetX
-          sumY += pos.y + BOARD_LAYOUT.offsetY
+          const pos = boardLayout.positions[cell.id]
+          sumX += pos.x + boardLayout.offsetX
+          sumY += pos.y + boardLayout.offsetY
         }
       }
       const startX = sumX / cellsToRemove.length
@@ -1672,10 +1893,10 @@ function App() {
           // Restore game state immediately so pieces reappear
           setUndoStack(remaining)
           setPendingUndoRestoreSlotIndex(slotIndex)
-          setGoldenPopupCellId(null)
+          setGoldenPopupCellIds([])
           setClearingCells([])
-          setClearingGoldenCellId(null)
-          setPendingGoldenSpawnCellId(null)
+          setClearingGoldenCellIds([])
+          setPendingGoldenSpawnCellIds([])
           setScorePopup(null)
           setGame((current) => {
             const restoredMoves =
@@ -1711,10 +1932,10 @@ function App() {
     // Fallback: instant undo if we can't animate
     setUndoStack(remaining)
     setPendingUndoRestoreSlotIndex(null)
-    setGoldenPopupCellId(null)
+    setGoldenPopupCellIds([])
     setClearingCells([])
-    setClearingGoldenCellId(null)
-    setPendingGoldenSpawnCellId(null)
+    setClearingGoldenCellIds([])
+    setPendingGoldenSpawnCellIds([])
     setScorePopup(null)
     setGame((current) => {
       const restoredMoves =
@@ -1728,28 +1949,33 @@ function App() {
     setHover(null)
   }
 
-  const toggleDailyMode = () => {
+  const toggleMode = (target: GameMode) => {
+    if (game.mode === target) return
     setGame((current) => {
-      if (current.mode === 'daily') {
-        // Leaving daily → restore endless run (or start fresh).
-        setSavedDailyGame(current)
-        if (savedEndlessGame) {
-          return savedEndlessGame
-        }
+      // Stash the current run into its own slot so it can be restored
+      // when the player toggles back. Big mode also flushes through to
+      // its localStorage slot via the mirror effect above.
+      if (current.mode === 'endless') setSavedEndlessGame(current)
+      else if (current.mode === 'daily') setSavedDailyGame(current)
+      else if (current.mode === 'big') setSavedBigGame(current)
+
+      if (target === 'endless') {
+        if (savedEndlessGame) return savedEndlessGame
         const endless = createInitialGameState()
         setSavedEndlessGame(endless)
         return endless
-      } else {
-        // Entering daily → restore today's run if we have one,
-        // otherwise create a fresh daily puzzle.
-        setSavedEndlessGame(current)
-        if (savedDailyGame) {
-          return savedDailyGame
-        }
+      }
+      if (target === 'daily') {
+        if (savedDailyGame) return savedDailyGame
         const daily = createDailyGameState()
         setSavedDailyGame(daily)
         return daily
       }
+      // target === 'big'
+      if (savedBigGame) return savedBigGame
+      const big = createBigGameState()
+      setSavedBigGame(big)
+      return big
     })
     setSelectedPieceId(null)
     setHover(null)
@@ -1778,8 +2004,8 @@ function App() {
     const timeout = window.setTimeout(() => {
       setClearingCells([])
       setClearingClassesByCell({})
-      setClearingGoldenCellId(null)
-      setPendingGoldenSpawnCellId(null)
+      setClearingGoldenCellIds([])
+      setPendingGoldenSpawnCellIds([])
     }, 600)
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
@@ -1817,18 +2043,23 @@ function App() {
     return () => window.clearTimeout(tid)
   }, [hitstop])
 
-  // Clear the ruby burst after its outward animation completes so the
-  // SVG nodes don't pile up across captures.
+  // Clear ruby bursts after their outward animation completes so the
+  // SVG nodes don't pile up across captures. Big-mode placements can
+  // queue several bursts at once; once they've all played out we wipe
+  // the whole list together.
   useEffect(() => {
-    if (!rubyBurst) return
-    const tokenAtStart = rubyBurst.token
+    if (rubyBursts.length === 0) return
+    const tokenAtStart = rubyBursts[rubyBursts.length - 1]!.token
     const tid = window.setTimeout(() => {
-      setRubyBurst((prev) =>
-        prev && prev.token === tokenAtStart ? null : prev,
+      setRubyBursts((prev) =>
+        prev.length > 0 &&
+        prev[prev.length - 1]!.token === tokenAtStart
+          ? []
+          : prev,
       )
     }, 800)
     return () => window.clearTimeout(tid)
-  }, [rubyBurst])
+  }, [rubyBursts])
 
   // Persist the reduced-motion preference so the toggle sticks across
   // sessions. The actual visual gating happens via a class on the root
@@ -1997,15 +2228,15 @@ function App() {
   }, [failedPlacementPieceId, invalidDropCellIds])
 
   useEffect(() => {
-    if (!goldenPopupCellId) return
+    if (goldenPopupCellIds.length === 0) return
     const tokenAtStart = goldenPopupToken
     const timeout = window.setTimeout(() => {
-      setGoldenPopupCellId((prev) =>
-        tokenAtStart === goldenPopupToken ? null : prev,
+      setGoldenPopupCellIds((prev) =>
+        tokenAtStart === goldenPopupToken ? [] : prev,
       )
     }, 900)
     return () => window.clearTimeout(timeout)
-  }, [goldenPopupCellId, goldenPopupToken])
+  }, [goldenPopupCellIds, goldenPopupToken])
 
   useEffect(() => {
     if (!scorePopup) return
@@ -2068,7 +2299,11 @@ function App() {
   }, [showHighScores])
 
   // Persist the current game state on every change so that a refresh
-  // resumes exactly where the player left off.
+  // resumes exactly where the player left off. Each mode owns its own
+  // localStorage slot, plus we record which mode is active so reload
+  // knows which slot to read first. The React `savedXxxGame` mirror
+  // for the active mode is kept in lockstep so toggling modes mid-
+  // session never sees stale state.
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -2079,12 +2314,16 @@ function App() {
         dateKey: game.mode === 'daily' ? getTodayKey() : undefined,
       }
       window.localStorage.setItem(
-        'cubic-current-game',
+        PERSIST_KEY_BY_MODE[game.mode],
         JSON.stringify(envelope),
       )
+      window.localStorage.setItem(ACTIVE_MODE_KEY, game.mode)
     } catch {
       // Best-effort persistence; ignore quota/serialization errors.
     }
+    if (game.mode === 'endless') setSavedEndlessGame(game)
+    else if (game.mode === 'daily') setSavedDailyGame(game)
+    else if (game.mode === 'big') setSavedBigGame(game)
   }, [game])
 
   const handleSaveHighScore = () => {
@@ -2357,15 +2596,20 @@ function App() {
         </span>
       </div>
       {(() => {
+        // Big mode is a playtest sandbox — its scores live on a
+        // different scale than endless and would be confusing to mix
+        // into endless's "Best" pill. Hide the best readout entirely
+        // for big until it gets its own leaderboard.
         const bestValue =
-          game.mode === 'daily' ? todayDailyBestMoves : bestScore
+          game.mode === 'daily'
+            ? todayDailyBestMoves
+            : game.mode === 'big'
+            ? null
+            : bestScore
         const showBest = bestValue !== null && bestValue !== undefined
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
           game.mode === 'daily' ? dailyCubesRemaining : game.score
-        // Daily shows the cube count from the start so the player sees
-        // the goal target before placing anything; endless's score
-        // surfaces from the start too.
         const showLiveStat = true
         return (
           <header className="hexaclear-header">
@@ -2408,7 +2652,7 @@ function App() {
                   onClick={() => {
                     if (game.mode !== 'endless') {
                       playUiClick()
-                      toggleDailyMode()
+                      toggleMode('endless')
                     }
                   }}
                 >
@@ -2425,11 +2669,28 @@ function App() {
                   onClick={() => {
                     if (game.mode !== 'daily') {
                       playUiClick()
-                      toggleDailyMode()
+                      toggleMode('daily')
                     }
                   }}
                 >
                   Daily
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'mode-pill',
+                    game.mode === 'big' ? 'active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    if (game.mode !== 'big') {
+                      playUiClick()
+                      toggleMode('big')
+                    }
+                  }}
+                >
+                  Big
                 </button>
               </div>
               {showLiveStat ? (
@@ -2452,7 +2713,11 @@ function App() {
           larger values (4-digit when score hits 1000+, etc). */}
       {(() => {
         const bestValue =
-          game.mode === 'daily' ? todayDailyBestMoves : bestScore
+          game.mode === 'daily'
+            ? todayDailyBestMoves
+            : game.mode === 'big'
+            ? null
+            : bestScore
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
           game.mode === 'daily' ? dailyCubesRemaining : game.score
@@ -2502,14 +2767,14 @@ function App() {
             .filter(Boolean)
             .join(' ')}
           style={{
-            aspectRatio: `${BOARD_LAYOUT.width} / ${BOARD_LAYOUT.height}`,
+            aspectRatio: `${boardLayout.width} / ${boardLayout.height}`,
           }}
           ref={boardWrapperRef}
         >
           <svg
             className="hexaclear-board"
             ref={svgRef}
-            viewBox={`0 0 ${BOARD_LAYOUT.width} ${BOARD_LAYOUT.height}`}
+            viewBox={`0 0 ${boardLayout.width} ${boardLayout.height}`}
           >
             <defs>
               
@@ -2522,8 +2787,8 @@ function App() {
                   <rect
                     x={0}
                     y={0}
-                    width={BOARD_LAYOUT.width}
-                    height={BOARD_LAYOUT.height}
+                    width={boardLayout.width}
+                    height={boardLayout.height}
                     fill="black"
                   />
                   <circle
@@ -2543,7 +2808,7 @@ function App() {
             </defs>
 
             {/* Board hull behind everything */}
-            {BOARD_OUTLINE_SEGMENTS.map((seg, idx) => (
+            {boardRender.outlineSegments.map((seg, idx) => (
               <line
                 key={`outline-back-${idx}`}
                 x1={seg.x1}
@@ -2553,7 +2818,7 @@ function App() {
                 className="hexaclear-board-outline-back"
               />
             ))}
-            {BOARD_OUTLINE_SEGMENTS.map((seg, idx) => (
+            {boardRender.outlineSegments.map((seg, idx) => (
               <line
                 key={`outline-front-${idx}`}
                 x1={seg.x1}
@@ -2565,20 +2830,19 @@ function App() {
             ))}
 
             {(() => {
-              return BOARD_DEFINITION.cells.map((cell) => {
-                const pos = BOARD_LAYOUT.positions[cell.id]
-                const cx = pos.x + BOARD_LAYOUT.offsetX
-                const cy = pos.y + BOARD_LAYOUT.offsetY
+              return boardDef.cells.map((cell) => {
+                const pos = boardLayout.positions[cell.id]
+                const cx = pos.x + boardLayout.offsetX
+                const cy = pos.y + boardLayout.offsetY
                 const points = buildHexPoints(cx, cy)
                 const bevel = buildHexBevelPaths(cx, cy)
 
                 const isFilledLogical = game.board[cell.id] === 'filled'
                 const isClearing = clearingCells.includes(cell.id)
                 const isPendingGoldenSpawn =
-                  game.mode === 'endless' &&
+                  (game.mode === 'endless' || game.mode === 'big') &&
                   clearingCells.length > 0 &&
-                  pendingGoldenSpawnCellId != null &&
-                  pendingGoldenSpawnCellId === cell.id
+                  pendingGoldenSpawnCellIds.includes(cell.id)
                 // Don't hide pieces during undo - they should reappear immediately
                 const isFilledVisible = isFilledLogical && !isPendingGoldenSpawn
                 const isFilled = isFilledVisible || isClearing
@@ -2597,12 +2861,10 @@ function App() {
                 const isRecentlyPlaced = recentlyPlacedCells.includes(cell.id)
                 const isInvalidDrop = invalidDropCellIds.includes(cell.id)
                 const isGolden =
-                  game.mode === 'endless' &&
+                  (game.mode === 'endless' || game.mode === 'big') &&
                   (clearingCells.length > 0
-                    ? clearingGoldenCellId != null &&
-                      clearingGoldenCellId === cell.id
-                    : game.goldenCellId != null &&
-                      game.goldenCellId === cell.id)
+                    ? clearingGoldenCellIds.includes(cell.id)
+                    : game.goldenCellIds.includes(cell.id))
 
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
@@ -2701,8 +2963,8 @@ function App() {
                         ].filter(Boolean)}
                       />
                     )}
-                    {game.mode === 'endless' &&
-                      goldenPopupCellId === cell.id && (
+                    {(game.mode === 'endless' || game.mode === 'big') &&
+                      goldenPopupCellIds.includes(cell.id) && (
                         <text
                           x={cx}
                           y={cy - HEX_SIZE * 0.5}
@@ -2732,7 +2994,7 @@ function App() {
             {invalidDropCellIds.length > 0 && (
               <g className="hexaclear-invalid-ghost">
                 {invalidDropCellIds.map((id) => {
-                  const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
+                  const cell = boardDef.cells.find((c) => c.id === id)
                   if (cell) {
                     // On-board cells are already flashing via invalid-drop.
                     return null
@@ -2742,8 +3004,8 @@ function App() {
                   const r = Number(rStr)
                   if (!Number.isFinite(q) || !Number.isFinite(r)) return null
                   const { x, y } = axialToPixel(q, r)
-                  const cx = x + BOARD_LAYOUT.offsetX
-                  const cy = y + BOARD_LAYOUT.offsetY
+                  const cx = x + boardLayout.offsetX
+                  const cy = y + boardLayout.offsetY
                   return (
                     <CubeLines
                       key={`invalid-ghost-${id}`}
@@ -2767,10 +3029,10 @@ function App() {
                   .join(' ')}
                 mask="url(#hexaclear-ripple-mask)"
               >
-                {BOARD_DEFINITION.cells.map((cell) => {
-                  const pos = BOARD_LAYOUT.positions[cell.id]
-                  const cx = pos.x + BOARD_LAYOUT.offsetX
-                  const cy = pos.y + BOARD_LAYOUT.offsetY
+                {boardDef.cells.map((cell) => {
+                  const pos = boardLayout.positions[cell.id]
+                  const cx = pos.x + boardLayout.offsetX
+                  const cy = pos.y + boardLayout.offsetY
                   const points = buildHexPoints(cx, cy)
                   return (
                     <polygon
@@ -2785,7 +3047,7 @@ function App() {
             {/* Rosette boundaries should sit above the static board but below
                 the final cube pop overlay so the highlight never hides the
                 animation. */}
-            {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
+            {boardRender.flowerBoundarySegments.map((seg, idx) => (
               <line
                 key={`flower-back-${idx}`}
                 x1={seg.x1}
@@ -2796,7 +3058,7 @@ function App() {
               />
             ))}
             <g className="hexaclear-flower-boundary-group">
-              {FLOWER_BOUNDARY_SEGMENTS.map((seg, idx) => (
+              {boardRender.flowerBoundarySegments.map((seg, idx) => (
                 <line
                   key={`flower-front-${idx}`}
                   x1={seg.x1}
@@ -2818,7 +3080,7 @@ function App() {
               aria-hidden="true"
               pointerEvents="none"
             >
-              {FLOWER_BOUNDARY_LOOPS.map((loop, idx) => (
+              {boardRender.flowerBoundaryLoops.map((loop, idx) => (
                 <g key={`flower-groove-${idx}`}>
                   {loop.dark.length > 0 && (
                     <polygon
@@ -2845,6 +3107,8 @@ function App() {
                 originCellId={hover.cellId}
                 piece={selectedPiece}
                 valid={false}
+                boardDef={boardDef}
+                layout={boardLayout}
               />
             )}
             {/* Final overlay: animate the whole placed shape as a unit while it
@@ -2853,22 +3117,20 @@ function App() {
               <g className="hexaclear-placed-overlay placed-impact">
                 {(() => {
                   return recentlyPlacedCells.map((id) => {
-                    const cell = BOARD_DEFINITION.cells.find((c) => c.id === id)
+                    const cell = boardDef.cells.find((c) => c.id === id)
                     if (!cell) return null
-                    const pos = BOARD_LAYOUT.positions[cell.id]
-                    const cx = pos.x + BOARD_LAYOUT.offsetX
-                    const cy = pos.y + BOARD_LAYOUT.offsetY
+                    const pos = boardLayout.positions[cell.id]
+                    const cx = pos.x + boardLayout.offsetX
+                    const cy = pos.y + boardLayout.offsetY
                     const dailyHitsForCell = game.dailyHits[cell.id] ?? 0
                     const isDailyTarget =
                       game.mode === 'daily' && dailyHitsForCell > 0
                     const isGolden =
-                      game.mode === 'endless' &&
+                      (game.mode === 'endless' || game.mode === 'big') &&
                       ((clearingCells.length > 0 &&
-                        clearingGoldenCellId != null &&
-                        clearingGoldenCellId === cell.id) ||
+                        clearingGoldenCellIds.includes(cell.id)) ||
                         (clearingCells.length === 0 &&
-                          game.goldenCellId != null &&
-                          game.goldenCellId === cell.id))
+                          game.goldenCellIds.includes(cell.id)))
                     if (game.board[cell.id] !== 'filled') return null
                     return (
                       <CubeLines
@@ -2890,11 +3152,13 @@ function App() {
               </g>
             )}
 
-            {/* Ruby capture burst: a radial spray of small shards that
-                fly out from the ruby's last cell when it's cleared. */}
-            {rubyBurst && (
+            {/* Ruby capture bursts: a radial spray of small shards
+                that flies out from each cleared ruby's last cell. Big
+                mode often queues several at once when a placement
+                clears multiple rubies in the same combo. */}
+            {rubyBursts.map((burst) => (
               <g
-                key={rubyBurst.token}
+                key={burst.token}
                 className="hexaclear-ruby-burst"
                 pointerEvents="none"
               >
@@ -2906,8 +3170,8 @@ function App() {
                   return (
                     <circle
                       key={i}
-                      cx={rubyBurst.x}
-                      cy={rubyBurst.y}
+                      cx={burst.x}
+                      cy={burst.y}
                       r={3.4}
                       className="hexaclear-ruby-shard"
                       style={{
@@ -2919,7 +3183,7 @@ function App() {
                   )
                 })}
               </g>
-            )}
+            ))}
           </svg>
           {boardClearFlashToken > 0 && (
             <div
@@ -3137,6 +3401,46 @@ function App() {
                     if (pendingHighScore) {
                       handleSaveHighScore()
                     }
+                    resetGame()
+                  }}
+                >
+                  Play again
+                </button>
+              </div>
+            </div>
+          )}
+          {game.gameOver && game.mode === 'big' && !gameOverWindingDown && (
+            <div className="hexaclear-overlay">
+              <div className="hexaclear-overlay-card hexaclear-gameover-card">
+                <div className="title">Game Over</div>
+
+                <div className="hexaclear-gameover-headline">
+                  <div className="hexaclear-gameover-headline-label">
+                    Final score
+                  </div>
+                  <div className="hexaclear-gameover-headline-value">
+                    {game.score}
+                  </div>
+                </div>
+
+                {undoStack.length > 0 && (
+                  <button
+                    type="button"
+                    className="hexaclear-menu-link"
+                    onClick={() => {
+                      playUiClick()
+                      handleUndo()
+                    }}
+                  >
+                    Undo last move
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="hexaclear-gameover-cta"
+                  onClick={() => {
+                    playUiClick()
                     resetGame()
                   }}
                 >

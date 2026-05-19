@@ -1,10 +1,15 @@
-import { BOARD_DEFINITION } from './boardDefinition'
+import {
+  BOARD_DEFINITION,
+  BIG_BOARD_DEFINITION,
+  STANDARD_BOARD_DEFINITION,
+  getBoardDefinitionForMode,
+} from './boardDefinition'
 import { ALL_PIECE_SHAPES } from './pieces'
 import type { PieceShape } from './pieces'
-import type { CellId, Pattern } from './hexTypes'
+import type { BoardDefinition, CellId, Pattern } from './hexTypes'
 import { rotateAxial } from './hexTypes'
 
-export type GameMode = 'endless' | 'daily'
+export type GameMode = 'endless' | 'daily' | 'big'
 
 export type CellState = 'empty' | 'filled'
 
@@ -17,6 +22,46 @@ export type ActivePiece = {
 
 export type Hand = ActivePiece[]
 
+// How many bonus rubies (a.k.a. golden cubes) a given mode keeps live on
+// the board. Endless has the classic single ruby; big mode plays with
+// three at once and respawns each one as it clears; daily mode has none
+// because the numbered cubes already drive the scoring tempo.
+const RUBY_COUNT_BY_MODE: Record<GameMode, number> = {
+  endless: 1,
+  daily: 0,
+  big: 3,
+}
+
+// Per-mode scoring parameters. Big mode pays out 4x per pattern clear and
+// 4x for board clears so the bigger rosettes still feel rewarding to
+// finish; endless and daily keep their original numbers.
+type ModeScoring = {
+  pointsPerClearedPattern: number
+  boardClearedBonus: number
+  // Bonus added to the base score for *each* ruby cleared in a placement.
+  // Endless awards this for the lone ruby; big stacks the bonus for every
+  // simultaneously-cleared ruby.
+  rubyClearedBonus: number
+}
+
+const SCORING_BY_MODE: Record<GameMode, ModeScoring> = {
+  endless: {
+    pointsPerClearedPattern: 10,
+    boardClearedBonus: 25,
+    rubyClearedBonus: 10,
+  },
+  daily: {
+    pointsPerClearedPattern: 10,
+    boardClearedBonus: 25,
+    rubyClearedBonus: 0,
+  },
+  big: {
+    pointsPerClearedPattern: 40,
+    boardClearedBonus: 100,
+    rubyClearedBonus: 10,
+  },
+}
+
 export type PlacementResult = {
   board: BoardState
   clearedCellIds: CellId[]
@@ -27,18 +72,23 @@ export type PlacementResult = {
   pointsGained: number
   comboMultiplier: number
   streakMultiplier: number
-  // Daily-mode bookkeeping is always returned; for endless games these
+  // Daily-mode bookkeeping is always returned; for endless/big games these
   // will just mirror the incoming state (no numbered targets).
   dailyHits: Record<CellId, number>
   dailyTotalHits: number
   dailyRemainingHits: number
   dailyCompleted: boolean
-  // Endless-mode golden cube state: the updated golden cell location
-  // and whether it was cleared in this placement.
-  goldenCellId: CellId | null
-  goldenCleared: boolean
-  // True when this placement emptied the entire board (earning the +25
-  // board-clear bonus). Surfaced so the UI can play a flourish.
+  // Updated ruby positions after this placement (post-clear, post-respawn).
+  // Order matches the incoming `goldenCellIds`; a freshly-respawned ruby
+  // takes the slot of the one that was cleared. For daily this stays
+  // empty; endless has 0 or 1; big has up to 3.
+  goldenCellIds: CellId[]
+  // Number of rubies cleared in *this* placement. Big mode multiplies the
+  // ruby bonus by this count; endless treats it as boolean.
+  rubiesCleared: number
+  // True when this placement emptied the entire board (earning the
+  // mode-specific board-clear bonus). Surfaced so the UI can play a
+  // flourish.
   boardCleared: boolean
 }
 
@@ -52,7 +102,7 @@ export type GameState = {
   gameOver: boolean
   // Count of successful piece placements in this run.
   moves: number
-  // Daily puzzle data. For endless games these will all be "empty".
+  // Daily puzzle data. For endless/big games these will all be "empty".
   dailyHits: Record<CellId, number>
   dailyTotalHits: number
   dailyRemainingHits: number
@@ -61,21 +111,32 @@ export type GameState = {
   dailySeed?: number
   // Daily-mode hand deal count for deterministic sequencing. Only set in daily mode.
   dailyHandDealCount?: number
-  // Endless-mode golden cube; null in daily mode.
-  goldenCellId: CellId | null
+  // Live ruby positions. Endless = 0 or 1, big = up to 3, daily = always 0.
+  goldenCellIds: CellId[]
 }
 
 const randomOf = <T>(arr: T[], random: () => number = Math.random): T =>
   arr[Math.floor(random() * arr.length)]!
 
-const scoringPatternIds = new Set([
-  ...BOARD_DEFINITION.scoringLineIds,
-  ...BOARD_DEFINITION.flowerIds,
-])
+const getScoringPatternIds = (boardDef: BoardDefinition): Set<string> =>
+  new Set([...boardDef.scoringLineIds, ...boardDef.flowerIds])
 
-const FLOWER_PATTERNS = BOARD_DEFINITION.patterns.filter(
-  (p) => p.type === 'flower',
-)
+const getFlowerPatterns = (boardDef: BoardDefinition): Pattern[] =>
+  boardDef.patterns.filter((p) => p.type === 'flower')
+
+// Cached scoring-pattern lookups per mode so the placement hot path
+// doesn't re-allocate a Set on every call.
+const SCORING_PATTERNS_BY_MODE: Record<GameMode, Set<string>> = {
+  endless: getScoringPatternIds(STANDARD_BOARD_DEFINITION),
+  daily: getScoringPatternIds(STANDARD_BOARD_DEFINITION),
+  big: getScoringPatternIds(BIG_BOARD_DEFINITION),
+}
+
+const FLOWER_PATTERNS_BY_MODE: Record<GameMode, Pattern[]> = {
+  endless: getFlowerPatterns(STANDARD_BOARD_DEFINITION),
+  daily: getFlowerPatterns(STANDARD_BOARD_DEFINITION),
+  big: getFlowerPatterns(BIG_BOARD_DEFINITION),
+}
 
 // Simple deterministic RNG used for daily puzzle generation so that the
 // same calendar day produces the same layout everywhere.
@@ -108,11 +169,14 @@ const getTodaySeed = (): number => {
 
 export const findClears = (
   board: BoardState,
+  mode: GameMode = 'endless',
 ): { clearedPatterns: Pattern[]; clearedCellIds: CellId[] } => {
+  const boardDef = getBoardDefinitionForMode(mode)
+  const scoringPatternIds = SCORING_PATTERNS_BY_MODE[mode]
   const clearedPatterns: Pattern[] = []
   const clearedCellsSet = new Set<CellId>()
 
-  for (const pattern of BOARD_DEFINITION.patterns) {
+  for (const pattern of boardDef.patterns) {
     if (!scoringPatternIds.has(pattern.id)) continue
     const allFilled = pattern.cellIds.every((id) => board[id] === 'filled')
     if (allFilled) {
@@ -129,24 +193,36 @@ export const findClears = (
   }
 }
 
-export const createEmptyBoard = (): BoardState => {
+export const createEmptyBoard = (mode: GameMode = 'endless'): BoardState => {
+  const boardDef = getBoardDefinitionForMode(mode)
   const state: BoardState = {}
-  for (const cell of BOARD_DEFINITION.cells) {
+  for (const cell of boardDef.cells) {
     state[cell.id] = 'empty'
   }
   return state
 }
 
-// Choose a new golden cube position on the given board. The golden cube
-// behaves like a real filled cube: if it lands on an empty cell we set
-// that cell to 'filled', but we avoid any empty-cell placements that
-// would immediately complete a scoring pattern. Optionally, we can
-// forbid respawning inside certain flower (rosette) patterns.
+// Choose a new ruby/golden cube position for the given mode.
+// Same rules as before:
+// - if it lands on an empty cell, it sets that cell to 'filled' but never
+//   in a way that would immediately complete a scoring pattern;
+// - if no safe empty slot exists, fall back to any filled cell;
+// - cells in `forbiddenFlowers` are skipped (used to avoid respawning the
+//   same ruby into the rosette it just cleared) and cells in
+//   `forbiddenCellIds` are skipped (used to keep multiple rubies from
+//   colliding on the same tile).
 const spawnGoldenCell = (
   board: BoardState,
-  forbiddenFlowers?: Set<string>,
+  mode: GameMode,
+  options: {
+    forbiddenFlowers?: Set<string>
+    forbiddenCellIds?: Set<CellId>
+  } = {},
 ): CellId | null => {
-  const cells = [...BOARD_DEFINITION.cells]
+  const boardDef = getBoardDefinitionForMode(mode)
+  const flowerPatterns = FLOWER_PATTERNS_BY_MODE[mode]
+  const { forbiddenFlowers, forbiddenCellIds } = options
+  const cells = [...boardDef.cells]
   // Shuffle to avoid always biasing toward earlier cells.
   for (let i = cells.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -155,10 +231,11 @@ const spawnGoldenCell = (
 
   let fallbackFilled: CellId | null = null
 
-cellLoop: for (const cell of cells) {
+  cellLoop: for (const cell of cells) {
     const id = cell.id
+    if (forbiddenCellIds && forbiddenCellIds.has(id)) continue
     if (forbiddenFlowers && forbiddenFlowers.size > 0) {
-      for (const pattern of FLOWER_PATTERNS) {
+      for (const pattern of flowerPatterns) {
         if (
           forbiddenFlowers.has(pattern.id) &&
           pattern.cellIds.includes(id)
@@ -180,7 +257,7 @@ cellLoop: for (const cell of cells) {
     // immediately complete any scoring pattern. If not, accept it and
     // lock it in as filled.
     board[id] = 'filled'
-    const { clearedPatterns } = findClears(board)
+    const { clearedPatterns } = findClears(board, mode)
     if (clearedPatterns.length === 0) {
       return id
     }
@@ -192,8 +269,9 @@ cellLoop: for (const cell of cells) {
   // cell (so we always have a golden cube somewhere).
   cellLoopFallback: for (const cell of cells) {
     const id = cell.id
+    if (forbiddenCellIds && forbiddenCellIds.has(id)) continue
     if (forbiddenFlowers && forbiddenFlowers.size > 0) {
-      for (const pattern of FLOWER_PATTERNS) {
+      for (const pattern of flowerPatterns) {
         if (
           forbiddenFlowers.has(pattern.id) &&
           pattern.cellIds.includes(id)
@@ -208,6 +286,33 @@ cellLoop: for (const cell of cells) {
     }
   }
   return fallbackFilled
+}
+
+// Spawn N rubies into a fresh board, each one in a different flower
+// when possible. Returns the array of cell ids; mutates `board` so each
+// chosen empty-cell becomes 'filled'.
+const spawnInitialRubies = (
+  board: BoardState,
+  mode: GameMode,
+  count: number,
+): CellId[] => {
+  const flowerPatterns = FLOWER_PATTERNS_BY_MODE[mode]
+  const rubyCellIds: CellId[] = []
+  const rubyFlowerIds = new Set<string>()
+  for (let i = 0; i < count; i++) {
+    const newId = spawnGoldenCell(board, mode, {
+      forbiddenFlowers: new Set(rubyFlowerIds),
+      forbiddenCellIds: new Set(rubyCellIds),
+    })
+    if (!newId) break
+    rubyCellIds.push(newId)
+    for (const pattern of flowerPatterns) {
+      if (pattern.cellIds.includes(newId)) {
+        rubyFlowerIds.add(pattern.id)
+      }
+    }
+  }
+  return rubyCellIds
 }
 
 export const dealHand = (random: () => number = Math.random): Hand => {
@@ -246,8 +351,10 @@ export const canPlacePiece = (
   board: BoardState,
   piece: PieceShape,
   originCellId: CellId,
+  mode: GameMode = 'endless',
 ): { targetCellIds: CellId[] } | null => {
-  const originCell = BOARD_DEFINITION.cells.find((c) => c.id === originCellId)
+  const boardDef = getBoardDefinitionForMode(mode)
+  const originCell = boardDef.cells.find((c) => c.id === originCellId)
   if (!originCell) return null
 
   const targetIds: CellId[] = []
@@ -269,8 +376,11 @@ export const applyPlacement = (
   piece: ActivePiece,
   originCellId: CellId,
 ): PlacementResult | null => {
-  const canPlace = canPlacePiece(current.board, piece.shape, originCellId)
+  const canPlace = canPlacePiece(current.board, piece.shape, originCellId, current.mode)
   if (!canPlace) return null
+
+  const flowerPatterns = FLOWER_PATTERNS_BY_MODE[current.mode]
+  const scoring = SCORING_BY_MODE[current.mode]
 
   const board: BoardState = { ...current.board }
   const placedCellIds = [...canPlace.targetCellIds]
@@ -278,7 +388,7 @@ export const applyPlacement = (
     board[id] = 'filled'
   }
 
-  const { clearedPatterns, clearedCellIds } = findClears(board)
+  const { clearedPatterns, clearedCellIds } = findClears(board, current.mode)
 
   // Start from current daily state; we may update it below if any of the
   // cleared patterns include numbered daily targets.
@@ -286,8 +396,7 @@ export const applyPlacement = (
   let dailyTotalHits = current.dailyTotalHits
   let dailyRemainingHits = current.dailyRemainingHits
   let dailyCompleted = current.dailyCompleted
-  let goldenCellId = current.goldenCellId
-  const previousGoldenCellId = current.goldenCellId
+  let goldenCellIds = [...current.goldenCellIds]
 
   if (clearedPatterns.length > 0 && Object.keys(dailyHits).length > 0) {
     // Count how many distinct clear-patterns each numbered cell
@@ -333,8 +442,8 @@ export const applyPlacement = (
       dailyTotalHits,
       dailyRemainingHits,
       dailyCompleted,
-      goldenCellId,
-      goldenCleared: false,
+      goldenCellIds,
+      rubiesCleared: 0,
       boardCleared: false,
     }
   }
@@ -353,15 +462,37 @@ export const applyPlacement = (
     }
   }
 
-  // Track whether the golden cube was cleared in this placement (endless
-  // mode only). If so, we'll both award its bonus and immediately spawn
-  // it at a new location on the resulting board.
-  let goldenCleared = false
-  if (current.mode === 'endless' && goldenCellId) {
-    if (clearedCellIds.includes(goldenCellId)) {
-      goldenCleared = true
-      goldenCellId = null
+  // Track which rubies got swept up in this clear. Each cleared ruby
+  // earns the per-mode ruby bonus and respawns at a fresh position
+  // outside the rosette it was just sitting in.
+  const clearedSet = new Set(clearedCellIds)
+  const survivingRubyIds: CellId[] = []
+  const clearedRubyIds: CellId[] = []
+  for (const id of goldenCellIds) {
+    if (clearedSet.has(id)) {
+      clearedRubyIds.push(id)
+    } else {
+      survivingRubyIds.push(id)
     }
+  }
+
+  // Rebuild goldenCellIds: keep the survivors, then for each cleared
+  // ruby spawn a replacement (avoiding the surviving ruby cells and the
+  // rosette the cleared one had been in).
+  goldenCellIds = [...survivingRubyIds]
+  for (const previousId of clearedRubyIds) {
+    let forbiddenFlowers: Set<string> | undefined
+    const ids = flowerPatterns
+      .filter((p) => p.cellIds.includes(previousId))
+      .map((p) => p.id)
+    if (ids.length > 0) {
+      forbiddenFlowers = new Set(ids)
+    }
+    const newId = spawnGoldenCell(board, current.mode, {
+      forbiddenFlowers,
+      forbiddenCellIds: new Set(goldenCellIds),
+    })
+    if (newId) goldenCellIds.push(newId)
   }
 
   const numClears = clearedPatterns.length
@@ -375,27 +506,15 @@ export const applyPlacement = (
     (state) => state === 'empty',
   )
   const boardCleared = !wasBoardEmptyBefore && isBoardEmptyAfter
-  const boardClearedBonus = boardCleared ? 25 : 0
+  const boardClearedBonus = boardCleared ? scoring.boardClearedBonus : 0
 
-  const goldenBonus = current.mode === 'endless' && goldenCleared ? 10 : 0
-  const basePoints = 10 * numClears + boardClearedBonus + goldenBonus
-  const pointsGained = Math.round(basePoints * comboMultiplier * streakMultiplier)
-
-  // If we just cleared the golden cube in endless mode, immediately
-  // respawn it somewhere else on the board.
-  if (current.mode === 'endless' && goldenCleared) {
-    let forbiddenFlowers: Set<string> | undefined
-    if (previousGoldenCellId) {
-      const ids = FLOWER_PATTERNS.filter((p) =>
-        p.cellIds.includes(previousGoldenCellId),
-      ).map((p) => p.id)
-      if (ids.length > 0) {
-        forbiddenFlowers = new Set(ids)
-      }
-    }
-    const newGolden = spawnGoldenCell(board, forbiddenFlowers)
-    goldenCellId = newGolden
-  }
+  const rubiesCleared = clearedRubyIds.length
+  const rubyBonusTotal = rubiesCleared * scoring.rubyClearedBonus
+  const basePoints =
+    scoring.pointsPerClearedPattern * numClears + boardClearedBonus + rubyBonusTotal
+  const pointsGained = Math.round(
+    basePoints * comboMultiplier * streakMultiplier,
+  )
 
   return {
     board,
@@ -409,17 +528,22 @@ export const applyPlacement = (
     dailyTotalHits,
     dailyRemainingHits,
     dailyCompleted,
-    goldenCellId,
-    goldenCleared,
+    goldenCellIds,
+    rubiesCleared,
     boardCleared,
   }
 }
 
-export const hasAnyValidMove = (board: BoardState, hand: Hand): boolean => {
+export const hasAnyValidMove = (
+  board: BoardState,
+  hand: Hand,
+  mode: GameMode = 'endless',
+): boolean => {
+  const boardDef = getBoardDefinitionForMode(mode)
   // Use the same placement path as real moves (including clears),
   // so "space created by clears" is always considered.
   const fakeGame: GameState = {
-    mode: 'endless',
+    mode,
     board,
     score: 0,
     streak: 0,
@@ -431,10 +555,10 @@ export const hasAnyValidMove = (board: BoardState, hand: Hand): boolean => {
     dailyTotalHits: 0,
     dailyRemainingHits: 0,
     dailyCompleted: false,
-    goldenCellId: null,
+    goldenCellIds: [],
   }
   for (const piece of hand) {
-    for (const cell of BOARD_DEFINITION.cells) {
+    for (const cell of boardDef.cells) {
       const result = applyPlacement(fakeGame, piece, cell.id)
       if (result) return true
     }
@@ -450,10 +574,11 @@ export const dealPlayableHand = (
   board: BoardState,
   maxAttempts = 30,
   random: () => number = Math.random,
+  mode: GameMode = 'endless',
 ): Hand => {
   let hand = dealHand(random)
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    if (hasAnyValidMove(board, hand)) {
+    if (hasAnyValidMove(board, hand, mode)) {
       return hand
     }
     hand = dealHand(random)
@@ -466,10 +591,10 @@ export const dealPlayableHand = (
 }
 
 export const createInitialGameState = (): GameState => {
-  const board = createEmptyBoard()
+  const board = createEmptyBoard('endless')
   // Spawn the initial golden cube for endless mode.
-  const goldenCellId = spawnGoldenCell(board)
-  const hand = dealPlayableHand(board)
+  const goldenCellIds = spawnInitialRubies(board, 'endless', RUBY_COUNT_BY_MODE.endless)
+  const hand = dealPlayableHand(board, 30, Math.random, 'endless')
   return {
     mode: 'endless',
     board,
@@ -477,13 +602,37 @@ export const createInitialGameState = (): GameState => {
     streak: 0,
     hand,
     handSlots: hand.map((p) => p.id),
-    gameOver: !hasAnyValidMove(board, hand),
+    gameOver: !hasAnyValidMove(board, hand, 'endless'),
     moves: 0,
     dailyHits: {},
     dailyTotalHits: 0,
     dailyRemainingHits: 0,
     dailyCompleted: false,
-    goldenCellId,
+    goldenCellIds,
+  }
+}
+
+// Big-board endless variant: 7 radius-2 rosettes with 3 simultaneous
+// rubies. Same single-player scoring loop as endless mode, just on a
+// larger surface (and tuned scoring values per mode in SCORING_BY_MODE).
+export const createBigGameState = (): GameState => {
+  const board = createEmptyBoard('big')
+  const goldenCellIds = spawnInitialRubies(board, 'big', RUBY_COUNT_BY_MODE.big)
+  const hand = dealPlayableHand(board, 30, Math.random, 'big')
+  return {
+    mode: 'big',
+    board,
+    score: 0,
+    streak: 0,
+    hand,
+    handSlots: hand.map((p) => p.id),
+    gameOver: !hasAnyValidMove(board, hand, 'big'),
+    moves: 0,
+    dailyHits: {},
+    dailyTotalHits: 0,
+    dailyRemainingHits: 0,
+    dailyCompleted: false,
+    goldenCellIds,
   }
 }
 
@@ -491,7 +640,7 @@ export const createInitialGameState = (): GameState => {
 // numbered hexes is deterministic per day, but the dealt pieces still
 // use the regular RNG.
 export const createDailyGameState = (): GameState => {
-  const board = createEmptyBoard()
+  const board = createEmptyBoard('daily')
 
   const seed = getTodaySeed()
   const random = makeSeededRandom(seed)
@@ -565,7 +714,7 @@ export const createDailyGameState = (): GameState => {
   }
 
   // Use seeded random for deterministic hands in daily mode
-  const hand = dealPlayableHand(board, 30, random)
+  const hand = dealPlayableHand(board, 30, random, 'daily')
 
   return {
     mode: 'daily',
@@ -582,7 +731,7 @@ export const createDailyGameState = (): GameState => {
     dailyCompleted: false,
     dailySeed: seed,
     dailyHandDealCount: 0,
-    goldenCellId: null,
+    goldenCellIds: [],
   }
 }
 
@@ -622,7 +771,5 @@ export const dealDailyHand = (
   }
   
   // Now deal the current hand using the seeded random
-  return dealPlayableHand(board, 30, random)
+  return dealPlayableHand(board, 30, random, 'daily')
 }
-
-
