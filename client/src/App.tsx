@@ -1422,8 +1422,30 @@ function App() {
   const [showHighScores, setShowHighScores] = useState(false)
   // When on, the high-scores card swaps the local lists for live
   // global queries. Local stays first-class — we never wipe local
-  // entries when the toggle flips. Default to local on first open.
-  const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState(false)
+  // entries when the toggle flips. Defaults to ON for new players so
+  // the global leaderboards (including co-op) are surfaced by default;
+  // the player's last explicit choice is persisted under
+  // `cubic-show-global-leaderboard` and restored on reload.
+  const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState<boolean>(
+    () => {
+      if (typeof window === 'undefined') return true
+      const raw = window.localStorage.getItem('cubic-show-global-leaderboard')
+      if (raw === '0' || raw === 'false') return false
+      if (raw === '1' || raw === 'true') return true
+      return true
+    },
+  )
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        'cubic-show-global-leaderboard',
+        showGlobalLeaderboard ? '1' : '0',
+      )
+    } catch {
+      // Best-effort; safe to fall through if storage is unavailable.
+    }
+  }, [showGlobalLeaderboard])
   const [highScores, setHighScores] = useState<HighScoreEntry[]>(() =>
     typeof window === 'undefined' ? [] : loadHighScores(),
   )
