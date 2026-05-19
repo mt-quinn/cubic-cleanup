@@ -59,6 +59,10 @@
      the ruby reuses Minesweeper's flag red. */
   --w98-cube-fill: #008080;
   --w98-ruby-fill: #ff0000;
+  /* MP partner-piece tint: a noticeably lighter, washed-out teal so
+     the player can tell their own placements from their partner's at
+     a glance without breaking the flat sunken-tile look. */
+  --w98-cube-fill-partner: #6fbcbc;
 
   /* Rosette etched groove. We mark each rosette as its own
      button group by carving a Win98-style 2-tone etched line
@@ -274,6 +278,9 @@
   border-bottom: 1px solid var(--w98-shadow);
   box-shadow: 0 1px 0 var(--w98-highlight);
   flex: 0 0 auto;
+  /* Anchors the bottom-aligned `.hexaclear-coop-hud` partner-name
+     label that sits between this strip and the LCD row below. */
+  position: relative;
 }
 
 [data-theme="win98"] .hexaclear-header-main,
@@ -408,6 +415,18 @@
     inset 1px 1px 0 var(--w98-deep-shadow),
     inset -1px -1px 0 var(--w98-surface);
   flex: 0 0 auto;
+  /* Anchors the absolutely-centered MP smiley (`.hexaclear-emote-bar`)
+     to the LCD row's centerline — Minesweeper layout. */
+  position: relative;
+}
+
+/* Co-op session: pad the LCD row out a bit so the centered smiley
+   button isn't sitting flush against the LCD frames. Triggers off
+   the smiley element actually being mounted in the row, so it only
+   applies in MP. */
+[data-theme="win98"] .hexaclear-win98-lcds:has(.hexaclear-emote-bar) {
+  padding-top: 9px;
+  padding-bottom: 9px;
 }
 
 /* Each LCD module wraps its red-on-black digit window plus a label
@@ -563,6 +582,189 @@
    value collectible. */
 [data-theme="win98"] .hexaclear-hex.filled.golden {
   fill: var(--w98-ruby-fill);
+}
+
+/* MP partner-piece tint: lighter teal on the filled face. We don't
+   apply this to .golden cells because rubies are neutral / unowned
+   and should keep their flag-red regardless of who triggered the
+   spawn. The clearing animation already starts from --w98-magenta
+   and ends at --w98-surface, so it overrides this fine. */
+[data-theme="win98"] .hexaclear-hex.filled.partner-piece {
+  fill: var(--w98-cube-fill-partner);
+}
+
+/* Win98 smiley button + emote panel. The trigger is a classic
+   raised Win98 button with the smiley.png image inside (no default
+   emoji); the popover below it is also chrome-shaded. The default
+   wood-theme rules are overridden here so the button reads as
+   pressed Minesweeper hardware. */
+[data-theme="win98"] .hexaclear-emote-trigger {
+  background: var(--w98-surface);
+  border: none;
+  border-radius: 0;
+  border-style: solid;
+  border-width: 2px;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+  width: 2.4rem;
+  height: 2.4rem;
+}
+[data-theme="win98"] .hexaclear-emote-trigger:active {
+  transform: none;
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow);
+}
+
+/* Win98-flavored partner-emote glow. We can't pulse the box-shadow
+   here without losing the chrome bevels, so we paint the halo with
+   an outline (which renders outside the bevels) and pulse its
+   color/alpha. The Win98 navy + LCD-red are the strongest
+   "incoming alert" colors in the palette, so we cycle between them
+   to read clearly against the gray surface. */
+@keyframes hexaclear-w98-emote-glow {
+  0%, 100% { outline-color: rgba(1, 0, 129, 0.0); }
+  50%      { outline-color: rgba(1, 0, 129, 0.95); }
+}
+[data-theme="win98"] .hexaclear-emote-trigger.has-partner-emote {
+  outline: 3px solid rgba(1, 0, 129, 0.0);
+  outline-offset: 2px;
+  animation: hexaclear-w98-emote-glow 1.4s ease-in-out infinite;
+}
+[data-theme="win98"] .hexaclear-reduced-motion .hexaclear-emote-trigger.has-partner-emote {
+  animation: none;
+  outline-color: rgba(1, 0, 129, 0.85);
+}
+
+/* In Win98, the partner-name HUD sits at the BOTTOM of the menu-bar
+   row (same vertical band as the Co-op pill / Menu button) so it
+   reads as a label sitting just above the smiley on the LCD row
+   below. `display: contents` on `.hexaclear-header-main` flattens
+   the HUD up to be a direct child of `.hexaclear-header`, which we
+   made `position: relative` above. */
+[data-theme="win98"] .hexaclear-header-main .hexaclear-coop-hud {
+  position: absolute;
+  left: 50%;
+  top: auto;
+  bottom: 2px;
+  transform: translateX(-50%);
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Copy Link button gets the standard Win98 button chrome + a
+   greenish "copied" affordance. */
+[data-theme="win98"] .hexaclear-coop-cta {
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border: 2px solid;
+  border-radius: 0;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+}
+[data-theme="win98"] .hexaclear-coop-cta:active {
+  transform: none;
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow);
+}
+[data-theme="win98"] .hexaclear-coop-cta.is-copied {
+  background: #6fbcbc;
+  color: var(--w98-text);
+}
+[data-theme="win98"] .hexaclear-emote-trigger-img {
+  display: block;
+  image-rendering: pixelated;
+}
+[data-theme="win98"] .hexaclear-emote-trigger-default {
+  display: none;
+}
+[data-theme="win98"] .hexaclear-emote-trigger-overlay {
+  background: var(--w98-surface);
+  border-radius: 0;
+  /* Hide the smiley.png underneath when an overlay emote is showing
+     (the overlay is opaque-ish so the image would peek through edges
+     otherwise). */
+}
+[data-theme="win98"] .hexaclear-emote-panel {
+  background: var(--w98-surface);
+  border-radius: 0;
+  border: 2px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+  padding: 0.4rem;
+  gap: 0.3rem;
+}
+[data-theme="win98"] .hexaclear-emote-panel-title {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+[data-theme="win98"] .hexaclear-emote-option {
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border: 2px solid;
+  border-radius: 0;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight);
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface);
+}
+[data-theme="win98"] .hexaclear-emote-option:hover {
+  background: var(--w98-surface);
+}
+[data-theme="win98"] .hexaclear-emote-option:active {
+  transform: none;
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow);
 }
 
 [data-theme="win98"] .hexaclear-hex.clearing {
@@ -947,6 +1149,30 @@
   gap: 4px;
 }
 
+/* Win98 flavor of the co-op stuck-status pill. We pick up the
+   surface chrome with raised borders so it reads like a tiny
+   floating dialog tab pinned to the top of the tray. Both variants
+   share the same chrome — Win98's monochrome palette doesn't lean
+   itself to warm/cool color coding the way the wood theme does. */
+[data-theme="win98"] .hexaclear-hand-status {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  letter-spacing: 0 !important;
+  padding: 3px 8px !important;
+}
+
 /* Hand piece slots become sunken individual wells (a la the
    Minesweeper grid cells). */
 [data-theme="win98"] .hexaclear-piece-button {
@@ -1136,6 +1362,16 @@
   font-weight: 700 !important;
   text-transform: none !important;
   opacity: 1 !important;
+}
+
+/* "Show global" toggle in the High Scores card uses the system
+   font and dark text on the surface gray so it reads as a normal
+   Win98 form control. */
+[data-theme="win98"] .hexaclear-scores-global-toggle {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
 }
 
 [data-theme="win98"] .hexaclear-gameover-card.daily-win .title {
@@ -1347,6 +1583,28 @@
   font-weight: 700;
   color: var(--w98-text);
   line-height: 1;
+}
+
+/* In-session co-op name input. Same sunken Win98 field chrome as
+   the theme picker, no special arrow indicator. */
+[data-theme="win98"] .hexaclear-menu-row-text {
+  appearance: none;
+  background: var(--w98-highlight) !important;
+  color: var(--w98-text) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+  border-radius: 0 !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  padding: 6px 10px !important;
+  min-height: 32px;
 }
 
 /* Native <select> for the theme picker — keep system rendering when

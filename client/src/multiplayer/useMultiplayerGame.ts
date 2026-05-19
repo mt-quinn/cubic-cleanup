@@ -29,6 +29,11 @@ export type UseMultiplayerGameArgs = {
   name: string
 }
 
+export type MultiplayerEmote = {
+  emoji: string
+  ts: number
+}
+
 export type UseMultiplayerGameResult = {
   status: MultiplayerStatus
   code: string | null
@@ -36,7 +41,22 @@ export type UseMultiplayerGameResult = {
   selfPlayer: MultiplayerPlayer | null
   partnerPlayer: MultiplayerPlayer | null
   lastPlacement: MultiplayerLastPlacement | null
+  // cellId -> playerId map for partner-piece tinting on the shared
+  // board. Empty / undefined when single-player.
+  cellOwners: Record<string, string>
+  // Latest partner emote (or null if none / they haven't sent one).
+  // Clients enforce the 10s display window themselves so a stale ts
+  // simply renders as "no emote" without needing a server cleanup.
+  partnerEmote: MultiplayerEmote | null
+  // Latest emote *this* client sent — surfaced so the local smiley
+  // button can render a small "you sent this" corner badge while
+  // the partner is still seeing the emoji on their side. Same 10s
+  // display window as `partnerEmote`.
+  selfEmote: MultiplayerEmote | null
   placePiece: (pieceId: string, cellId: string) => Promise<void>
+  sendEmote: (emoji: string) => Promise<void>
+  setName: (name: string) => Promise<void>
+  restart: () => Promise<void>
   leave: () => Promise<void>
 }
 
@@ -78,6 +98,9 @@ export const useMultiplayerGame = ({
   const placePieceMutation = useMutation(api.rooms.placePiece)
   const leaveMutation = useMutation(api.rooms.leaveRoom)
   const heartbeatMutation = useMutation(api.rooms.heartbeat)
+  const sendEmoteMutation = useMutation(api.rooms.sendEmote)
+  const setNameMutation = useMutation(api.rooms.setPlayerName)
+  const restartMutation = useMutation(api.rooms.restartRoom)
 
   // Periodic presence ping so the partner can tell when someone has
   // gone idle (closing tab, lost connection, etc).
@@ -149,10 +172,48 @@ export const useMultiplayerGame = ({
     await placePieceMutation({ code, playerId, pieceId, cellId })
   }
 
+  const sendEmote = async (emoji: string) => {
+    if (!code) return
+    await sendEmoteMutation({ code, playerId, emoji })
+  }
+
+  const setName = async (nextName: string) => {
+    if (!code) return
+    await setNameMutation({ code, playerId, name: nextName })
+  }
+
+  const restart = async () => {
+    if (!code) return
+    await restartMutation({ code, playerId })
+  }
+
   const leave = async () => {
     if (!code) return
     await leaveMutation({ code, playerId })
   }
+
+  const cellOwners = useMemo<Record<string, string>>(() => {
+    if (!room || !room.cellOwners) return {}
+    return room.cellOwners
+  }, [room])
+
+  const partnerEmote = useMemo<MultiplayerEmote | null>(() => {
+    if (!room || !partnerPlayer) return null
+    const emote = (room.lastEmotes ?? []).find(
+      (e) => e.playerId === partnerPlayer.playerId,
+    )
+    if (!emote) return null
+    return { emoji: emote.emoji, ts: emote.ts }
+  }, [room, partnerPlayer])
+
+  const selfEmote = useMemo<MultiplayerEmote | null>(() => {
+    if (!room) return null
+    const emote = (room.lastEmotes ?? []).find(
+      (e) => e.playerId === playerId,
+    )
+    if (!emote) return null
+    return { emoji: emote.emoji, ts: emote.ts }
+  }, [room, playerId])
 
   return {
     status,
@@ -161,7 +222,13 @@ export const useMultiplayerGame = ({
     selfPlayer,
     partnerPlayer,
     lastPlacement: room?.lastPlacement ?? null,
+    cellOwners,
+    partnerEmote,
+    selfEmote,
     placePiece,
+    sendEmote,
+    setName,
+    restart,
     leave,
   }
 }

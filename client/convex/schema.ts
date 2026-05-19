@@ -59,6 +59,21 @@ const lastPlacementValidator = v.object({
   ts: v.number(),
 })
 
+// Per-cell ownership map: cellId -> playerId. Lets clients know which
+// player placed each cube so partner-placed pieces can render with a
+// lighter tint. Entries get cleared as cells get cleared. Optional so
+// older rooms (created before this field existed) keep validating.
+const cellOwnersValidator = v.optional(v.record(v.string(), v.string()))
+
+// Most-recent emote per player. We render the partner's emote inside
+// their smiley face for 10s after `ts`, then it falls back to the
+// default 🙂. Optional / array-shaped so older rooms keep working.
+const emoteValidator = v.object({
+  playerId: v.string(),
+  emoji: v.string(),
+  ts: v.number(),
+})
+
 export default defineSchema({
   rooms: defineTable({
     code: v.string(),
@@ -74,7 +89,35 @@ export default defineSchema({
     moves: v.number(),
     players: v.array(playerValidator),
     lastPlacement: v.union(v.null(), lastPlacementValidator),
+    cellOwners: cellOwnersValidator,
+    lastEmotes: v.optional(v.array(emoteValidator)),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index('by_code', ['code']),
+
+  // Global high scores for endless mode. We dedupe on (playerId,
+  // savedAt) so a player resubmitting the same saved entry (e.g. the
+  // first-time backfill) doesn't double-count. Score is the sortable
+  // metric; ties break by savedAt (older first, like the local board).
+  endlessScores: defineTable({
+    playerId: v.string(),
+    name: v.string(),
+    score: v.number(),
+    savedAt: v.number(),
+  })
+    .index('by_score', ['score'])
+    .index('by_player_saved', ['playerId', 'savedAt']),
+
+  // Global daily-puzzle runs. Same identity dedup. `dateKey` is the
+  // calendar-day key the run is bound to (matches single-player's
+  // local-daily key format) so we can scope queries to "today".
+  dailyScores: defineTable({
+    playerId: v.string(),
+    name: v.string(),
+    moves: v.number(),
+    dateKey: v.string(),
+    savedAt: v.number(),
+  })
+    .index('by_dateKey_moves', ['dateKey', 'moves'])
+    .index('by_player_saved', ['playerId', 'savedAt']),
 })

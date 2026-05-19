@@ -79,8 +79,24 @@ export const createRoom = mutation({
   args: {
     playerId: v.string(),
     name: v.string(),
+    // Optional snapshot of the host's current single-player co-op
+    // (Big) board. When present we seed the new room with it so the
+    // host's in-progress run is preserved when they invite a friend.
+    // Otherwise we boot a fresh empty co-op board.
+    seed: v.optional(
+      v.object({
+        board: v.record(
+          v.string(),
+          v.union(v.literal('empty'), v.literal('filled')),
+        ),
+        goldenCellIds: v.array(v.string()),
+        score: v.number(),
+        streak: v.number(),
+        moves: v.number(),
+      }),
+    ),
   },
-  handler: async (ctx, { playerId, name }) => {
+  handler: async (ctx, { playerId, name, seed }) => {
     // Try a few times to land on an unused code. Collisions are rare with
     // a 24^4 alphabet (~330k) so this almost always lands on the first.
     let code: string | null = null
@@ -99,19 +115,29 @@ export const createRoom = mutation({
       throw new Error('Could not allocate a free room code, try again')
     }
 
-    const board = createEmptyBoard(MODE)
-    const goldenCellIds = spawnInitialRubies(board, MODE, 3)
+    const board = seed?.board ?? createEmptyBoard(MODE)
+    const goldenCellIds =
+      seed?.goldenCellIds ?? spawnInitialRubies(board, MODE, 3)
     const hand = dealPlayableHand(board, 30, Math.random, MODE)
     const now = Date.now()
+
+    // Initial ruby cells were just placed by the room itself, not by a
+    // human player. Leaving their ownership unset means they'll render
+    // in the default palette regardless of which player is looking,
+    // which is what we want for "neutral" rubies. When seeding from
+    // a host's solo board we likewise leave ownership empty — the
+    // host's pre-existing cubes can render to both players in the
+    // default palette since they pre-date the partnership.
+    const cellOwners: Record<string, string> = {}
 
     const id = await ctx.db.insert('rooms', {
       code,
       state: 'waiting',
       board,
       goldenCellIds,
-      score: 0,
-      streak: 0,
-      moves: 0,
+      score: seed?.score ?? 0,
+      streak: seed?.streak ?? 0,
+      moves: seed?.moves ?? 0,
       players: [
         {
           playerId,
@@ -124,6 +150,8 @@ export const createRoom = mutation({
         },
       ],
       lastPlacement: null,
+      cellOwners,
+      lastEmotes: [],
       createdAt: now,
       updatedAt: now,
     })
@@ -131,6 +159,12 @@ export const createRoom = mutation({
     return { code, roomId: id }
   },
 })
+
+// A player whose lastSeen is older than this is considered
+// disconnected for the purposes of seat reclamation. The client
+// heartbeats every 8s, so this gives ~3 missed heartbeats before
+// someone else can take their seat.
+const STALE_PLAYER_MS = 30_000
 
 export const joinRoom = mutation({
   args: {
@@ -145,6 +179,10 @@ export const joinRoom = mutation({
       .unique()
     if (!room) throw new Error('Room not found')
 
+    if (room.state === 'gameover') {
+      throw new Error('That game has already finished')
+    }
+
     const now = Date.now()
 
     // Reconnect: same playerId is already in the room. Just bump lastSeen.
@@ -155,38 +193,80 @@ export const joinRoom = mutation({
           ? { ...p, lastSeen: now, name: sanitizeName(name) }
           : p,
       )
-      await ctx.db.patch(room._id, { players, updatedAt: now })
+      // If we were sitting in 'waiting' but reconnect happens to
+      // bring us back to a fresh quorum, flip back to 'playing'.
+      const freshCount = players.filter(
+        (p) => now - p.lastSeen < STALE_PLAYER_MS,
+      ).length
+      const nextState =
+        freshCount >= MAX_PLAYERS ? 'playing' : 'waiting'
+      await ctx.db.patch(room._id, {
+        players,
+        state: nextState,
+        updatedAt: now,
+      })
       return { code, joinedAsSlot: existing.slot, reconnect: true }
     }
 
-    if (room.players.length >= MAX_PLAYERS) {
-      throw new Error('Room is full')
+    // Open seat? Just append.
+    if (room.players.length < MAX_PLAYERS) {
+      const hand = dealPlayableHand(room.board, 30, Math.random, MODE)
+      const slot = room.players.length
+      const players = [
+        ...room.players,
+        {
+          playerId,
+          name: sanitizeName(name),
+          slot,
+          hand,
+          handSlots: hand.map((p) => p.id),
+          joinedAt: now,
+          lastSeen: now,
+        },
+      ]
+      await ctx.db.patch(room._id, {
+        players,
+        state: players.length >= MAX_PLAYERS ? 'playing' : 'waiting',
+        updatedAt: now,
+      })
+      return { code, joinedAsSlot: slot, reconnect: false }
     }
 
-    // Deal a fresh hand for player 2 against the live shared board.
+    // Room is at MAX_PLAYERS — but is anyone stale? If yes, the new
+    // joiner evicts the stalest seat and inherits its slot. Stale
+    // player's cellOwners entries get re-tagged to the new player so
+    // their cubes don't render as orphan / partner-tinted forever.
+    const stalest = [...room.players]
+      .filter((p) => now - p.lastSeen >= STALE_PLAYER_MS)
+      .sort((a, b) => a.lastSeen - b.lastSeen)[0]
+    if (!stalest) {
+      throw new Error('Room is full')
+    }
     const hand = dealPlayableHand(room.board, 30, Math.random, MODE)
-    const slot = room.players.length
-
-    const players = [
-      ...room.players,
-      {
-        playerId,
-        name: sanitizeName(name),
-        slot,
-        hand,
-        handSlots: hand.map((p) => p.id),
-        joinedAt: now,
-        lastSeen: now,
-      },
-    ]
-
+    const players = room.players.map((p) =>
+      p.playerId === stalest.playerId
+        ? {
+            playerId,
+            name: sanitizeName(name),
+            slot: stalest.slot,
+            hand,
+            handSlots: hand.map((p2) => p2.id),
+            joinedAt: now,
+            lastSeen: now,
+          }
+        : p,
+    )
+    const cellOwners: Record<string, string> = { ...(room.cellOwners ?? {}) }
+    for (const [cellId, ownerId] of Object.entries(cellOwners)) {
+      if (ownerId === stalest.playerId) cellOwners[cellId] = playerId
+    }
     await ctx.db.patch(room._id, {
       players,
-      state: players.length >= MAX_PLAYERS ? 'playing' : 'waiting',
+      cellOwners,
+      state: 'playing',
       updatedAt: now,
     })
-
-    return { code, joinedAsSlot: slot, reconnect: false }
+    return { code, joinedAsSlot: stalest.slot, reconnect: false }
   },
 })
 
@@ -226,9 +306,10 @@ export const placePiece = mutation({
     if (room.state === 'gameover') {
       throw new Error('Game already over')
     }
-    if (room.state === 'waiting') {
-      throw new Error('Waiting for second player')
-    }
+    // We deliberately don't refuse placement while the room is
+    // still in 'waiting'. Per the new co-op flow, the host plays
+    // on the shared board straight away (no waiting overlay) and
+    // any partner who joins later inherits the in-progress board.
 
     const playerIndex = room.players.findIndex((p) => p.playerId === playerId)
     if (playerIndex < 0) throw new Error('You are not in this room')
@@ -242,6 +323,18 @@ export const placePiece = mutation({
     const fakeGame = roomToGameState(room, player.hand as ActivePiece[])
     const result = applyPlacement(fakeGame, piece, cellId)
     if (!result) throw new Error('Invalid placement')
+
+    // Update per-cell ownership: tag every cell the player just filled
+    // with their playerId, then drop entries for any cells that the
+    // resulting clears swept off the board so partner-tinted relics
+    // don't linger on cleared cells.
+    const cellOwners: Record<string, string> = { ...(room.cellOwners ?? {}) }
+    for (const cellId of result.placedCellIds) {
+      cellOwners[cellId] = playerId
+    }
+    for (const cellId of result.clearedCellIds) {
+      delete cellOwners[cellId]
+    }
 
     // New per-player hand: drop the just-played piece. If that empties the
     // player's hand, deal a fresh playable hand against the new board.
@@ -325,6 +418,7 @@ export const placePiece = mutation({
       moves: newMoves,
       players: updatedPlayers,
       lastPlacement,
+      cellOwners,
       state: gameOver ? 'gameover' : 'playing',
       updatedAt: now,
     })
@@ -338,9 +432,136 @@ export const placePiece = mutation({
   },
 })
 
-// Bail out of a room. We don't actually delete anything — leaving just
-// nudges the room into a non-playing state so the UI can show "your
-// partner left". MVP keeps this simple.
+// Update a player's display name mid-session. Only changes how the
+// partner sees you in the co-op HUD — it doesn't touch
+// `cubic-player-name` in localStorage, so the leaderboard auto-fill
+// still uses whatever the player typed last time they saved a high
+// score. Idempotent on identical input.
+export const setPlayerName = mutation({
+  args: {
+    code: v.string(),
+    playerId: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, { code, playerId, name }) => {
+    const room = await ctx.db
+      .query('rooms')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .unique()
+    if (!room) return null
+    const sanitized = sanitizeName(name)
+    let touched = false
+    const players = room.players.map((p) => {
+      if (p.playerId !== playerId) return p
+      if (p.name === sanitized) return p
+      touched = true
+      return { ...p, name: sanitized }
+    })
+    if (!touched) return null
+    await ctx.db.patch(room._id, { players, updatedAt: Date.now() })
+    return null
+  },
+})
+
+// Send an emote to the partner. We just stash the latest one per
+// player on the room; clients render the partner's emoji in their
+// smiley button for 10s after `ts`. The 10s window is enforced
+// client-side by comparing Date.now() to ts so we don't have to run
+// any cleanup jobs.
+const ALLOWED_EMOTES = new Set([
+  '⏸️',
+  '▶️',
+  '🤣',
+  '😭',
+  '🎉',
+  '💀',
+  '😍',
+  '🙂\u200d↕\ufe0f',
+  '🙂\u200d↔\ufe0f',
+])
+
+export const sendEmote = mutation({
+  args: {
+    code: v.string(),
+    playerId: v.string(),
+    emoji: v.string(),
+  },
+  handler: async (ctx, { code, playerId, emoji }) => {
+    if (!ALLOWED_EMOTES.has(emoji)) {
+      throw new Error('Unknown emote')
+    }
+    const room = await ctx.db
+      .query('rooms')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .unique()
+    if (!room) throw new Error('Room not found')
+    if (!room.players.some((p) => p.playerId === playerId)) {
+      throw new Error('You are not in this room')
+    }
+    const now = Date.now()
+    const prior = (room.lastEmotes ?? []).filter(
+      (e) => e.playerId !== playerId,
+    )
+    const lastEmotes = [...prior, { playerId, emoji, ts: now }]
+    await ctx.db.patch(room._id, { lastEmotes, updatedAt: now })
+    return null
+  },
+})
+
+// Reset a room to a fresh game while keeping every player seated.
+// Used by the in-modal "New game" CTA at game over so two players
+// can immediately re-rack against the same partner without going
+// through the create/share/join dance again. Either player can
+// trigger it; if both fire near-simultaneously the second wins
+// (idempotent reset to a fresh empty board).
+export const restartRoom = mutation({
+  args: { code: v.string(), playerId: v.string() },
+  handler: async (ctx, { code, playerId }) => {
+    const room = await ctx.db
+      .query('rooms')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .unique()
+    if (!room) throw new Error('Room not found')
+    if (!room.players.some((p) => p.playerId === playerId)) {
+      throw new Error('You are not in this room')
+    }
+    const now = Date.now()
+    const board = createEmptyBoard(MODE)
+    const goldenCellIds = spawnInitialRubies(board, MODE, 3)
+    const players = room.players.map((p) => {
+      const hand = dealPlayableHand(board, 30, Math.random, MODE)
+      return {
+        ...p,
+        hand,
+        handSlots: hand.map((piece) => piece.id),
+        lastSeen: now,
+      }
+    })
+    await ctx.db.patch(room._id, {
+      board,
+      goldenCellIds,
+      score: 0,
+      streak: 0,
+      moves: 0,
+      players,
+      lastPlacement: null,
+      cellOwners: {},
+      lastEmotes: [],
+      state: players.length >= MAX_PLAYERS ? 'playing' : 'waiting',
+      updatedAt: now,
+    })
+    return null
+  },
+})
+
+// Bail out of a room. The seat opens up so anyone with the link
+// can take it (durable links). We deliberately do NOT delete the
+// room when the last player leaves — the shared board state is
+// preserved until either (a) someone reaches gameover or (b) the
+// daily janitor cron prunes it for being idle past the TTL.
+// Gameover rooms get cleared so the next person clicking the link
+// can start fresh, since we currently don't surface "post-mortem"
+// boards to anyone outside that finished session anyway.
 export const leaveRoom = mutation({
   args: { code: v.string(), playerId: v.string() },
   handler: async (ctx, { code, playerId }) => {
@@ -350,15 +571,36 @@ export const leaveRoom = mutation({
       .unique()
     if (!room) return null
     const remaining = room.players.filter((p) => p.playerId !== playerId)
-    if (remaining.length === 0) {
+    if (room.state === 'gameover' && remaining.length === 0) {
       await ctx.db.delete(room._id)
       return null
     }
     await ctx.db.patch(room._id, {
       players: remaining,
-      state: 'waiting',
+      state: room.state === 'gameover' ? 'gameover' : 'waiting',
       updatedAt: Date.now(),
     })
     return null
+  },
+})
+
+// Daily janitor: prunes any room that hasn't been touched in over
+// 24h. We need this so abandoned rooms (both players closed their
+// tabs without leaving and never came back) don't pile up forever
+// in the rooms table.
+export const cleanupStaleRooms = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const TTL_MS = 24 * 60 * 60 * 1000
+    const cutoff = Date.now() - TTL_MS
+    const stale = await ctx.db.query('rooms').collect()
+    let removed = 0
+    for (const room of stale) {
+      if (room.updatedAt < cutoff) {
+        await ctx.db.delete(room._id)
+        removed += 1
+      }
+    }
+    return { removed }
   },
 })

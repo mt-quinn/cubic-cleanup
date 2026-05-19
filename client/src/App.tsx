@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import {
   getBoardDefinitionForMode,
   getBoardGeometryForMode,
@@ -624,6 +624,130 @@ const CubeLines = ({
   )
 }
 
+// Emote sequence shown in the 3x3 grid below the smiley button. The
+// composed emoji ('head shake' yes/no) include their explicit
+// variation selectors so render-side font fallback is consistent
+// across iOS / Android / desktop browsers.
+const EMOTE_OPTIONS = [
+  '⏸️',
+  '▶️',
+  '🤣',
+  '😭',
+  '🎉',
+  '💀',
+  '😍',
+  '🙂\u200d↕\ufe0f',
+  '🙂\u200d↔\ufe0f',
+] as const
+
+type EmoteBarProps = {
+  show: boolean
+  setShow: (v: boolean) => void
+  partnerEmote: { emoji: string; ts: number } | null
+  // Emoji THIS client most recently sent — surfaced as a small
+  // dimmed corner badge so the sender can see what their partner is
+  // currently looking at. Mirrors the partner-emote display window.
+  selfEmote: { emoji: string; ts: number } | null
+  onSend: (emoji: string) => void
+  onToggle: () => void
+}
+
+const EmoteBar = ({
+  show,
+  setShow,
+  partnerEmote,
+  selfEmote,
+  onToggle,
+  onSend,
+}: EmoteBarProps) => {
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  // Close on outside click. Pointerdown so we beat the synthetic
+  // click that would otherwise re-fire onToggle when the user taps
+  // outside the popover. The capture phase matters here because the
+  // emote buttons themselves want to handle their own click first.
+  useEffect(() => {
+    if (!show) return
+    const onPointerDown = (e: PointerEvent) => {
+      const el = wrapperRef.current
+      if (!el) return
+      if (el.contains(e.target as Node)) return
+      setShow(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [show, setShow])
+  return (
+    <div className="hexaclear-emote-bar" ref={wrapperRef}>
+      <button
+        type="button"
+        className={[
+          'hexaclear-emote-trigger',
+          partnerEmote ? 'has-partner-emote' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={onToggle}
+        aria-label="Send an emote"
+        aria-expanded={show}
+      >
+        {/* In Win98 the trigger is the classic Minesweeper smiley
+            graphic. In every other theme we render a default 🙂
+            emoji so the button stays themed-button shaped. The CSS
+            shows/hides each variant via the parent [data-theme]. */}
+        <img
+          src="/smiley.png"
+          alt=""
+          aria-hidden="true"
+          className="hexaclear-emote-trigger-img"
+          draggable={false}
+        />
+        <span className="hexaclear-emote-trigger-default" aria-hidden="true">
+          🙂
+        </span>
+        {partnerEmote && (
+          <span
+            className="hexaclear-emote-trigger-overlay"
+            aria-label={`Partner sent ${partnerEmote.emoji}`}
+          >
+            {partnerEmote.emoji}
+          </span>
+        )}
+        {selfEmote && (
+          <span
+            className="hexaclear-emote-trigger-self"
+            aria-label={`You sent ${selfEmote.emoji}`}
+          >
+            {selfEmote.emoji}
+          </span>
+        )}
+      </button>
+      {show && (
+        <div
+          className="hexaclear-emote-panel"
+          role="dialog"
+          aria-label="Pick an emote"
+        >
+          <div className="hexaclear-emote-panel-title" aria-hidden="true">
+            Send how you feel!
+          </div>
+          <div className="hexaclear-emote-panel-grid">
+            {EMOTE_OPTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="hexaclear-emote-option"
+                onClick={() => onSend(emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const SlotGeometry = ({ cx, cy }: { cx: number; cy: number }) => {
   // Empty cells render as a single quiet hex dimple — no 3D cube facets — so
   // placed pieces stand out clearly against open space. Filled cubes carry
@@ -985,7 +1109,7 @@ function App() {
   // We pull the player's display name from the same localStorage key the
   // single-player high-score flow uses so the lobby auto-fills with
   // their familiar tag.
-  const [mpPlayerName] = useState<string>(() => {
+  const [mpPlayerName, setMpPlayerName] = useState<string>(() => {
     if (typeof window === 'undefined') return 'Player'
     try {
       const saved = window.localStorage.getItem('cubic-player-name')
@@ -1001,8 +1125,165 @@ function App() {
     playerId,
     name: mpPlayerName,
   })
+  // Smiley/emote panel UI state. The smiley button lives in the score
+  // bar in MP only; clicking it opens a 3x3 grid of emotes that get
+  // pushed to the partner. The expiry tick is bumped when the
+  // partner's last emote crosses the 10s display window so the
+  // smiley face falls back to its default render.
+  const [showEmotePanel, setShowEmotePanel] = useState<boolean>(false)
+  const [partnerEmoteExpiryTick, setPartnerEmoteExpiryTick] = useState(0)
+  // Set of cell ids owned by the partner. Re-derived only when the
+  // shared cellOwners map or the partner's id changes so the cube
+  // render loop can do a cheap O(1) `has` check per cell.
+  const partnerOwnedCellSet = useMemo<Set<string>>(() => {
+    if (!isMultiplayer) return new Set()
+    const partnerId = mp.partnerPlayer?.playerId
+    if (!partnerId) return new Set()
+    const out = new Set<string>()
+    for (const [cellId, ownerId] of Object.entries(mp.cellOwners)) {
+      if (ownerId === partnerId) out.add(cellId)
+    }
+    return out
+  }, [isMultiplayer, mp.cellOwners, mp.partnerPlayer])
+  // Partner emote that's still inside its 10s display window. Once
+  // the window closes the smiley button falls back to its default
+  // face. We re-evaluate whenever the partner sends a new emote and
+  // when the existing one ages out (via a one-shot timeout that
+  // bumps `partnerEmoteExpiryTick`).
+  const PARTNER_EMOTE_TTL_MS = 10_000
+  const partnerEmoteActive = useMemo(() => {
+    if (!mp.partnerEmote) return null
+    if (Date.now() - mp.partnerEmote.ts >= PARTNER_EMOTE_TTL_MS) return null
+    return mp.partnerEmote
+    // partnerEmoteExpiryTick is in the dep list intentionally — its
+    // only job is to force a recompute when the active emote ages
+    // out, even though it doesn't appear inside the function body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mp.partnerEmote, partnerEmoteExpiryTick])
+  // Same window/TTL for the local "I sent this" badge so the corner
+  // sticker on our smiley button vanishes in lockstep with the
+  // partner's overlay clearing on their side.
+  const selfEmoteActive = useMemo(() => {
+    if (!mp.selfEmote) return null
+    if (Date.now() - mp.selfEmote.ts >= PARTNER_EMOTE_TTL_MS) return null
+    return mp.selfEmote
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mp.selfEmote, partnerEmoteExpiryTick])
+  useEffect(() => {
+    // Schedule expiry ticks for whichever side (self / partner /
+    // both) has an active emote, so the badge + overlay both fade
+    // out exactly when their TTL elapses. We pick the earliest
+    // pending expiry across the two so a single timer handles the
+    // common case where both sides have recent emotes.
+    const expiries: number[] = []
+    if (mp.partnerEmote) {
+      const r = PARTNER_EMOTE_TTL_MS - (Date.now() - mp.partnerEmote.ts)
+      if (r > 0) expiries.push(r)
+    }
+    if (mp.selfEmote) {
+      const r = PARTNER_EMOTE_TTL_MS - (Date.now() - mp.selfEmote.ts)
+      if (r > 0) expiries.push(r)
+    }
+    if (expiries.length === 0) return
+    const remaining = Math.min(...expiries)
+    const id = window.setTimeout(() => {
+      setPartnerEmoteExpiryTick((t) => t + 1)
+    }, remaining + 16)
+    return () => window.clearTimeout(id)
+  }, [mp.partnerEmote, mp.selfEmote])
+  // Auto-close the emote panel when MP ends so we don't leave a
+  // dangling popover floating in single-player mode.
+  useEffect(() => {
+    if (!isMultiplayer) setShowEmotePanel(false)
+  }, [isMultiplayer])
+  // Push the player's display-name edits to the server while we're
+  // in a co-op session. Debounced so a fast typist doesn't spam
+  // mutations as they type. We deliberately do NOT write
+  // localStorage here — the leaderboard auto-fill stays whatever
+  // they typed last in the high-score save dialog.
+  useEffect(() => {
+    if (!isMultiplayer) return
+    const handle = window.setTimeout(() => {
+      mp.setName(mpPlayerName).catch(() => {})
+    }, 300)
+    return () => window.clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mpPlayerName, isMultiplayer])
+  // First-run backfill: push every locally-saved high score up to
+  // the global leaderboards. The dedup index in the mutation makes
+  // re-submissions a no-op, but we also gate this with a one-shot
+  // localStorage flag so a normal session does no work. This is
+  // best-effort; if the browser is offline we'll retry on the next
+  // launch (the flag isn't set unless every submit returned).
+  const didBackfillRef = useRef<boolean>(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (didBackfillRef.current) return
+    if (window.localStorage.getItem('cubic-global-backfilled-v1') === '1') {
+      didBackfillRef.current = true
+      return
+    }
+    didBackfillRef.current = true
+    void (async () => {
+      try {
+        const endless = loadHighScores()
+        for (const e of endless) {
+          await submitEndlessGlobal({
+            playerId,
+            name: e.name,
+            score: e.score,
+            savedAt: e.date,
+          })
+        }
+        const dailies = loadDailyHighScores()
+        for (const e of dailies) {
+          await submitDailyGlobal({
+            playerId,
+            name: e.name,
+            moves: e.moves,
+            dateKey: getDateKeyFromTimestamp(e.date),
+            savedAt: e.date,
+          })
+        }
+        // Sweep all per-date stash keys (`cubic-daily-runs-YYYY-M-D`)
+        // so historical daily runs land on global too — these are the
+        // entries that don't show up in `cubic-daily-highscores` once
+        // they fall out of the top 5.
+        for (let i = 0; i < window.localStorage.length; i += 1) {
+          const k = window.localStorage.key(i)
+          if (!k || !k.startsWith(DAILY_PLAYER_RUNS_PREFIX)) continue
+          const dateKey = k.slice(DAILY_PLAYER_RUNS_PREFIX.length)
+          const runs = loadDailyRunsForDateKey(dateKey)
+          for (const e of runs) {
+            await submitDailyGlobal({
+              playerId,
+              name: e.name,
+              moves: e.moves,
+              dateKey,
+              savedAt: e.date,
+            })
+          }
+        }
+        window.localStorage.setItem('cubic-global-backfilled-v1', '1')
+      } catch {
+        // Swallow — leaving the flag unset means we'll retry next
+        // session, and the server-side dedup keeps re-runs cheap.
+        didBackfillRef.current = false
+      }
+    })()
+    // We intentionally only want this to fire once per mount; after
+    // that the ref / localStorage flag prevents repeats.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const createRoomMutation = useMutation(api.rooms.createRoom)
   const joinRoomMutation = useMutation(api.rooms.joinRoom)
+  // Global leaderboard mutations + queries. The mutations get fired
+  // alongside every local save (and during a one-time backfill of the
+  // player's existing local entries). The queries are only enabled
+  // when the High Scores card is open and the global toggle is on,
+  // so we don't pay for a subscription while the menu is closed.
+  const submitEndlessGlobal = useMutation(api.leaderboard.submitEndlessScore)
+  const submitDailyGlobal = useMutation(api.leaderboard.submitDailyScore)
   // Track whether we've already attempted to join the current room so a
   // single failure or a full-room error doesn't get retried in a loop on
   // every render.
@@ -1012,6 +1293,14 @@ function App() {
   })
   const [mpError, setMpError] = useState<string | null>(null)
   const [mpShareUrl, setMpShareUrl] = useState<string | null>(null)
+  // Tri-state for the new "Copy Link" button so we can flash a
+  // "Copied!" confirmation right on the button without popping a
+  // modal. The timer ref is held outside React state so re-renders
+  // don't cancel a pending revert.
+  const [copyLinkLabel, setCopyLinkLabel] = useState<'idle' | 'copied' | 'busy'>(
+    'idle',
+  )
+  const copyLinkTimerRef = useRef<number | null>(null)
 
   const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
   // All board-shape data (cell positions, layout dimensions, rosette
@@ -1130,6 +1419,10 @@ function App() {
   >([])
   const [showScoring, setShowScoring] = useState(false)
   const [showHighScores, setShowHighScores] = useState(false)
+  // When on, the high-scores card swaps the local lists for live
+  // global queries. Local stays first-class — we never wipe local
+  // entries when the toggle flips. Default to local on first open.
+  const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState(false)
   const [highScores, setHighScores] = useState<HighScoreEntry[]>(() =>
     typeof window === 'undefined' ? [] : loadHighScores(),
   )
@@ -1216,6 +1509,21 @@ function App() {
   const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
     getTodayKey(),
   )
+  // Live global queries. We only subscribe when the High Scores
+  // card is showing AND the global toggle is on — passing 'skip'
+  // tears down the subscription otherwise. Daily is hard-pinned to
+  // today globally (per product call), regardless of which date
+  // the local stepper happens to be sitting on.
+  const globalEndlessScores = useQuery(
+    api.leaderboard.getTopEndlessScores,
+    showHighScores && showGlobalLeaderboard ? {} : 'skip',
+  )
+  const globalDailyScores = useQuery(
+    api.leaderboard.getTopDailyScoresForDate,
+    showHighScores && showGlobalLeaderboard
+      ? { dateKey: getTodayKey() }
+      : 'skip',
+  )
   const [goldenPopupCellIds, setGoldenPopupCellIds] = useState<string[]>([])
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
   const [dailyHitPulseCells, setDailyHitPulseCells] = useState<string[]>([])
@@ -1300,6 +1608,55 @@ function App() {
     }
     return playable
   }, [game.board, game.hand, game.mode, boardDef])
+
+  // Co-op only: when one player is stuck (no valid moves) but the
+  // other still has options, both players see a small status label
+  // above the hand so the stuck player knows they're waiting on the
+  // partner and the moving player knows the partner is benched. The
+  // label always names the *other* player from the perspective of
+  // whoever's looking at the screen.
+  //
+  // We deliberately suppress this in the gameover state — once both
+  // players are out of moves the gameover modal takes over the
+  // narrative and a "no valid moves" label would be redundant.
+  const mpMoveStatus = useMemo<
+    | { kind: 'self-stuck' | 'partner-stuck'; message: string }
+    | null
+  >(() => {
+    if (!isMultiplayer) return null
+    if (!mp.selfPlayer || !mp.partnerPlayer) return null
+    if (game.gameOver) return null
+    const selfCanMove = hasAnyValidMove(
+      game.board,
+      mp.selfPlayer.hand,
+      game.mode,
+    )
+    const partnerCanMove = hasAnyValidMove(
+      game.board,
+      mp.partnerPlayer.hand,
+      game.mode,
+    )
+    if (!selfCanMove && partnerCanMove) {
+      return {
+        kind: 'self-stuck',
+        message: `${mp.partnerPlayer.name} still has valid moves`,
+      }
+    }
+    if (selfCanMove && !partnerCanMove) {
+      return {
+        kind: 'partner-stuck',
+        message: `${mp.partnerPlayer.name} has no valid moves`,
+      }
+    }
+    return null
+  }, [
+    isMultiplayer,
+    mp.selfPlayer,
+    mp.partnerPlayer,
+    game.board,
+    game.mode,
+    game.gameOver,
+  ])
 
   const findClosestCellIdFromClientPoint = (clientX: number, clientY: number): string | null => {
     const svg = svgRef.current
@@ -2156,25 +2513,28 @@ function App() {
   }
 
   // ---- Multiplayer handlers -----------------------------------------
-  //
-  // Wraps the createRoom mutation: writes the new code into the URL so
-  // refreshes resume into the same lobby, and pops the share URL into
-  // the waiting overlay. Errors surface inline rather than alert()ing.
-  const handleCreateRoom = () => {
-    setMpError(null)
-    createRoomMutation({ playerId, name: mpPlayerName })
-      .then((res) => {
-        if (!res?.code) return
-        setMpRoomCode(res.code)
-        setRoomCodeInUrl(res.code)
-        setMpShareUrl(buildRoomShareUrl(res.code))
-        joinAttemptRef.current = { code: res.code, attempted: true }
-      })
-      .catch((err: unknown) => {
-        const msg =
-          err instanceof Error ? err.message : 'Could not create a room'
-        setMpError(msg)
-      })
+
+  // Restart a co-op room in place: the server resets the shared
+  // board and re-deals both hands, so neither player has to copy a
+  // new link or rejoin. We flush local-only UI bookkeeping
+  // (selection, hovers, particles, half-finished clears) so the
+  // post-restart server state shows up clean.
+  const handleRestartCoop = () => {
+    if (!mpRoomCode) return
+    mp.restart().catch(() => {})
+    scoreParticleGenerationRef.current += 1
+    lastScheduledScoreParticleActionIdRef.current = null
+    setScoreParticles([])
+    setSelectedPieceId(null)
+    setHover(null)
+    setUndoStack([])
+    setUndoAnimation(null)
+    setPendingUndoRestoreSlotIndex(null)
+    setGoldenPopupCellIds([])
+    setClearingCells([])
+    setClearingGoldenCellIds([])
+    setPendingGoldenSpawnCellIds([])
+    setScorePopup(null)
   }
 
   const handleLeaveRoom = () => {
@@ -2200,10 +2560,65 @@ function App() {
     void code
   }
 
-  const handleCopyShareUrl = () => {
-    if (!mpShareUrl) return
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(mpShareUrl).catch(() => {})
+  // Single-action "Copy Link" used from the co-op HUD. If we're not
+  // already in a room, we lazily spin one up so the link points at a
+  // real lobby; if we are, we copy the existing URL. Either way the
+  // button briefly flips to "Copied!" and then reverts. No modal.
+  const handleCopyLinkAction = async () => {
+    if (copyLinkLabel === 'busy') return
+    setMpError(null)
+    let code = mpRoomCode
+    let url = mpShareUrl
+    try {
+      if (!code) {
+        setCopyLinkLabel('busy')
+        // Seed the new room with the host's current solo Big board
+        // so their in-progress run carries over when a friend joins.
+        // We only seed when the local game is in 'big' mode and has
+        // already had at least one move; otherwise an empty fresh
+        // board is fine and lets the server roll new initial rubies.
+        const seedFromLocal =
+          game.mode === 'big' && game.moves > 0
+            ? {
+                board: game.board,
+                goldenCellIds: game.goldenCellIds,
+                score: game.score,
+                streak: game.streak,
+                moves: game.moves,
+              }
+            : undefined
+        const res = await createRoomMutation({
+          playerId,
+          name: mpPlayerName,
+          seed: seedFromLocal,
+        })
+        if (!res?.code) throw new Error('No code returned')
+        code = res.code
+        setMpRoomCode(code)
+        setRoomCodeInUrl(code)
+        url = buildRoomShareUrl(code)
+        setMpShareUrl(url)
+        joinAttemptRef.current = { code, attempted: true }
+      } else if (!url) {
+        url = buildRoomShareUrl(code)
+        setMpShareUrl(url)
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard && url) {
+        await navigator.clipboard.writeText(url)
+      }
+      setCopyLinkLabel('copied')
+      if (copyLinkTimerRef.current !== null) {
+        window.clearTimeout(copyLinkTimerRef.current)
+      }
+      copyLinkTimerRef.current = window.setTimeout(() => {
+        setCopyLinkLabel('idle')
+        copyLinkTimerRef.current = null
+      }, 2200)
+    } catch (err) {
+      setCopyLinkLabel('idle')
+      const msg =
+        err instanceof Error ? err.message : 'Could not copy link'
+      setMpError(msg)
     }
   }
 
@@ -2710,6 +3125,14 @@ function App() {
     }
     setPendingHighScore(false)
     setHighScoreSaved(true)
+    // Auto-mirror to the global leaderboard. Convex dedupes on
+    // (playerId, savedAt) so duplicate clicks/refreshes are a no-op.
+    submitEndlessGlobal({
+      playerId,
+      name,
+      score: entry.score,
+      savedAt: entry.date,
+    }).catch(() => {})
   }
 
   const handleSaveDailyHighScore = () => {
@@ -2742,6 +3165,16 @@ function App() {
     setDailyRunsToken((t) => t + 1)
     setPendingDailyHighScore(false)
     setDailyHighScoreSaved(true)
+    // Auto-mirror to the global daily board, scoped to today's
+    // calendar key. We don't gate this on the toggle so a player
+    // who saves locally always lands on the global board too.
+    submitDailyGlobal({
+      playerId,
+      name,
+      moves: entry.moves,
+      dateKey: getTodayKey(),
+      savedAt: entry.date,
+    }).catch(() => {})
   }
 
   const handleResetHighScores = () => {
@@ -2931,9 +3364,9 @@ function App() {
           active. Window controls are visual-only; closing/minimizing a
           web app doesn't make sense. Kept always-mounted so theme swaps
           are a single CSS reflow with no React reconciliation. */}
-      <div className="hexaclear-win98-titlebar" aria-hidden="true">
+      <div className="hexaclear-win98-titlebar">
         <span className="title">Cubekill</span>
-        <span className="title-controls">
+        <span className="title-controls" aria-hidden="true">
           <button
             type="button"
             className="title-control"
@@ -2980,6 +3413,29 @@ function App() {
           <header className="hexaclear-header">
             <div className="hexaclear-header-main">
               <div className="hexaclear-title">Cubekill</div>
+              {/* Co-op partner-name HUD. Centered above the smiley
+                  in both themes; CSS positions it relative to the
+                  title row (wood) or the menu-bar row (win98), where
+                  it bottom-aligns just above the LCD row's smiley.
+                  Renders "Waiting for Partner" while we're alone in
+                  the room, then swaps to "{Partner} Feels:" once a
+                  second player has joined. The slot stays mounted
+                  the whole time so the layout doesn't shift when a
+                  partner shows up. */}
+              {isMultiplayer && (
+                <div
+                  className="hexaclear-coop-hud"
+                  aria-label={
+                    mp.partnerPlayer
+                      ? `Partner ${mp.partnerPlayer.name}`
+                      : 'Waiting for partner'
+                  }
+                >
+                  {mp.partnerPlayer
+                    ? `${mp.partnerPlayer.name} Feels:`
+                    : 'Waiting for Partner'}
+                </div>
+              )}
               <div className="hexaclear-header-main-right">
                 {showBest && (
                   <div className="hexaclear-best-banner">
@@ -3062,9 +3518,37 @@ function App() {
                       }
                     }}
                   >
-                    Big
+                    Co-op
                   </button>
                 </div>
+              )}
+              {/* Wood theme renders the smiley/emote bar here in
+                  the controls row. The Win98 theme renders a sibling
+                  copy of the same EmoteBar inside the LCD row below
+                  (gated by `theme === 'win98'`) — its `display:
+                  contents` ancestors break the absolute-centering
+                  anchor we need, so we explicitly mount it under a
+                  `position: relative` parent there instead. */}
+              {isMultiplayer && theme !== 'win98' && (
+                <EmoteBar
+                  show={showEmotePanel}
+                  setShow={setShowEmotePanel}
+                  partnerEmote={partnerEmoteActive}
+                  selfEmote={selfEmoteActive}
+                  onSend={(emoji) => {
+                    playUiClick()
+                    mp.sendEmote(emoji).catch(() => {
+                      // The mutation can fail if the partner already
+                      // left the room. We silently swallow it — the
+                      // emote panel will close and life goes on.
+                    })
+                    setShowEmotePanel(false)
+                  }}
+                  onToggle={() => {
+                    playUiClick()
+                    setShowEmotePanel((s) => !s)
+                  }}
+                />
               )}
               {showLiveStat ? (
                 <div className="hexaclear-live-stat">
@@ -3085,7 +3569,7 @@ function App() {
           authentic Minesweeper 3-digit width and grow naturally for
           larger values (4-digit when score hits 1000+, etc). */}
       {(() => {
-        const bestValue =
+        const rawBestValue =
           game.mode === 'daily'
             ? todayDailyBestMoves
             : game.mode === 'big'
@@ -3094,6 +3578,16 @@ function App() {
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
           game.mode === 'daily' ? dailyCubesRemaining : game.score
+        // Modes that don't track a persistent best (Big / co-op)
+        // would otherwise leave the left LCD reading "---", which
+        // looks broken on a 7-segment display. We fall back to the
+        // live score there instead — same digits as the right LCD,
+        // but the "Best" label stays so the layout is preserved and
+        // it still reads as the slot reserved for a record. Modes
+        // that DO have a best but haven't recorded one yet (e.g.
+        // first-ever endless run) get the same fallback for the
+        // same reason.
+        const bestValue = rawBestValue ?? liveStatValue
         const bestLabel = 'Best'
         // 3 digits is the Minesweeper default; values >999 expand the
         // display naturally rather than truncating. The off-segment
@@ -3107,21 +3601,45 @@ function App() {
         const bestDigits = padDigits(bestValue)
         const liveDigits = padDigits(liveStatValue)
         return (
-          <div className="hexaclear-win98-lcds" aria-hidden="true">
-            <div className="hexaclear-win98-lcd hexaclear-win98-lcd-best">
+          <div className="hexaclear-win98-lcds">
+            <div className="hexaclear-win98-lcd hexaclear-win98-lcd-best" aria-hidden="true">
               <span className="lcd-frame">
                 <span className="lcd-digits-off">{'8'.repeat(bestDigits.length)}</span>
                 <span className="lcd-digits">{bestDigits}</span>
               </span>
               <span className="lcd-label">{bestLabel}</span>
             </div>
-            <div className="hexaclear-win98-lcd hexaclear-win98-lcd-score">
+            <div
+              className="hexaclear-win98-lcd hexaclear-win98-lcd-score"
+              aria-hidden="true"
+            >
               <span className="lcd-label">{liveStatLabel}</span>
               <span className="lcd-frame">
                 <span className="lcd-digits-off">{'8'.repeat(liveDigits.length)}</span>
                 <span className="lcd-digits">{liveDigits}</span>
               </span>
             </div>
+            {/* Win98 smiley + emote panel. Sits centered between the
+                two LCDs (Minesweeper layout). Conditional on theme so
+                only one EmoteBar lives in the DOM at a time — keeps
+                the outside-click detector unambiguous. */}
+            {isMultiplayer && theme === 'win98' && (
+              <EmoteBar
+                show={showEmotePanel}
+                setShow={setShowEmotePanel}
+                partnerEmote={partnerEmoteActive}
+                selfEmote={selfEmoteActive}
+                onSend={(emoji) => {
+                  playUiClick()
+                  mp.sendEmote(emoji).catch(() => {})
+                  setShowEmotePanel(false)
+                }}
+                onToggle={() => {
+                  playUiClick()
+                  setShowEmotePanel((s) => !s)
+                }}
+              />
+            )}
           </div>
         )
       })()}
@@ -3239,6 +3757,15 @@ function App() {
                     ? clearingGoldenCellIds.includes(cell.id)
                     : game.goldenCellIds.includes(cell.id))
 
+                // In MP co-op we tint the partner's pieces a lighter
+                // shade so each player can see at a glance which cubes
+                // they placed. Self-placed cells stay in the default
+                // palette. Rubies render in their own palette already
+                // and aren't owned by either player, so we leave them
+                // untinted regardless.
+                const isPartnerOwned =
+                  isMultiplayer && !isGolden && partnerOwnedCellSet.has(cell.id)
+
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
                 return (
@@ -3260,6 +3787,7 @@ function App() {
                         isClearing ? 'clearing' : '',
                         isInvalidDrop ? 'invalid-drop' : '',
                         willClearInPreview ? 'preview-clear' : '',
+                        isPartnerOwned ? 'partner-piece' : '',
                         ...clearingClasses,
                         inPreview
                           ? previewValid
@@ -3333,6 +3861,7 @@ function App() {
                           isDailyTarget && isDailyHitPulsing
                             ? 'daily-hit-pulse'
                             : '',
+                          isPartnerOwned ? 'partner-piece' : '',
                         ].filter(Boolean)}
                       />
                     )}
@@ -3590,40 +4119,34 @@ function App() {
                 )}
               </div>
             )}
-            {game.mode === 'big' && (
+            {/* Copy Link CTA only renders when an invite is actually
+                useful: solo Co-op (pre-room) or in MP but waiting on
+                a partner. Once the second seat is filled, the button
+                steps out of the way — sharing the link again would
+                only invite an evictor at that point. */}
+            {game.mode === 'big' && !mp.partnerPlayer && (
               <div className="board-hud-block right hexaclear-coop-block">
-                {!isMultiplayer ? (
-                  <button
-                    type="button"
-                    className="hexaclear-coop-cta"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      handleCreateRoom()
-                    }}
-                  >
-                    Play with a friend
-                  </button>
-                ) : (
-                  <div className="hexaclear-coop-status">
-                    <span className="label">Co-op</span>
-                    <span className="value">
-                      {mp.partnerPlayer
-                        ? mp.partnerPlayer.name
-                        : 'Waiting for partner…'}
-                    </span>
-                    <button
-                      type="button"
-                      className="hexaclear-coop-leave"
-                      onClick={() => {
-                        playUiClick()
-                        handleLeaveRoom()
-                      }}
-                    >
-                      Leave
-                    </button>
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className={[
+                    'hexaclear-coop-cta',
+                    copyLinkLabel === 'copied' ? 'is-copied' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    unlockAudioOnGesture()
+                    playUiClick()
+                    void handleCopyLinkAction()
+                  }}
+                  disabled={copyLinkLabel === 'busy'}
+                >
+                  {copyLinkLabel === 'copied'
+                    ? 'Copied!'
+                    : copyLinkLabel === 'busy'
+                    ? 'Creating…'
+                    : 'Copy Link'}
+                </button>
               </div>
             )}
           </div>
@@ -3664,10 +4187,10 @@ function App() {
               <PiecePreview shape={undoAnimation.piece.shape} mode="board" />
             </div>
           )}
-          {scorePopup && game.mode === 'endless' && (
+          {scorePopup && game.mode !== 'daily' && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
           )}
-          {scoreParticles.length > 0 && game.mode === 'endless' && (
+          {scoreParticles.length > 0 && game.mode !== 'daily' && (
             <div className="hexaclear-score-particles">
               {scoreParticles.map((particle) => (
                 <div
@@ -3847,71 +4370,52 @@ function App() {
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  className="hexaclear-gameover-cta"
-                  onClick={() => {
-                    playUiClick()
-                    if (isMultiplayer) {
-                      handleLeaveRoom()
-                    } else {
-                      resetGame()
-                    }
-                  }}
-                >
-                  {isMultiplayer ? 'Back to single player' : 'Play again'}
-                </button>
-              </div>
-            </div>
-          )}
-          {isMultiplayer && mp.status === 'waiting' && !game.gameOver && (
-            <div className="hexaclear-overlay">
-              <div className="hexaclear-overlay-card hexaclear-coop-waiting-card">
-                <div className="title">Waiting for a partner…</div>
-                <p className="hexaclear-coop-instructions">
-                  Send this link to a friend. The game starts as soon as
-                  they join.
-                </p>
-                {mpShareUrl && (
-                  <div className="hexaclear-coop-share">
-                    <input
-                      type="text"
-                      readOnly
-                      className="hexaclear-coop-share-input"
-                      value={mpShareUrl}
-                      onFocus={(e) => e.currentTarget.select()}
-                    />
+                {isMultiplayer ? (
+                  <>
+                    {/* Keep the same room/partner — just rerack and
+                        play again. Either player can fire it; the
+                        server reset propagates to both clients. */}
                     <button
                       type="button"
-                      className="hexaclear-coop-share-copy"
+                      className="hexaclear-gameover-cta"
                       onClick={() => {
                         playUiClick()
-                        handleCopyShareUrl()
+                        handleRestartCoop()
                       }}
                     >
-                      Copy
+                      New game
                     </button>
-                  </div>
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link"
+                      onClick={() => {
+                        playUiClick()
+                        handleLeaveRoom()
+                      }}
+                    >
+                      Back to single player
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="hexaclear-gameover-cta"
+                    onClick={() => {
+                      playUiClick()
+                      resetGame()
+                    }}
+                  >
+                    Play again
+                  </button>
                 )}
-                {mpRoomCode && (
-                  <p className="hexaclear-coop-code">
-                    Or share the room code:{' '}
-                    <strong>{mpRoomCode}</strong>
-                  </p>
-                )}
-                <button
-                  type="button"
-                  className="hexaclear-reset hexaclear-coop-cancel"
-                  onClick={() => {
-                    playUiClick()
-                    handleLeaveRoom()
-                  }}
-                >
-                  Cancel
-                </button>
               </div>
             </div>
           )}
+          {/* The old "Waiting for a partner…" modal is gone — Copy
+              Link writes the URL straight to the clipboard without
+              any overlay. While the room sits in 'waiting' state,
+              the player keeps playing on the shared board so their
+              run isn't blocked by a missing partner. */}
           {isMultiplayer && (mp.status === 'not-found' || mpError) && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card hexaclear-coop-error-card">
@@ -4091,6 +4595,21 @@ function App() {
                 </div>
 
                 <div className="hexaclear-menu-rows">
+                  {isMultiplayer && (
+                    <label className="hexaclear-menu-row">
+                      <span className="hexaclear-menu-row-label">
+                        Co-op name
+                      </span>
+                      <input
+                        type="text"
+                        className="hexaclear-menu-row-text"
+                        value={mpPlayerName}
+                        maxLength={20}
+                        onChange={(e) => setMpPlayerName(e.target.value)}
+                        aria-label="Co-op display name"
+                      />
+                    </label>
+                  )}
                   <label className="hexaclear-menu-row">
                     <span className="hexaclear-menu-row-label">Volume</span>
                     <input
@@ -4190,7 +4709,11 @@ function App() {
                   </button>
                 </div>
 
-                  {hasStartedSession ? (
+                  {/* In MP we always show the Resume + Leave co-op
+                      pair, regardless of whether the player has
+                      placed a piece yet. The "fresh new game" menu
+                      pair only makes sense for single-player runs. */}
+                  {hasStartedSession || isMultiplayer ? (
                   <>
                     {isMultiplayer ? (
                       <button
@@ -4306,6 +4829,7 @@ function App() {
                     const isBig = game.mode === 'big'
                     const clearPoints = isBig ? 40 : 10
                     const boardClearPoints = isBig ? 100 : 25
+                    const rosetteSize = isBig ? 'nineteen-cube' : 'six-cube'
                     return (
                       <>
                         <div className="title">How To Score</div>
@@ -4319,7 +4843,7 @@ function App() {
                                 Line or rosette clear
                               </div>
                               <div className="hexaclear-scoring-rule-desc">
-                                Fill a straight line or a six-cube rosette.
+                                Fill a straight line or a {rosetteSize} rosette.
                               </div>
                             </div>
                           </div>
@@ -4414,16 +4938,40 @@ function App() {
           )}
           {showHighScores && (() => {
             const todayKey = getTodayKey()
-            const sortedEndless = highScores
-              .slice()
-              .sort((a, b) => b.score - a.score || a.date - b.date)
-            const dailyEntriesForDay = dailyHighScores
-              .slice()
-              .filter(
-                (entry) =>
-                  getDateKeyFromTimestamp(entry.date) === dailyScoresDateKey,
-              )
-              .sort((a, b) => a.moves - b.moves || a.date - b.date)
+            // When the global toggle is on, we render directly off
+            // the live Convex queries and pin the daily section to
+            // today (per product call). When off, we keep the local
+            // lists with the date stepper so old behavior is intact.
+            const sortedEndless = showGlobalLeaderboard
+              ? (globalEndlessScores ?? []).map((e) => ({
+                  name: e.name,
+                  score: e.score,
+                  date: e.savedAt,
+                }))
+              : highScores
+                  .slice()
+                  .sort((a, b) => b.score - a.score || a.date - b.date)
+            const dailyEntriesForDay = showGlobalLeaderboard
+              ? (globalDailyScores ?? []).map((e) => ({
+                  name: e.name,
+                  moves: e.moves,
+                  date: e.savedAt,
+                }))
+              : dailyHighScores
+                  .slice()
+                  .filter(
+                    (entry) =>
+                      getDateKeyFromTimestamp(entry.date) ===
+                      dailyScoresDateKey,
+                  )
+                  .sort((a, b) => a.moves - b.moves || a.date - b.date)
+            const globalLoading =
+              showGlobalLeaderboard &&
+              (globalEndlessScores === undefined ||
+                globalDailyScores === undefined)
+            const dailyDateKeyForDisplay = showGlobalLeaderboard
+              ? todayKey
+              : dailyScoresDateKey
             const rankClass = (rank: number) =>
               rank === 1
                 ? 'hexaclear-chip-trophy'
@@ -4435,13 +4983,30 @@ function App() {
                 <div className="hexaclear-overlay-card hexaclear-scores-card">
                   <div className="title">High Scores</div>
 
+                  <label className="hexaclear-scores-global-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showGlobalLeaderboard}
+                      onChange={(e) => {
+                        playUiClick()
+                        setShowGlobalLeaderboard(e.target.checked)
+                      }}
+                    />
+                    <span>Show global</span>
+                  </label>
+
                   <div className="hexaclear-scores-section">
                     <div className="hexaclear-scores-section-label">
                       Endless · highest score
+                      {showGlobalLeaderboard ? ' (global)' : ''}
                     </div>
-                    {sortedEndless.length === 0 ? (
+                    {globalLoading ? (
+                      <p className="hexaclear-scores-empty">Loading global scores…</p>
+                    ) : sortedEndless.length === 0 ? (
                       <p className="hexaclear-scores-empty">
-                        No endless scores yet. Play a game!
+                        {showGlobalLeaderboard
+                          ? 'No global endless scores yet.'
+                          : 'No endless scores yet. Play a game!'}
                       </p>
                     ) : (
                       <ol className="hexaclear-scores-list">
@@ -4481,7 +5046,9 @@ function App() {
                   <div className="hexaclear-scores-section">
                     <div className="hexaclear-scores-section-label">
                       Daily · fewest moves
+                      {showGlobalLeaderboard ? ' (global · today)' : ''}
                     </div>
+                    {!showGlobalLeaderboard && (
                     <div className="hexaclear-scores-date-stepper">
                       <button
                         type="button"
@@ -4516,10 +5083,13 @@ function App() {
                         ›
                       </button>
                     </div>
-                    {dailyEntriesForDay.length === 0 ? (
+                    )}
+                    {globalLoading ? (
+                      <p className="hexaclear-scores-empty">Loading global scores…</p>
+                    ) : dailyEntriesForDay.length === 0 ? (
                       <p className="hexaclear-scores-empty">
                         No scores stored for this date
-                        {dailyScoresDateKey === todayKey
+                        {dailyDateKeyForDisplay === todayKey
                           ? ". Play today's puzzle!"
                           : '.'}
                       </p>
@@ -4556,7 +5126,7 @@ function App() {
                         })}
                       </ol>
                     )}
-                    {dailyScoresDateKey !== todayKey && (
+                    {!showGlobalLeaderboard && dailyScoresDateKey !== todayKey && (
                       <button
                         type="button"
                         className="hexaclear-menu-link hexaclear-scores-today-link"
@@ -4642,6 +5212,18 @@ function App() {
             .filter(Boolean)
             .join(' ')}
         >
+          {mpMoveStatus && (
+            <div
+              className={[
+                'hexaclear-hand-status',
+                `hexaclear-hand-status-${mpMoveStatus.kind}`,
+              ].join(' ')}
+              role="status"
+              aria-live="polite"
+            >
+              {mpMoveStatus.message}
+            </div>
+          )}
           {game.handSlots.map((pieceId, slotIndex) => {
             const piece = game.hand.find((p) => p.id === pieceId) ?? null
             const isHiddenByUndo =
