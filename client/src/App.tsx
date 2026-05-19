@@ -2564,29 +2564,41 @@ function App() {
   // already in a room, we lazily spin one up so the link points at a
   // real lobby; if we are, we copy the existing URL. Either way the
   // button briefly flips to "Copied!" and then reverts. No modal.
-  const handleCopyLinkAction = async () => {
+  //
+  // Important: this handler must be synchronous up to the
+  // `navigator.clipboard.write` call. Safari / iOS reject any
+  // clipboard write that's separated from the user gesture by an
+  // `await`, so we use the `ClipboardItem(Promise<Blob>)` form which
+  // lets us kick off the room-creation mutation, register the
+  // pending write inside the same gesture tick, and let the browser
+  // commit it once the URL resolves.
+  const handleCopyLinkAction = (): void => {
     if (copyLinkLabel === 'busy') return
     setMpError(null)
-    let code = mpRoomCode
-    let url = mpShareUrl
-    try {
+
+    // Seed the new room with the host's current solo Big board so
+    // their in-progress run carries over when a friend joins. We
+    // only seed when the local game is in 'big' mode and has already
+    // had at least one move; otherwise an empty fresh board is fine
+    // and lets the server roll new initial rubies.
+    const seedFromLocal =
+      game.mode === 'big' && game.moves > 0
+        ? {
+            board: game.board,
+            goldenCellIds: game.goldenCellIds,
+            score: game.score,
+            streak: game.streak,
+            moves: game.moves,
+          }
+        : undefined
+
+    // Kick off the URL resolution. This IIFE returns synchronously
+    // (it returns a Promise) so the clipboard.write call below still
+    // runs inside the click gesture.
+    const urlPromise = (async (): Promise<string> => {
+      let code = mpRoomCode
+      let url = mpShareUrl
       if (!code) {
-        setCopyLinkLabel('busy')
-        // Seed the new room with the host's current solo Big board
-        // so their in-progress run carries over when a friend joins.
-        // We only seed when the local game is in 'big' mode and has
-        // already had at least one move; otherwise an empty fresh
-        // board is fine and lets the server roll new initial rubies.
-        const seedFromLocal =
-          game.mode === 'big' && game.moves > 0
-            ? {
-                board: game.board,
-                goldenCellIds: game.goldenCellIds,
-                score: game.score,
-                streak: game.streak,
-                moves: game.moves,
-              }
-            : undefined
         const res = await createRoomMutation({
           playerId,
           name: mpPlayerName,
@@ -2603,23 +2615,53 @@ function App() {
         url = buildRoomShareUrl(code)
         setMpShareUrl(url)
       }
-      if (typeof navigator !== 'undefined' && navigator.clipboard && url) {
-        await navigator.clipboard.writeText(url)
-      }
-      setCopyLinkLabel('copied')
-      if (copyLinkTimerRef.current !== null) {
-        window.clearTimeout(copyLinkTimerRef.current)
-      }
-      copyLinkTimerRef.current = window.setTimeout(() => {
+      if (!url) throw new Error('No share URL available')
+      return url
+    })()
+
+    setCopyLinkLabel('busy')
+
+    const supportsClipboardItem =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.clipboard?.write === 'function' &&
+      typeof window !== 'undefined' &&
+      typeof window.ClipboardItem !== 'undefined'
+
+    // Write path. Safari only honors the gesture if we hand it a
+    // ClipboardItem with a Promise<Blob> right now — actually
+    // awaiting the URL first and then calling writeText bombs out
+    // with the "request not allowed by the user agent" error.
+    const writePromise: Promise<unknown> = supportsClipboardItem
+      ? navigator.clipboard.write([
+          new window.ClipboardItem({
+            'text/plain': urlPromise.then(
+              (text) => new Blob([text], { type: 'text/plain' }),
+            ),
+          }),
+        ])
+      : urlPromise.then((text) =>
+          typeof navigator !== 'undefined' && navigator.clipboard?.writeText
+            ? navigator.clipboard.writeText(text)
+            : undefined,
+        )
+
+    void Promise.all([urlPromise, writePromise])
+      .then(() => {
+        setCopyLinkLabel('copied')
+        if (copyLinkTimerRef.current !== null) {
+          window.clearTimeout(copyLinkTimerRef.current)
+        }
+        copyLinkTimerRef.current = window.setTimeout(() => {
+          setCopyLinkLabel('idle')
+          copyLinkTimerRef.current = null
+        }, 2200)
+      })
+      .catch((err: unknown) => {
         setCopyLinkLabel('idle')
-        copyLinkTimerRef.current = null
-      }, 2200)
-    } catch (err) {
-      setCopyLinkLabel('idle')
-      const msg =
-        err instanceof Error ? err.message : 'Could not copy link'
-      setMpError(msg)
-    }
+        const msg =
+          err instanceof Error ? err.message : 'Could not copy link'
+        setMpError(msg)
+      })
   }
 
   const handleUndo = () => {
