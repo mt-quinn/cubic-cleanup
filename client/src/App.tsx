@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import {
   getBoardDefinitionForMode,
@@ -4512,48 +4512,62 @@ function App() {
                 the footprint still render so the player can see
                 that their partner is aiming at an edge — no
                 validity check on purpose; these are exploratory
-                previews, not commitments. */}
+                previews, not commitments.
+
+                Key stability matters here: we key the per-partner
+                group by playerId (NOT by hovered cellId) and the
+                inner cell slots by relative index within the
+                piece's footprint, so when the partner moves their
+                cursor to a new cell React updates the existing
+                nodes' positions in place instead of unmounting and
+                remounting. Mount/unmount churn at the sender's
+                ~10Hz re-stamp cadence reads as a rapid blink on the
+                partner's screen, which is exactly the bug we're
+                avoiding. */}
             {partnerGhosts.length > 0 && (
               <g className="hexaclear-partner-ghosts" pointerEvents="none">
-                {partnerGhosts.map((ghost) =>
-                  ghost.cells.map((c) => {
-                    const { x, y } = axialToPixel(c.q, c.r)
-                    const cx = x + boardLayout.offsetX
-                    const cy = y + boardLayout.offsetY
-                    const points = buildHexPoints(cx, cy)
-                    const offboardClass = c.onBoard
-                      ? ''
-                      : 'partner-ghost-offboard'
-                    const hueStyle = {
-                      '--partner-hue': `${ghost.hue}deg`,
-                    } as React.CSSProperties
-                    return (
-                      <g
-                        key={`partner-ghost-${ghost.playerId}-${c.cellId}`}
-                        style={hueStyle}
-                      >
-                        <polygon
-                          className={[
-                            'hexaclear-partner-ghost-fill',
-                            offboardClass,
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          points={points}
-                        />
-                        <CubeLines
-                          cx={cx}
-                          cy={cy}
-                          variant="normal"
-                          extraClasses={[
-                            'partner-ghost',
-                            offboardClass,
-                          ].filter(Boolean)}
-                        />
-                      </g>
-                    )
-                  }),
-                )}
+                {partnerGhosts.map((ghost) => (
+                  <g
+                    key={`partner-${ghost.playerId}`}
+                    style={
+                      {
+                        '--partner-hue': `${ghost.hue}deg`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {ghost.cells.map((c, idx) => {
+                      const { x, y } = axialToPixel(c.q, c.r)
+                      const cx = x + boardLayout.offsetX
+                      const cy = y + boardLayout.offsetY
+                      const points = buildHexPoints(cx, cy)
+                      const offboardClass = c.onBoard
+                        ? ''
+                        : 'partner-ghost-offboard'
+                      return (
+                        <React.Fragment key={`cell-${idx}`}>
+                          <polygon
+                            className={[
+                              'hexaclear-partner-ghost-fill',
+                              offboardClass,
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            points={points}
+                          />
+                          <CubeLines
+                            cx={cx}
+                            cy={cy}
+                            variant="normal"
+                            extraClasses={[
+                              'partner-ghost',
+                              offboardClass,
+                            ].filter(Boolean)}
+                          />
+                        </React.Fragment>
+                      )
+                    })}
+                  </g>
+                ))}
               </g>
             )}
 
