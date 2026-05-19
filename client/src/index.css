@@ -1733,24 +1733,25 @@ body {
     drop-shadow(0 0 8px rgba(255, 120, 160, 0.65));
 }
 
-/* MP partner-tinted cubes (wood theme). The `partner-piece` class
-   handles the *lightening* pass via a filter (any non-self placement
-   reads brighter and a touch desaturated, so it's visibly distinct
-   from the player's own pieces) AND splices in a per-player
-   `hue-rotate` driven by the inline `--partner-hue` variable so each
-   seat lands on its own clearly-different color. We apply the filter
-   chain directly to each `<polygon>` cube face rather than to a
-   wrapping `<g>`: SVG filters on group elements rasterize the
-   group's bounding box and don't compose reliably across the
-   board's nested scale transforms (especially when there are
-   sibling overlay groups like the partner-ghost layer). Per-face
-   filters work because they have a definite paint region. Rubies
-   (`.golden`) bypass this whole pass since they're neutral / unowned. */
-.hexaclear-hex-cube.partner-piece .cube-face {
-  filter:
-    brightness(1.18)
-    saturate(0.85)
-    hue-rotate(var(--partner-hue, 0deg));
+/* MP partner-tinted cubes (wood theme). Each face takes its tinted
+   fill from an inline CSS variable computed in JS (HSL hue rotation
+   + small lightness/saturation tweak). We deliberately bake the
+   tint into a concrete color rather than using `filter:
+   hue-rotate()` because (a) SVG filters on `<g>` wrappers don't
+   compose reliably across the board's nested transform groups, and
+   (b) CSS `hue-rotate` is a linear color matrix that produces
+   visually similar output for mid-saturation teals at different
+   angles, which made two partners read as the same color in win98.
+   Rubies (`.golden`) bypass this whole pass — they're neutral /
+   unowned and keep their flag-pink palette regardless of placer. */
+.hexaclear-hex-cube.partner-piece .cube-top {
+  fill: var(--cube-top-tint, var(--cube-top));
+}
+.hexaclear-hex-cube.partner-piece .cube-right {
+  fill: var(--cube-right-tint, var(--cube-right));
+}
+.hexaclear-hex-cube.partner-piece .cube-left {
+  fill: var(--cube-left-tint, var(--cube-left));
 }
 
 /* Live partner-hover ghosts. Translucent silhouette of the piece
@@ -1771,11 +1772,14 @@ body {
   opacity: 0.65;
   pointer-events: none;
 }
-.hexaclear-hex-cube.partner-ghost .cube-face {
-  filter:
-    brightness(1.05)
-    saturate(0.75)
-    hue-rotate(var(--partner-hue, 0deg));
+.hexaclear-hex-cube.partner-ghost .cube-top {
+  fill: var(--cube-top-tint, var(--cube-top));
+}
+.hexaclear-hex-cube.partner-ghost .cube-right {
+  fill: var(--cube-right-tint, var(--cube-right));
+}
+.hexaclear-hex-cube.partner-ghost .cube-left {
+  fill: var(--cube-left-tint, var(--cube-left));
 }
 .hexaclear-hex-cube.partner-ghost.partner-ghost-offboard {
   opacity: 0.32;
@@ -1786,7 +1790,6 @@ body {
   stroke: rgba(40, 20, 10, 0.45);
   stroke-width: 1.5;
   pointer-events: none;
-  filter: hue-rotate(var(--partner-hue, 0deg));
 }
 .hexaclear-partner-ghost-fill.partner-ghost-offboard {
   opacity: 0.5;

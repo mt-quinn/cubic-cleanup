@@ -620,16 +620,17 @@
   fill: var(--w98-ruby-fill);
 }
 
-/* MP partner-piece tint: lighter teal on the filled face plus a
-   per-player hue rotation driven by the inline `--partner-hue`
-   variable, so each seat reads as a distinct color. We don't apply
-   this to .golden cells because rubies are neutral / unowned and
-   should keep their flag-red regardless of who triggered the spawn.
-   The clearing animation already starts from --w98-magenta and ends
-   at --w98-surface, so it overrides this fine. */
+/* MP partner-piece tint: each non-self placement gets its own fill
+   color, computed in JS as an HSL hue rotation off the partner-base
+   teal. We bake the rotation into the inline `--w98-partner-fill-
+   tint` rather than using `filter: hue-rotate()` because the CSS
+   filter is a linear color matrix that maps mid-saturation teals at
+   different angles to visually similar outputs — two partners ended
+   up reading as the same color even when their hue values differed.
+   Rubies (`.golden`) keep their flag-red regardless of placer.
+   Clearing animations override this via their own keyframes. */
 [data-theme="win98"] .hexaclear-hex.filled.partner-piece {
-  fill: var(--w98-cube-fill-partner);
-  filter: hue-rotate(var(--partner-hue, 0deg));
+  fill: var(--w98-partner-fill-tint, var(--w98-cube-fill-partner));
 }
 
 /* Live partner-hover ghosts in Win98: the cube-faces silhouette
@@ -641,7 +642,7 @@
    palette, with the ghost just being more transparent and pulsing. */
 [data-theme="win98"] .hexaclear-partner-ghost-fill {
   display: block;
-  fill: var(--w98-cube-fill-partner);
+  fill: var(--w98-partner-fill-tint, var(--w98-cube-fill-partner));
   stroke: var(--w98-text);
   stroke-width: 1;
 }

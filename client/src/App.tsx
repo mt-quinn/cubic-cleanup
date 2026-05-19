@@ -66,6 +66,105 @@ const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
 const HEX_SIZE = 32
 const SQRT3 = Math.sqrt(3)
 
+// Self-rendered cube palette in the wood theme. Mirrors the
+// `--cube-{top,right,left}` defaults declared in index.css. We hold
+// JS copies here because per-partner tinting computes the rotated /
+// lightened variants in JavaScript and assigns them as inline
+// CSS custom properties — using `filter: hue-rotate()` on the SVG
+// `<g>` wrappers turned out to be unreliable across nested transform
+// groups, and `hue-rotate` itself is a linear color matrix that
+// barely shifts mid-saturation teals (so two partners ended up
+// reading as the same color even when their hue values differed).
+// The win98 partner fill is the explicit "lighter teal" base used
+// when filtering is in effect — we keep using it as the *self* base
+// for partner cells in win98 too, then rotate from there in JS.
+const WOOD_CUBE_TOP_HEX = '#ffeaa3'
+const WOOD_CUBE_RIGHT_HEX = '#a04a18'
+const WOOD_CUBE_LEFT_HEX = '#f9a23f'
+const W98_PARTNER_FILL_HEX = '#6fbcbc'
+
+const hexToRgb = (hex: string): [number, number, number] => {
+  const h = hex.replace('#', '')
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ]
+}
+
+const rgbToHex = (r: number, g: number, b: number): string => {
+  const c = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, '0')
+  return `#${c(r)}${c(g)}${c(b)}`
+}
+
+const rgbToHsl = (
+  r: number,
+  g: number,
+  b: number,
+): [number, number, number] => {
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const l = (max + min) / 2
+  let h = 0
+  let s = 0
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60
+    else if (max === gn) h = ((bn - rn) / d + 2) * 60
+    else h = ((rn - gn) / d + 4) * 60
+  }
+  return [h, s, l]
+}
+
+const hslToRgb = (
+  h: number,
+  s: number,
+  l: number,
+): [number, number, number] => {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const hp = ((h % 360) + 360) % 360 / 60
+  const x = c * (1 - Math.abs((hp % 2) - 1))
+  let r = 0
+  let g = 0
+  let b = 0
+  if (hp < 1) [r, g, b] = [c, x, 0]
+  else if (hp < 2) [r, g, b] = [x, c, 0]
+  else if (hp < 3) [r, g, b] = [0, c, x]
+  else if (hp < 4) [r, g, b] = [0, x, c]
+  else if (hp < 5) [r, g, b] = [x, 0, c]
+  else [r, g, b] = [c, 0, x]
+  const m = l - c / 2
+  return [(r + m) * 255, (g + m) * 255, (b + m) * 255]
+}
+
+// Rotate the hue of `hex` by `deg` and apply a small lightness/
+// saturation tweak so partner cubes always read as visibly tinted
+// even when `deg === 0` (i.e. self-relative offset is the floor of
+// the lightening pass — the wood/win98 themes used to do this with
+// `brightness()` / `saturate()` filters, but those don't compose on
+// SVG groups so we bake the same effect into the output color here).
+const tintCubeColor = (
+  hex: string,
+  deg: number,
+  lightnessAdd: number,
+  saturationMul: number,
+): string => {
+  const [r, g, b] = hexToRgb(hex)
+  const [h, s, l] = rgbToHsl(r, g, b)
+  const nh = h + deg
+  const ns = Math.max(0, Math.min(1, s * saturationMul))
+  const nl = Math.max(0, Math.min(1, l + lightnessAdd))
+  const [nr, ng, nb] = hslToRgb(nh, ns, nl)
+  return rgbToHex(nr, ng, nb)
+}
+
 // Resolve the on-screen score counter element for the active theme.
 // Wood theme renders the score in `.hexaclear-live-stat .value`;
 // Win98 hides that and renders it as a 7-segment LCD on the right
@@ -4333,9 +4432,46 @@ function App() {
                   isMultiplayer && !isGolden && nonSelfOwnedCells.has(cell.id)
                 const partnerHueShift =
                   isPartnerOwned ? cellHueByCellId[cell.id] ?? 0 : 0
+                // Bake hue rotation + lightening pass into concrete
+                // hex colors via JS HSL math, then hand each cube
+                // face / win98 polygon its tinted fill through inline
+                // CSS variables. Doing it in JS sidesteps two CSS
+                // gotchas: SVG `filter` on `<g>` doesn't compose
+                // reliably across the board's nested transform
+                // groups, and CSS `hue-rotate()` is a linear color
+                // matrix that produces near-identical output for
+                // mid-saturation teals at different angles, so two
+                // distinct partners can read as the same color even
+                // though `--partner-hue` differs. The lightnessAdd /
+                // saturationMul args reproduce the previous
+                // `brightness()/saturate()` filter pass.
                 const partnerHueStyle = isPartnerOwned
                   ? ({
                       '--partner-hue': `${partnerHueShift}deg`,
+                      '--cube-top-tint': tintCubeColor(
+                        WOOD_CUBE_TOP_HEX,
+                        partnerHueShift,
+                        0.05,
+                        0.85,
+                      ),
+                      '--cube-right-tint': tintCubeColor(
+                        WOOD_CUBE_RIGHT_HEX,
+                        partnerHueShift,
+                        0.08,
+                        0.85,
+                      ),
+                      '--cube-left-tint': tintCubeColor(
+                        WOOD_CUBE_LEFT_HEX,
+                        partnerHueShift,
+                        0.06,
+                        0.85,
+                      ),
+                      '--w98-partner-fill-tint': tintCubeColor(
+                        W98_PARTNER_FILL_HEX,
+                        partnerHueShift,
+                        0,
+                        1,
+                      ),
                     } as React.CSSProperties)
                   : undefined
 
@@ -4529,6 +4665,30 @@ function App() {
                     style={
                       {
                         '--partner-hue': `${ghost.hue}deg`,
+                        '--cube-top-tint': tintCubeColor(
+                          WOOD_CUBE_TOP_HEX,
+                          ghost.hue,
+                          0.05,
+                          0.85,
+                        ),
+                        '--cube-right-tint': tintCubeColor(
+                          WOOD_CUBE_RIGHT_HEX,
+                          ghost.hue,
+                          0.08,
+                          0.85,
+                        ),
+                        '--cube-left-tint': tintCubeColor(
+                          WOOD_CUBE_LEFT_HEX,
+                          ghost.hue,
+                          0.06,
+                          0.85,
+                        ),
+                        '--w98-partner-fill-tint': tintCubeColor(
+                          W98_PARTNER_FILL_HEX,
+                          ghost.hue,
+                          0,
+                          1,
+                        ),
                       } as React.CSSProperties
                     }
                   >
