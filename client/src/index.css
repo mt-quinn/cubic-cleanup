@@ -2018,13 +2018,17 @@ body {
   cursor: grabbing;
 }
 
-/* While dragging, the × cancel marker IS the highlight — suppress
-   the larger .selected outline on the slot so we don't read as two
-   nested boxes (the marker has its own dashed border that doubles
-   as the hit-zone affordance). */
+/* While dragging, the .selected highlight (slot-wide background +
+   inset glow) is moved onto the × cancel marker so the highlight
+   wraps just the actual hit zone instead of the whole slot. */
 .hexaclear-piece-button.dragging.selected {
   background: transparent;
   box-shadow: none;
+}
+
+.hexaclear-piece-button.dragging.selected .hexaclear-piece-cancel-mark {
+  background: rgba(255, 213, 123, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 213, 123, 0.55);
 }
 
 /* The × that appears in the slot a drag started in. Acts as both a
