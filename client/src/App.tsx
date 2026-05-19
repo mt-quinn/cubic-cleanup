@@ -1602,20 +1602,19 @@ function App() {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const boardWrapperRef = useRef<HTMLDivElement | null>(null)
+  // Live element ref for the × cancel marker that's currently mounted
+  // inside the dragging slot. The marker is the single source of
+  // truth for both the visual hit-zone affordance and the JS hit-
+  // test rect, so they can never drift out of sync.
+  const cancelMarkRef = useRef<HTMLSpanElement | null>(null)
   const dragState = useRef<{
     pieceId: string | null
     pointerId: number | null
     pointerType: string | null
-    // Slot the drag started in. Used to scope the "drop to cancel"
-    // hit zone to that slot's button rect (rather than the whole
-    // hand bar) so tall pieces with a touch-offset preview don't
-    // make the bottom row of the board unreachable.
-    slotIndex: number | null
   }>({
     pieceId: null,
     pointerId: null,
     pointerType: null,
-    slotIndex: null,
   })
   // React dev StrictMode can invoke state updater functions twice; we use these
   // refs to ensure we don't schedule merge-time score increments twice.
@@ -1964,7 +1963,6 @@ function App() {
       pieceId: null,
       pointerId: null,
       pointerType: null,
-      slotIndex: null,
     }
   }, [isMultiplayer])
 
@@ -3337,24 +3335,22 @@ function App() {
   }
 
   useEffect(() => {
-    // True iff the given client-space point lies inside the slot the
-    // current drag *started* in. Used to suppress on-board placement
-    // preview / placement attempts while the player is hovering the
-    // piece over the empty slot it left behind — that one slot is the
-    // "drop to cancel" hit zone (and the slot renders an × marker
-    // while dragging so the affordance is visible).
+    // True iff the given client-space point lies inside the live ×
+    // marker rect for the current drag. The marker is sized via CSS
+    // (50% × 50% of its slot, centered); we read its real rect off
+    // the DOM rather than recomputing the inset in JS so the visual
+    // and the hit-test can never drift.
     //
-    // Why only that slot, not the whole hand: pieces drag with a
-    // touch-offset preview, and on the big board the bottom row of
-    // cells lines up close to the hand. Treating the entire hand bar
-    // as a cancel zone makes those bottom cells unreachable.
-    const isPointOverDraggingSlot = (
+    // Why a small centered hit-zone, not the whole slot or hand bar:
+    // pieces drag with a touch-offset preview, and on the big board
+    // the bottom row of cells lines up close to the hand. A larger
+    // cancel zone makes those bottom cells unreachable when the
+    // player tries to place there.
+    const isPointOverCancelMark = (
       clientX: number,
       clientY: number,
     ): boolean => {
-      const slotIndex = dragState.current.slotIndex
-      if (slotIndex === null) return false
-      const node = handButtonRefs.current[slotIndex]
+      const node = cancelMarkRef.current
       if (!node) return false
       const r = node.getBoundingClientRect()
       return (
@@ -3374,10 +3370,10 @@ function App() {
       const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
 
-      // While the cursor sits over the dragging slot's × hit zone,
-      // kill the on-board preview entirely so cells don't light up
-      // behind the held piece.
-      if (isPointOverDraggingSlot(clientX, clientY)) {
+      // While the cursor sits over the × cancel marker, kill the
+      // on-board preview entirely so cells don't light up behind the
+      // held piece.
+      if (isPointOverCancelMark(clientX, clientY)) {
         setHover(null)
         return
       }
@@ -3400,17 +3396,17 @@ function App() {
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
 
-      // Released inside the dragging slot's × hit zone — cancel the
-      // drag silently. No placement attempt, no error shake, no
-      // preview-cell snap. We still play the soft click_up so the
-      // gesture sounds completed.
-      const releasedOverCancelSlot =
+      // Released over the × cancel marker — cancel the drag silently.
+      // No placement attempt, no error shake, no preview-cell snap.
+      // We still play the soft click_up so the gesture sounds
+      // completed.
+      const releasedOverCancelMark =
         clientX !== null &&
         clientY !== null &&
-        isPointOverDraggingSlot(clientX, clientY)
+        isPointOverCancelMark(clientX, clientY)
 
       let cellId: string | null = null
-      if (!releasedOverCancelSlot) {
+      if (!releasedOverCancelMark) {
         cellId = hover?.cellId ?? null
         if (!cellId && clientX !== null && clientY !== null) {
           cellId = findClosestCellIdFromClientPoint(
@@ -3433,7 +3429,6 @@ function App() {
       dragState.current.pointerId = null
       dragState.current.pieceId = null
       dragState.current.pointerType = null
-      dragState.current.slotIndex = null
       setDraggingPieceId(null)
       setGhost(null)
 
@@ -3454,7 +3449,7 @@ function App() {
         // instead, which intentionally keeps the selection alive so the
         // player can keep tapping cells.
         setSelectedPieceId(null)
-      } else if (releasedOverCancelSlot) {
+      } else if (releasedOverCancelMark) {
         // Drag-cancel: also drop the click-to-select state so the next
         // pointer-down on the same piece reads as a fresh pickup
         // instead of a follow-up placement at the closest cell.
@@ -5554,7 +5549,6 @@ function App() {
                     pieceId: displayPiece.id,
                     pointerId: e.pointerId,
                     pointerType: e.pointerType || null,
-                    slotIndex,
                   }
                   setSelectedPieceId(displayPiece.id)
                   setDraggingPieceId(displayPiece.id)
@@ -5576,6 +5570,7 @@ function App() {
                 )}
                 {isDragging && (
                   <span
+                    ref={cancelMarkRef}
                     className="hexaclear-piece-cancel-mark"
                     aria-hidden="true"
                   >

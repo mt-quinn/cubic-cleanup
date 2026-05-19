@@ -2020,24 +2020,29 @@ body {
 
 /* The × that appears in the slot a drag started in. Acts as both a
    visual affordance ("releasing here cancels the drag") and the
-   actual cancel hit zone — pointer-up inside this slot's button rect
-   skips the placement attempt. We render it large and dim so it
-   reads as a soft "drop zone" rather than a primary action button.
-   pointer-events: none so the underlying button still owns the
-   gesture and bounding rect. */
+   actual cancel hit zone — pointer-up inside this element's
+   bounding rect skips the placement attempt, the JS hit-test reads
+   getBoundingClientRect() on this very node so the visual and the
+   hit area can never drift.
+   We size it to 50% × 50% of the slot, centered, so the rest of
+   the slot (and the rows of the board immediately above it) stay
+   reachable when the touch-offset preview pulls the piece up off
+   the finger.
+   pointer-events: none keeps the underlying button owning the
+   gesture; the cancel detection runs against this node's rect
+   from the global pointer handlers, not via DOM event bubbling. */
 .hexaclear-piece-button .hexaclear-piece-cancel-mark {
   position: absolute;
-  inset: 0;
+  inset: 25%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(2.4rem, 6.5vw, 3.6rem);
+  font-size: clamp(1.6rem, 4.5vw, 2.6rem);
   font-weight: 600;
   line-height: 1;
   color: rgba(255, 197, 138, 0.55);
   border: 1.5px dashed rgba(255, 197, 138, 0.35);
-  border-radius: 0.55rem;
-  margin: 0.15rem;
+  border-radius: 0.45rem;
   pointer-events: none;
   user-select: none;
   animation: hexaclear-cancel-mark-fade 140ms ease-out both;

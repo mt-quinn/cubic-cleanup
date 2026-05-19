@@ -1202,12 +1202,13 @@
    a drag started in. We swap to the theme's native flag-red on
    surface-gray so it reads as a Minesweeper "remove flag" cue
    rather than the wood-theme cream-on-warm dashed look. Keep the
-   dashed border, but in deep-shadow black. */
+   dashed border, but in deep-shadow black. Inset / size are
+   inherited from the base rule so the visual and the JS hit-test
+   stay in lock-step. */
 [data-theme="win98"] .hexaclear-piece-button .hexaclear-piece-cancel-mark {
   color: var(--w98-ruby-fill);
   border-color: var(--w98-deep-shadow);
   border-radius: 0;
-  margin: 2px;
 }
 
 /* --- Generic Win98 buttons ------------------------------------------- */
