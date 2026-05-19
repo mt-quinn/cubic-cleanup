@@ -13,30 +13,57 @@
 // throwaway, plays freely overlap, there's no Promise to reject, and
 // scheduling latency is essentially the audio device's frame size.
 
+// Clear SFX naming convention:
+//   - "clear<S>" (S = 1..7) is the single-clear sound for streak S.
+//     Used when a placement clears exactly one line/rosette. Streak
+//     caps at 7 (i.e., 8th+ consecutive clear reuses clear7).
+//   - "clear<S>combo<C>" (S = 1..7, C = 1..3) is the combo sound for
+//     streak S and combo size C+1. So clear3combo2 plays on the 3rd
+//     consecutive clearing placement when that placement clears 3
+//     lines/rosettes at once. Combo caps at 3 (i.e., 4+ patterns
+//     cleared in one placement reuses combo3).
+type ClearStreakIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7
+type ClearComboIndex = 1 | 2 | 3
+type ClearKey =
+  | `clear${ClearStreakIndex}`
+  | `clear${ClearStreakIndex}combo${ClearComboIndex}`
 type SoundKey =
   | 'clickDown'
   | 'clickUp'
-  | 'clear1'
-  | 'clear2'
-  | 'clear3'
-  | 'clear4'
-  | 'clear5'
-  | 'clear6'
-  | 'clear7'
+  | ClearKey
   | 'error'
   | 'gameOver'
   | 'break'
 
+const STREAKS: ClearStreakIndex[] = [1, 2, 3, 4, 5, 6, 7]
+const COMBOS: ClearComboIndex[] = [1, 2, 3]
+
+const buildClearSources = (): Record<ClearKey, string> => {
+  const out = {} as Record<ClearKey, string>
+  for (const s of STREAKS) {
+    out[`clear${s}`] = `/clear_${s}.wav`
+    for (const c of COMBOS) {
+      out[`clear${s}combo${c}`] = `/clear_${s}_combo_${c}.wav`
+    }
+  }
+  return out
+}
+
+const buildClearVolumes = (): Record<ClearKey, number> => {
+  const out = {} as Record<ClearKey, number>
+  for (const s of STREAKS) {
+    out[`clear${s}`] = 0.85
+    for (const c of COMBOS) {
+      out[`clear${s}combo${c}`] = 0.85
+    }
+  }
+  return out
+}
+
 const SOURCES: Record<SoundKey, string> = {
   clickDown: '/click_down.wav',
   clickUp: '/click_up.wav',
-  clear1: '/clear_1.wav',
-  clear2: '/clear_2.wav',
-  clear3: '/clear_3.wav',
-  clear4: '/clear_4.wav',
-  clear5: '/clear_5.wav',
-  clear6: '/clear_6.wav',
-  clear7: '/clear_7.wav',
+  ...buildClearSources(),
   error: '/error.wav',
   gameOver: '/game_over.wav',
   break: '/break.wav',
@@ -45,13 +72,7 @@ const SOURCES: Record<SoundKey, string> = {
 const VOLUMES: Record<SoundKey, number> = {
   clickDown: 0.7,
   clickUp: 0.7,
-  clear1: 0.85,
-  clear2: 0.85,
-  clear3: 0.85,
-  clear4: 0.85,
-  clear5: 0.85,
-  clear6: 0.85,
-  clear7: 0.85,
+  ...buildClearVolumes(),
   // Error SFX dialed back per request — was reading too loud relative
   // to the quieter UI clicks and clear hits around it.
   error: 0.64,
@@ -275,10 +296,23 @@ export const playUiClick = () => {
   }
 }
 
-// Play the SFX for the Nth consecutive clearing placement, capping at
-// clear_7.wav for the 7th and beyond. `streakIndex` is 1-based: 1 means
-// the first clear in a run, 2 the second, etc.
-export const playClearForStreakIndex = (streakIndex: number) => {
-  const clamped = Math.max(1, Math.min(7, Math.floor(streakIndex)))
-  playOneShot(`clear${clamped}` as SoundKey)
+// Play the celebration SFX for a clearing placement.
+//
+// `streakIndex` (1-based) is how many consecutive clearing placements
+// the player has chained together, including this one — capped at 7,
+// so an 8th+ in a row replays the clear7 layer.
+//
+// `clearCount` is how many lines/rosettes were cleared in *this single
+// placement*. The combo layer is clearCount - 1: a single-clear plays
+// the bare "clear<streak>" sound, two-in-one steps up to combo_1,
+// three-in-one to combo_2, and four-or-more all collapse to combo_3.
+export const playClearForStreakIndex = (
+  streakIndex: number,
+  clearCount: number = 1,
+) => {
+  const streak = Math.max(1, Math.min(7, Math.floor(streakIndex)))
+  const combo = Math.max(0, Math.min(3, Math.floor(clearCount) - 1))
+  const key =
+    combo === 0 ? `clear${streak}` : `clear${streak}combo${combo}`
+  playOneShot(key as SoundKey)
 }

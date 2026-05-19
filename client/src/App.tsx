@@ -864,6 +864,30 @@ function App() {
   // hand-piece button's React key so all three buttons remount together
   // and the fly-in animation always plays on a hand refresh.
   const [handFlyInToken, setHandFlyInToken] = useState(0)
+  // Per-slot fly-in completion, scoped to a token. Once the deal animation
+  // has played for a slot we drop the `hexaclear-piece-flyin` class so an
+  // unrelated CSS rule change (notably the failed-drop shake clearing
+  // back out) can't re-trigger the deal animation a second time. State
+  // is keyed by token so a fresh hand naturally starts everything at
+  // "not yet played" without needing a separate reset effect that would
+  // fight the initial render.
+  const [flyInDoneState, setFlyInDoneState] = useState<{
+    token: number
+    done: boolean[]
+  }>({ token: -1, done: [] })
+  const isFlyInDone = (slotIndex: number) =>
+    flyInDoneState.token === handFlyInToken &&
+    (flyInDoneState.done[slotIndex] ?? false)
+  const markFlyInDone = (slotIndex: number) => {
+    setFlyInDoneState((prev) => {
+      const baseDone = prev.token === handFlyInToken ? prev.done : []
+      if (baseDone[slotIndex]) return prev
+      const nextDone = [...baseDone]
+      while (nextDone.length <= slotIndex) nextDone.push(false)
+      nextDone[slotIndex] = true
+      return { token: handFlyInToken, done: nextDone }
+    })
+  }
   // Radial particle burst that fires at the ruby's old position when it
   // gets cleared. Token bumps so consecutive captures restart cleanly.
   const [rubyBurst, setRubyBurst] = useState<{
@@ -1468,14 +1492,16 @@ function App() {
       // Each consecutive clearing placement steps through clear_1..clear_7,
       // capped at clear_7 thereafter. A non-clearing placement resets
       // current.streak to 0 in game state, so the next clear after that
-      // naturally lands back on clear_1.
+      // naturally lands back on clear_1. clearCount layers the combo
+      // variant on top: 1 clear plays the plain streak sound, 2+ clears
+      // play clear_<streak>_combo_<clearCount-1>, capped at combo_3.
       const clearCount = result.clearedPatterns.length
       if (clearCount > 0) {
         // If this placement also ends the run, the game-over SFX fires
         // shortly after and overlapping a celebratory clear hit on top
         // of it sounds chaotic. Cede the moment to game_over.wav.
         if (!gameOver) {
-          playClearForStreakIndex(current.streak + 1)
+          playClearForStreakIndex(current.streak + 1, clearCount)
           // Ruby capture: layer break.wav ~80ms after the clear hit so
           // the shatter reads as a follow-up to the clear, not on top
           // of its attack. Skipped when the same placement also ends
@@ -1822,10 +1848,17 @@ function App() {
   // Apply the active theme to <html data-theme="..."> and persist it.
   // Every theme override in CSS is scoped under that selector so
   // switching is purely a single attribute write — no remount needed,
-  // no flash, animations keep running.
+  // no flash, animations keep running. Also swap the tab favicon so
+  // the Win98 theme gets its Minesweeper-mine icon instead of the
+  // default cube glyph.
   useEffect(() => {
     if (typeof window === 'undefined') return
     document.documentElement.dataset.theme = theme
+    const faviconHref = theme === 'win98' ? '/win_favicon.png' : '/favicon.png'
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    if (link && link.getAttribute('href') !== faviconHref) {
+      link.setAttribute('href', faviconHref)
+    }
     try {
       window.localStorage.setItem('cubic-theme', theme)
     } catch {
@@ -2182,6 +2215,16 @@ function App() {
 
       if (cellId && pieceId) {
         placePieceAtCell(pieceId, cellId, attemptedCellIds)
+        // Drag-based placement is one-shot: after the player lifts off
+        // the board (success or fail) we deselect so the on-board hover
+        // preview stops tracking the cursor. Without this, a failed
+        // drop leaves the piece "stuck" to the mouse on desktop because
+        // selectedPieceId is still set and any subsequent
+        // onMouseEnter on a cell re-renders the placement preview.
+        // The click-to-select workflow goes through handleCellClick
+        // instead, which intentionally keeps the selection alive so the
+        // player can keep tapping cells.
+        setSelectedPieceId(null)
       }
       setHover(null)
     }
@@ -3815,7 +3858,14 @@ function App() {
                 }}
                 className={[
                   'hexaclear-piece-button',
-                  'hexaclear-piece-flyin',
+                  // Drop the deal animation class as soon as the fly-in
+                  // has completed (or the player has picked the piece
+                  // up). Leaving it on means a transient class change
+                  // like .failed-drop's shake can later remove its own
+                  // animation rule and let CSS re-trigger the deal
+                  // animation, making a misplaced piece appear to be
+                  // re-dealt right after shaking back into place.
+                  !isFlyInDone(slotIndex) ? 'hexaclear-piece-flyin' : '',
                   isSelected ? 'selected' : '',
                   isDragging ? 'dragging' : '',
                   piece && !isPlayable ? 'unplayable' : '',
@@ -3823,6 +3873,11 @@ function App() {
                 ]
                   .filter(Boolean)
                   .join(' ')}
+                onAnimationEnd={(e) => {
+                  if (e.animationName === 'hexaclear-hand-flyin') {
+                    markFlyInDone(slotIndex)
+                  }
+                }}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
                 aria-label={
@@ -3845,6 +3900,11 @@ function App() {
                   // start the looped scrolling sound from inside later
                   // pointermove handlers.
                   unlockAudioOnGesture()
+                  // Lock in the deal animation: if the player grabs a
+                  // piece mid-fly-in, treat the deal as done so a later
+                  // failed-drop shake can't bounce the piece back into
+                  // a fresh deal animation when its class clears.
+                  markFlyInDone(slotIndex)
                   dragState.current = {
                     pieceId: displayPiece.id,
                     pointerId: e.pointerId,
