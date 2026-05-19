@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Convex CLI scratch (binaries, local backend state)
+.convex/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation } from 'convex/react'
 import {
   getBoardDefinitionForMode,
   getBoardGeometryForMode,
@@ -31,6 +32,14 @@ import {
   setMuted,
   unlockAudioOnGesture,
 } from './audio'
+import { api } from '../convex/_generated/api'
+import { useMultiplayerGame } from './multiplayer/useMultiplayerGame'
+import { getOrCreatePlayerId } from './multiplayer/playerIdentity'
+import {
+  buildRoomShareUrl,
+  readRoomCodeFromUrl,
+  setRoomCodeInUrl,
+} from './multiplayer/roomUrl'
 import { WebHaptics } from 'web-haptics'
 import './index.css'
 
@@ -961,6 +970,49 @@ const triggerGrabHaptic = () => {
 }
 
 function App() {
+  // ---- Multiplayer plumbing ------------------------------------------
+  //
+  // We treat multiplayer as a thin layer over the single-player engine:
+  // the same `game` state variable backs the rendering pipeline; in MP
+  // mode it just gets continuously mirrored from the room snapshot
+  // instead of being driven by local placePiece updates. Single-player
+  // logic remains fully intact when no room is active.
+  const playerIdRef = useRef<string>(getOrCreatePlayerId())
+  const playerId = playerIdRef.current
+  const [mpRoomCode, setMpRoomCode] = useState<string | null>(() =>
+    readRoomCodeFromUrl(),
+  )
+  // We pull the player's display name from the same localStorage key the
+  // single-player high-score flow uses so the lobby auto-fills with
+  // their familiar tag.
+  const [mpPlayerName] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'Player'
+    try {
+      const saved = window.localStorage.getItem('cubic-player-name')
+      if (saved && saved.trim().length > 0) return saved
+    } catch {
+      // Ignore — fall through to default.
+    }
+    return 'Player'
+  })
+  const isMultiplayer = mpRoomCode !== null
+  const mp = useMultiplayerGame({
+    code: mpRoomCode,
+    playerId,
+    name: mpPlayerName,
+  })
+  const createRoomMutation = useMutation(api.rooms.createRoom)
+  const joinRoomMutation = useMutation(api.rooms.joinRoom)
+  // Track whether we've already attempted to join the current room so a
+  // single failure or a full-room error doesn't get retried in a loop on
+  // every render.
+  const joinAttemptRef = useRef<{ code: string; attempted: boolean }>({
+    code: '',
+    attempted: false,
+  })
+  const [mpError, setMpError] = useState<string | null>(null)
+  const [mpShareUrl, setMpShareUrl] = useState<string | null>(null)
+
   const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
   // All board-shape data (cell positions, layout dimensions, rosette
   // boundaries, etc.) is precomputed once per mode at module load and
@@ -1091,7 +1143,9 @@ function App() {
   // Open the menu on load. The first gesture the player makes is
   // dismissing the menu, which gives us a clean moment to prime the
   // audio elements without that priming colliding with gameplay sounds.
-  const [showMenu, setShowMenu] = useState(true)
+  // Skip the auto-open when arriving via a room URL — the player came
+  // here to play, not to land on a menu they didn't ask for.
+  const [showMenu, setShowMenu] = useState(() => mpRoomCode === null)
   const [volume, setVolumeState] = useState<number>(() => getMasterVolume())
   const [audioMuted, setAudioMutedState] = useState<boolean>(() => getMuted())
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
@@ -1278,11 +1332,267 @@ function App() {
     return bestId
   }
 
+  // ---- Multiplayer auto-join + state mirror ---------------------------
+  //
+  // When the URL has ?room=ABCD we kick off a single joinRoom call. The
+  // ref guard avoids re-firing the mutation on every render once we know
+  // we've tried (success or hard error). Reconnects still land on the
+  // same slot via the playerId match in the convex mutation.
+  useEffect(() => {
+    if (!mpRoomCode) return
+    if (mp.status === 'connecting') return
+    if (mp.status === 'not-found') {
+      setMpError('Room not found')
+      return
+    }
+    if (mp.selfPlayer) return
+    if (joinAttemptRef.current.code === mpRoomCode && joinAttemptRef.current.attempted) {
+      return
+    }
+    joinAttemptRef.current = { code: mpRoomCode, attempted: true }
+    setMpError(null)
+    joinRoomMutation({
+      code: mpRoomCode,
+      playerId,
+      name: mpPlayerName,
+    }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Could not join room'
+      setMpError(msg)
+    })
+  }, [mpRoomCode, mp.status, mp.selfPlayer, joinRoomMutation, playerId, mpPlayerName])
+
+  // Mirror the live room snapshot into the local game state so the
+  // existing render tree (board, hand, score, etc.) shows the shared
+  // state without any deeper rewrite. Only runs while a room is active.
+  useEffect(() => {
+    if (!isMultiplayer) return
+    if (!mp.game) return
+    setGame(mp.game)
+  }, [isMultiplayer, mp.game])
+
+  // Per-placement animation pipeline for MP mode. Reuses the same VFX
+  // setters single-player drives inline from setGame; here we listen for
+  // a fresh `lastPlacement.token` from the room snapshot and recreate
+  // the animation set from the server-provided fields. We don't try to
+  // perfectly recreate every detail (e.g. score-particle lives in the
+  // single-player flow); just the load-bearing feel beats: placement
+  // pop, ripple, clearing cells, ruby bursts, board-clear flourish,
+  // shake, and clear SFX.
+  const lastSeenMpTokenRef = useRef<number>(0)
+  const prevMpHandLenRef = useRef<number>(0)
+  useEffect(() => {
+    if (!isMultiplayer) return
+    if (!mp.game) return
+    const placement = mp.lastPlacement
+    if (!placement) return
+    if (placement.token === lastSeenMpTokenRef.current) return
+    lastSeenMpTokenRef.current = placement.token
+
+    const placedSet = new Set(placement.placedCellIds)
+    const clearedSet =
+      placement.clearedCellIds.length > 0
+        ? new Set(placement.clearedCellIds)
+        : null
+    const nonClearingPlacedIds =
+      clearedSet === null
+        ? placement.placedCellIds
+        : placement.placedCellIds.filter((id) => !clearedSet.has(id))
+
+    // Hide rubies that just respawned onto cleared cells until the
+    // clear animation finishes (otherwise the new ruby flashes as a
+    // normal cube during the dissolve).
+    if (placement.rubiesCleared > 0) {
+      const previousRubySet = new Set(placement.prevGoldenCellIds)
+      const newSpawns = placement.newGoldenCellIds.filter(
+        (id) =>
+          !previousRubySet.has(id) &&
+          !placedSet.has(id),
+      )
+      setPendingGoldenSpawnCellIds(newSpawns)
+    } else {
+      setPendingGoldenSpawnCellIds([])
+    }
+
+    setRecentlyPlacedCells(nonClearingPlacedIds)
+
+    const causedClear = placement.clearedPatternIds.length > 0
+    setRippleIsClear(causedClear)
+    setRippleCells(placement.placedCellIds)
+
+    const rippleFootprint =
+      nonClearingPlacedIds.length > 0
+        ? nonClearingPlacedIds
+        : placement.placedCellIds
+
+    if (rippleFootprint.length > 0) {
+      let sumX = 0
+      let sumY = 0
+      let count = 0
+      for (const id of rippleFootprint) {
+        const pos = boardLayout.positions[id]
+        if (!pos) continue
+        sumX += pos.x + boardLayout.offsetX
+        sumY += pos.y + boardLayout.offsetY
+        count++
+      }
+      if (count > 0) {
+        const cx = sumX / count
+        const cy = sumY / count
+        setRippleCenter({ x: cx, y: cy })
+        setRippleToken((t) => t + 1)
+        rippleRadiusRef.current = 0
+        let maxDistSq = 0
+        for (const cell of boardDef.cells) {
+          const pos = boardLayout.positions[cell.id]
+          if (!pos) continue
+          const x = pos.x + boardLayout.offsetX
+          const y = pos.y + boardLayout.offsetY
+          const dx = x - cx
+          const dy = y - cy
+          const distSq = dx * dx + dy * dy
+          if (distSq > maxDistSq) {
+            maxDistSq = distSq
+          }
+        }
+        const margin = HEX_SIZE * 1.4
+        rippleMaxRadiusRef.current = Math.sqrt(maxDistSq) + margin
+      }
+    }
+
+    if (causedClear) {
+      // Build per-cell clearing classes by looking up patterns on the
+      // board definition. The server only sent us pattern ids; here we
+      // rehydrate the type/order info needed to drive the line vs
+      // flower clearing styles.
+      const patternsById = new Map(
+        boardDef.patterns.map((p) => [p.id, p] as const),
+      )
+      const nextClearingClasses: Record<string, string[]> = {}
+      for (const id of placement.clearedPatternIds) {
+        const pattern = patternsById.get(id)
+        if (!pattern) continue
+        if (pattern.type === 'line') {
+          pattern.cellIds.forEach((cellId, idx) => {
+            const classes = (nextClearingClasses[cellId] ||= [])
+            classes.push('clearing-line', `clearing-line-step-${idx}`)
+          })
+        } else if (pattern.type === 'flower') {
+          const centerIdForPattern = pattern.cellIds[0] ?? null
+          for (const cellId of pattern.cellIds) {
+            const role =
+              centerIdForPattern && cellId === centerIdForPattern
+                ? 'clearing-flower-center'
+                : 'clearing-flower-ring'
+            ;(nextClearingClasses[cellId] ||= []).push(role)
+          }
+        }
+      }
+      setClearingClassesByCell(nextClearingClasses)
+      setClearingCells(placement.clearedCellIds)
+      setClearingGoldenCellIds(placement.prevGoldenCellIds)
+    }
+
+    // Clear SFX + haptics + screenshake + hitstop, all derived from the
+    // server-reported streak and combo (clearedCount).
+    const clearCount = placement.clearedPatternIds.length
+    if (clearCount > 0 && !mp.game.gameOver) {
+      playClearForStreakIndex(placement.streakAfter, clearCount)
+      if (placement.rubiesCleared > 0) {
+        playBreakAfterClear(80)
+      }
+    }
+    triggerHaptics(clearCount > 0)
+
+    if (clearCount > 0) {
+      let intensity = Math.min(
+        6,
+        clearCount + Math.min((placement.streakAfter - 1) * 0.5, 3),
+      )
+      if (placement.boardCleared) intensity = Math.max(intensity, 9)
+      setShakeRequest((prev) => ({ token: prev.token + 1, intensity }))
+
+      const bigClear =
+        clearCount >= 2 ||
+        placement.streakAfter >= 3 ||
+        placement.boardCleared
+      if (bigClear) setHitstop(true)
+    }
+
+    if (placement.boardCleared) {
+      setBoardClearFlashToken((t) => t + 1)
+    }
+
+    // Ruby capture pop + radial burst per cleared ruby.
+    if (placement.rubiesCleared > 0) {
+      const newPopupIds: string[] = placement.prevGoldenCellIds.filter(
+        (id) => clearedSet?.has(id),
+      )
+      if (newPopupIds.length > 0) {
+        setGoldenPopupCellIds(newPopupIds)
+        setGoldenPopupToken((t) => t + 1)
+        const newBursts: Array<{ token: number; x: number; y: number }> = []
+        let nextToken = Date.now()
+        for (const rubyId of newPopupIds) {
+          const rubyPos = boardLayout.positions[rubyId]
+          if (rubyPos) {
+            newBursts.push({
+              token: nextToken++,
+              x: rubyPos.x + boardLayout.offsetX,
+              y: rubyPos.y + boardLayout.offsetY,
+            })
+          }
+        }
+        if (newBursts.length > 0) {
+          setRubyBursts((prev) => [...prev, ...newBursts])
+        }
+      }
+    }
+
+    // If this placement was ours and used our last hand piece, the
+    // server has already dealt a fresh 3-piece hand; trigger the deal
+    // animation so the new pieces fly in just like single-player.
+    const myHandLen = mp.game.hand.length
+    if (myHandLen === 3 && prevMpHandLenRef.current === 0) {
+      setHandFlyInToken((t) => t + 1)
+    }
+    prevMpHandLenRef.current = myHandLen
+  }, [isMultiplayer, mp.lastPlacement, mp.game, boardDef, boardLayout])
+
+  // While in MP mode, wipe transient single-player UI state (selection,
+  // ghost, drag) so leftovers from a local run don't flicker on screen.
+  useEffect(() => {
+    if (!isMultiplayer) return
+    setSelectedPieceId(null)
+    setHover(null)
+    setGhost(null)
+    setDraggingPieceId(null)
+    dragState.current = { pieceId: null, pointerId: null, pointerType: null }
+  }, [isMultiplayer])
+
   const placePieceAtCell = (
     pieceId: string,
     cellId: string,
     attemptedCellIds?: string[],
   ) => {
+    if (isMultiplayer) {
+      // In MP the server is authoritative. Optimistically clear local
+      // ghost / selection so the piece doesn't appear stuck while we
+      // wait for the room snapshot, and surface a shake on rejection.
+      setSelectedPieceId(null)
+      setHover(null)
+      setGhost(null)
+      mp.placePiece(pieceId, cellId).catch(() => {
+        setFailedPlacementPieceId(pieceId)
+        setInvalidDropCellIds(
+          attemptedCellIds && attemptedCellIds.length > 0
+            ? attemptedCellIds
+            : [cellId],
+        )
+        playError()
+      })
+      return
+    }
+
     const actionId = (placementActionIdRef.current += 1)
     setGame((current) => {
       if (current.gameOver) return current
@@ -1845,6 +2155,58 @@ function App() {
     setScorePopup(null)
   }
 
+  // ---- Multiplayer handlers -----------------------------------------
+  //
+  // Wraps the createRoom mutation: writes the new code into the URL so
+  // refreshes resume into the same lobby, and pops the share URL into
+  // the waiting overlay. Errors surface inline rather than alert()ing.
+  const handleCreateRoom = () => {
+    setMpError(null)
+    createRoomMutation({ playerId, name: mpPlayerName })
+      .then((res) => {
+        if (!res?.code) return
+        setMpRoomCode(res.code)
+        setRoomCodeInUrl(res.code)
+        setMpShareUrl(buildRoomShareUrl(res.code))
+        joinAttemptRef.current = { code: res.code, attempted: true }
+      })
+      .catch((err: unknown) => {
+        const msg =
+          err instanceof Error ? err.message : 'Could not create a room'
+        setMpError(msg)
+      })
+  }
+
+  const handleLeaveRoom = () => {
+    if (!mpRoomCode) return
+    const code = mpRoomCode
+    mp.leave().catch(() => {})
+    setMpRoomCode(null)
+    setRoomCodeInUrl(null)
+    setMpShareUrl(null)
+    setMpError(null)
+    joinAttemptRef.current = { code: '', attempted: false }
+    // Drop straight back into a fresh single-player big game so the
+    // local view doesn't keep showing the just-left shared board.
+    const next = createBigGameState()
+    setGame(next)
+    setSavedBigGame(next)
+    setSelectedPieceId(null)
+    setHover(null)
+    setClearingCells([])
+    setClearingGoldenCellIds([])
+    setPendingGoldenSpawnCellIds([])
+    setUndoStack([])
+    void code
+  }
+
+  const handleCopyShareUrl = () => {
+    if (!mpShareUrl) return
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(mpShareUrl).catch(() => {})
+    }
+  }
+
   const handleUndo = () => {
     if (undoStack.length === 0) return
     const previous = undoStack[undoStack.length - 1]
@@ -2306,6 +2668,9 @@ function App() {
   // session never sees stale state.
   useEffect(() => {
     if (typeof window === 'undefined') return
+    // The room owns the source of truth in MP mode; mirroring it back to
+    // localStorage would clobber the player's offline single-player save.
+    if (isMultiplayer) return
     try {
       const envelope: PersistedGameEnvelope = {
         version: 1,
@@ -2324,7 +2689,7 @@ function App() {
     if (game.mode === 'endless') setSavedEndlessGame(game)
     else if (game.mode === 'daily') setSavedDailyGame(game)
     else if (game.mode === 'big') setSavedBigGame(game)
-  }, [game])
+  }, [game, isMultiplayer])
 
   const handleSaveHighScore = () => {
     if (pendingScore === null) return
@@ -2640,59 +3005,67 @@ function App() {
               </div>
             </div>
             <div className="hexaclear-header-controls">
-              <div className="hexaclear-mode-toggle">
-                <button
-                  type="button"
-                  className={[
-                    'mode-pill',
-                    game.mode === 'endless' ? 'active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => {
-                    if (game.mode !== 'endless') {
-                      playUiClick()
-                      toggleMode('endless')
-                    }
-                  }}
-                >
-                  Endless
-                </button>
-                <button
-                  type="button"
-                  className={[
-                    'mode-pill',
-                    game.mode === 'daily' ? 'active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => {
-                    if (game.mode !== 'daily') {
-                      playUiClick()
-                      toggleMode('daily')
-                    }
-                  }}
-                >
-                  Daily
-                </button>
-                <button
-                  type="button"
-                  className={[
-                    'mode-pill',
-                    game.mode === 'big' ? 'active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => {
-                    if (game.mode !== 'big') {
-                      playUiClick()
-                      toggleMode('big')
-                    }
-                  }}
-                >
-                  Big
-                </button>
-              </div>
+              {isMultiplayer ? (
+                <div className="hexaclear-mode-toggle hexaclear-mode-toggle-coop">
+                  <span className="mode-pill active" aria-disabled="true">
+                    Co-op
+                  </span>
+                </div>
+              ) : (
+                <div className="hexaclear-mode-toggle">
+                  <button
+                    type="button"
+                    className={[
+                      'mode-pill',
+                      game.mode === 'endless' ? 'active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      if (game.mode !== 'endless') {
+                        playUiClick()
+                        toggleMode('endless')
+                      }
+                    }}
+                  >
+                    Endless
+                  </button>
+                  <button
+                    type="button"
+                    className={[
+                      'mode-pill',
+                      game.mode === 'daily' ? 'active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      if (game.mode !== 'daily') {
+                        playUiClick()
+                        toggleMode('daily')
+                      }
+                    }}
+                  >
+                    Daily
+                  </button>
+                  <button
+                    type="button"
+                    className={[
+                      'mode-pill',
+                      game.mode === 'big' ? 'active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      if (game.mode !== 'big') {
+                        playUiClick()
+                        toggleMode('big')
+                      }
+                    }}
+                  >
+                    Big
+                  </button>
+                </div>
+              )}
               {showLiveStat ? (
                 <div className="hexaclear-live-stat">
                   <span className="label">{liveStatLabel}</span>
@@ -3217,6 +3590,42 @@ function App() {
                 )}
               </div>
             )}
+            {game.mode === 'big' && (
+              <div className="board-hud-block right hexaclear-coop-block">
+                {!isMultiplayer ? (
+                  <button
+                    type="button"
+                    className="hexaclear-coop-cta"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      handleCreateRoom()
+                    }}
+                  >
+                    Play with a friend
+                  </button>
+                ) : (
+                  <div className="hexaclear-coop-status">
+                    <span className="label">Co-op</span>
+                    <span className="value">
+                      {mp.partnerPlayer
+                        ? mp.partnerPlayer.name
+                        : 'Waiting for partner…'}
+                    </span>
+                    <button
+                      type="button"
+                      className="hexaclear-coop-leave"
+                      onClick={() => {
+                        playUiClick()
+                        handleLeaveRoom()
+                      }}
+                    >
+                      Leave
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {undoStack.length > 0 && !game.gameOver && (
             <button
@@ -3412,7 +3821,9 @@ function App() {
           {game.gameOver && game.mode === 'big' && !gameOverWindingDown && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card hexaclear-gameover-card">
-                <div className="title">Game Over</div>
+                <div className="title">
+                  {isMultiplayer ? 'Co-op finished' : 'Game Over'}
+                </div>
 
                 <div className="hexaclear-gameover-headline">
                   <div className="hexaclear-gameover-headline-label">
@@ -3423,7 +3834,7 @@ function App() {
                   </div>
                 </div>
 
-                {undoStack.length > 0 && (
+                {!isMultiplayer && undoStack.length > 0 && (
                   <button
                     type="button"
                     className="hexaclear-menu-link"
@@ -3441,10 +3852,85 @@ function App() {
                   className="hexaclear-gameover-cta"
                   onClick={() => {
                     playUiClick()
-                    resetGame()
+                    if (isMultiplayer) {
+                      handleLeaveRoom()
+                    } else {
+                      resetGame()
+                    }
                   }}
                 >
-                  Play again
+                  {isMultiplayer ? 'Back to single player' : 'Play again'}
+                </button>
+              </div>
+            </div>
+          )}
+          {isMultiplayer && mp.status === 'waiting' && !game.gameOver && (
+            <div className="hexaclear-overlay">
+              <div className="hexaclear-overlay-card hexaclear-coop-waiting-card">
+                <div className="title">Waiting for a partner…</div>
+                <p className="hexaclear-coop-instructions">
+                  Send this link to a friend. The game starts as soon as
+                  they join.
+                </p>
+                {mpShareUrl && (
+                  <div className="hexaclear-coop-share">
+                    <input
+                      type="text"
+                      readOnly
+                      className="hexaclear-coop-share-input"
+                      value={mpShareUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <button
+                      type="button"
+                      className="hexaclear-coop-share-copy"
+                      onClick={() => {
+                        playUiClick()
+                        handleCopyShareUrl()
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
+                {mpRoomCode && (
+                  <p className="hexaclear-coop-code">
+                    Or share the room code:{' '}
+                    <strong>{mpRoomCode}</strong>
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="hexaclear-reset hexaclear-coop-cancel"
+                  onClick={() => {
+                    playUiClick()
+                    handleLeaveRoom()
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {isMultiplayer && (mp.status === 'not-found' || mpError) && (
+            <div className="hexaclear-overlay">
+              <div className="hexaclear-overlay-card hexaclear-coop-error-card">
+                <div className="title">Couldn't join</div>
+                <p className="hexaclear-coop-error-message">
+                  {mpError ||
+                    (mp.status === 'not-found'
+                      ? 'That room no longer exists. Try creating a new one.'
+                      : 'Something went wrong.')}
+                </p>
+                <button
+                  type="button"
+                  className="hexaclear-reset"
+                  onClick={() => {
+                    playUiClick()
+                    handleLeaveRoom()
+                  }}
+                >
+                  Back to single player
                 </button>
               </div>
             </div>
@@ -3706,18 +4192,33 @@ function App() {
 
                   {hasStartedSession ? (
                   <>
-                    <button
-                      type="button"
-                      className="hexaclear-menu-restart-link"
-                      onClick={() => {
-                        unlockAudioOnGesture()
-                        playUiClick()
-                        setShowMenu(false)
-                        resetGame()
-                      }}
-                    >
-                      Restart run
-                    </button>
+                    {isMultiplayer ? (
+                      <button
+                        type="button"
+                        className="hexaclear-menu-restart-link"
+                        onClick={() => {
+                          unlockAudioOnGesture()
+                          playUiClick()
+                          setShowMenu(false)
+                          handleLeaveRoom()
+                        }}
+                      >
+                        Leave co-op
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="hexaclear-menu-restart-link"
+                        onClick={() => {
+                          unlockAudioOnGesture()
+                          playUiClick()
+                          setShowMenu(false)
+                          resetGame()
+                        }}
+                      >
+                        Restart run
+                      </button>
+                    )}
 
                     <button
                       type="button"

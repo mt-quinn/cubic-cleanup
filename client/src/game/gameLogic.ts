@@ -291,7 +291,7 @@ const spawnGoldenCell = (
 // Spawn N rubies into a fresh board, each one in a different flower
 // when possible. Returns the array of cell ids; mutates `board` so each
 // chosen empty-cell becomes 'filled'.
-const spawnInitialRubies = (
+export const spawnInitialRubies = (
   board: BoardState,
   mode: GameMode,
   count: number,
