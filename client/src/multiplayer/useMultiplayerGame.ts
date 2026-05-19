@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { ActivePiece, GameState } from '../game/gameLogic'
@@ -322,13 +322,21 @@ export const useMultiplayerGame = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, playerId, staleTick])
 
-  const setHover = async (
-    pieceId: string | null,
-    cellId: string | null,
-  ) => {
-    if (!code) return
-    await setHoverMutation({ code, playerId, pieceId, cellId })
-  }
+  // Stable identity so consumers can put `setHover` into effect dep
+  // arrays (or rely on its identity for cleanup-on-unmount logic)
+  // without re-firing on every render. Without this, the cleanup
+  // function of any effect that depends on `setHover` runs every
+  // render and — for the hover-ghost teardown effect in App — was
+  // calling setHover(null,null) ~10×/s, which the partner saw as a
+  // rapid set→null→set→null flicker on top of the legitimate hover
+  // updates.
+  const setHover = useCallback(
+    async (pieceId: string | null, cellId: string | null) => {
+      if (!code) return
+      await setHoverMutation({ code, playerId, pieceId, cellId })
+    },
+    [code, playerId, setHoverMutation],
+  )
 
   return {
     status,

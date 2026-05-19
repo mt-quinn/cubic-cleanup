@@ -608,11 +608,6 @@ export const setHover = mutation({
       pieceId && cellId
         ? [...others, { playerId, pieceId, cellId, ts: now }]
         : others
-    // Don't bump `updatedAt` on hover-only changes — every cell
-    // crossing would otherwise look like a fresh "this room is
-    // active" signal to the daily janitor and to any other code
-    // keying off updatedAt. Hovers are pure presence noise; the
-    // existing heartbeat already covers liveness.
     await ctx.db.patch(room._id, { hovers: next })
     return null
   },

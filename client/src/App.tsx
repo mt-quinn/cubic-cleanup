@@ -3149,9 +3149,6 @@ function App() {
       hoverTrailingTimerRef.current = null
     }
 
-    // Read desired from the ref at fire time — not at schedule time —
-    // so a fast-moving cursor doesn't pin the trailing flush to an
-    // intermediate cell it's already left.
     const flush = () => {
       hoverTrailingTimerRef.current = null
       const cur = desiredHoverRef.current
