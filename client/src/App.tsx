@@ -1602,17 +1602,21 @@ function App() {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const boardWrapperRef = useRef<HTMLDivElement | null>(null)
-  // Bounding box of the hand bar. Drops that release inside this rect
-  // are treated as "cancel the drag" instead of attempted placements,
-  // so the player can pick a piece up and immediately drop it (or drag
-  // it back home from over the board) without triggering an error
-  // shake or an accidental commit at the closest board cell.
-  const handSectionRef = useRef<HTMLElement | null>(null)
   const dragState = useRef<{
     pieceId: string | null
     pointerId: number | null
     pointerType: string | null
-  }>({ pieceId: null, pointerId: null, pointerType: null })
+    // Slot the drag started in. Used to scope the "drop to cancel"
+    // hit zone to that slot's button rect (rather than the whole
+    // hand bar) so tall pieces with a touch-offset preview don't
+    // make the bottom row of the board unreachable.
+    slotIndex: number | null
+  }>({
+    pieceId: null,
+    pointerId: null,
+    pointerType: null,
+    slotIndex: null,
+  })
   // React dev StrictMode can invoke state updater functions twice; we use these
   // refs to ensure we don't schedule merge-time score increments twice.
   const placementActionIdRef = useRef(0)
@@ -1956,7 +1960,12 @@ function App() {
     setHover(null)
     setGhost(null)
     setDraggingPieceId(null)
-    dragState.current = { pieceId: null, pointerId: null, pointerType: null }
+    dragState.current = {
+      pieceId: null,
+      pointerId: null,
+      pointerType: null,
+      slotIndex: null,
+    }
   }, [isMultiplayer])
 
   const placePieceAtCell = (
@@ -3328,13 +3337,24 @@ function App() {
   }
 
   useEffect(() => {
-    // True iff the given client-space point lies inside the hand bar.
-    // Used to suppress on-board placement preview / placement attempts
-    // while the player is hovering the piece over their own hand —
-    // dragging back to the hand is treated as "cancel this drag", not
-    // as a placement attempt at the nearest board cell.
-    const isPointOverHand = (clientX: number, clientY: number): boolean => {
-      const node = handSectionRef.current
+    // True iff the given client-space point lies inside the slot the
+    // current drag *started* in. Used to suppress on-board placement
+    // preview / placement attempts while the player is hovering the
+    // piece over the empty slot it left behind — that one slot is the
+    // "drop to cancel" hit zone (and the slot renders an × marker
+    // while dragging so the affordance is visible).
+    //
+    // Why only that slot, not the whole hand: pieces drag with a
+    // touch-offset preview, and on the big board the bottom row of
+    // cells lines up close to the hand. Treating the entire hand bar
+    // as a cancel zone makes those bottom cells unreachable.
+    const isPointOverDraggingSlot = (
+      clientX: number,
+      clientY: number,
+    ): boolean => {
+      const slotIndex = dragState.current.slotIndex
+      if (slotIndex === null) return false
+      const node = handButtonRefs.current[slotIndex]
       if (!node) return false
       const r = node.getBoundingClientRect()
       return (
@@ -3354,9 +3374,10 @@ function App() {
       const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
 
-      // While the cursor sits over the hand, kill the on-board preview
-      // entirely so cells don't light up behind the held piece.
-      if (isPointOverHand(clientX, clientY)) {
+      // While the cursor sits over the dragging slot's × hit zone,
+      // kill the on-board preview entirely so cells don't light up
+      // behind the held piece.
+      if (isPointOverDraggingSlot(clientX, clientY)) {
         setHover(null)
         return
       }
@@ -3379,16 +3400,17 @@ function App() {
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
 
-      // Released over the hand bar — cancel the drag silently. No
-      // placement attempt, no error shake, no preview-cell snap. We
-      // still play the soft click_up so the gesture sounds completed.
-      const releasedOverHand =
+      // Released inside the dragging slot's × hit zone — cancel the
+      // drag silently. No placement attempt, no error shake, no
+      // preview-cell snap. We still play the soft click_up so the
+      // gesture sounds completed.
+      const releasedOverCancelSlot =
         clientX !== null &&
         clientY !== null &&
-        isPointOverHand(clientX, clientY)
+        isPointOverDraggingSlot(clientX, clientY)
 
       let cellId: string | null = null
-      if (!releasedOverHand) {
+      if (!releasedOverCancelSlot) {
         cellId = hover?.cellId ?? null
         if (!cellId && clientX !== null && clientY !== null) {
           cellId = findClosestCellIdFromClientPoint(
@@ -3411,12 +3433,13 @@ function App() {
       dragState.current.pointerId = null
       dragState.current.pieceId = null
       dragState.current.pointerType = null
+      dragState.current.slotIndex = null
       setDraggingPieceId(null)
       setGhost(null)
 
       // The player set the piece down — fire the drop click regardless
       // of whether the placement was actually valid (or whether they
-      // dropped it back onto the hand to cancel).
+      // dropped it back into the cancel slot).
       playClickUp()
 
       if (cellId && pieceId) {
@@ -3431,7 +3454,7 @@ function App() {
         // instead, which intentionally keeps the selection alive so the
         // player can keep tapping cells.
         setSelectedPieceId(null)
-      } else if (releasedOverHand) {
+      } else if (releasedOverCancelSlot) {
         // Drag-cancel: also drop the click-to-select state so the next
         // pointer-down on the same piece reads as a fresh pickup
         // instead of a follow-up placement at the closest cell.
@@ -5429,7 +5452,6 @@ function App() {
         </div>
 
         <section
-          ref={handSectionRef}
           className={[
             'hexaclear-hand',
             gameOverWindingDown ? 'game-over-winding-down' : '',
@@ -5532,6 +5554,7 @@ function App() {
                     pieceId: displayPiece.id,
                     pointerId: e.pointerId,
                     pointerType: e.pointerType || null,
+                    slotIndex,
                   }
                   setSelectedPieceId(displayPiece.id)
                   setDraggingPieceId(displayPiece.id)
@@ -5550,6 +5573,14 @@ function App() {
               >
                 {displayPiece && !isDragging && (
                   <PiecePreview shape={displayPiece.shape} mode="hand" />
+                )}
+                {isDragging && (
+                  <span
+                    className="hexaclear-piece-cancel-mark"
+                    aria-hidden="true"
+                  >
+                    ×
+                  </span>
                 )}
               </button>
             )

@@ -1198,6 +1198,18 @@
   border-radius: 0;
 }
 
+/* Win98 styling for the drop-to-cancel × that appears in the slot
+   a drag started in. We swap to the theme's native flag-red on
+   surface-gray so it reads as a Minesweeper "remove flag" cue
+   rather than the wood-theme cream-on-warm dashed look. Keep the
+   dashed border, but in deep-shadow black. */
+[data-theme="win98"] .hexaclear-piece-button .hexaclear-piece-cancel-mark {
+  color: var(--w98-ruby-fill);
+  border-color: var(--w98-deep-shadow);
+  border-radius: 0;
+  margin: 2px;
+}
+
 /* --- Generic Win98 buttons ------------------------------------------- */
 /* Anything inside an overlay-card or styled as a primary action gets
    the classic raised 3D button. The press-down state inverts the
