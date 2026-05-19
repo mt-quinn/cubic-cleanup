@@ -1738,14 +1738,15 @@ body {
    reads brighter and a touch desaturated, so it's visibly distinct
    from the player's own pieces) AND splices in a per-player
    `hue-rotate` driven by the inline `--partner-hue` variable so each
-   seat lands on its own clearly-different color. Combining all
-   three functions in one filter chain is critical: stacking the
-   hue-rotate on the outer SVG `<g>` while the brightness/saturate
-   sits on the inner wrapper doesn't compose reliably (the SVG
-   ancestor's filter region doesn't always pick up the rasterized
-   inner filter), so we keep them on the same element here. Rubies
+   seat lands on its own clearly-different color. We apply the filter
+   chain directly to each `<polygon>` cube face rather than to a
+   wrapping `<g>`: SVG filters on group elements rasterize the
+   group's bounding box and don't compose reliably across the
+   board's nested scale transforms (especially when there are
+   sibling overlay groups like the partner-ghost layer). Per-face
+   filters work because they have a definite paint region. Rubies
    (`.golden`) bypass this whole pass since they're neutral / unowned. */
-.hexaclear-hex-cube.partner-piece .hexaclear-cube-wiggle-wrap {
+.hexaclear-hex-cube.partner-piece .cube-face {
   filter:
     brightness(1.18)
     saturate(0.85)
@@ -1770,7 +1771,7 @@ body {
   opacity: 0.65;
   pointer-events: none;
 }
-.hexaclear-hex-cube.partner-ghost .hexaclear-cube-wiggle-wrap {
+.hexaclear-hex-cube.partner-ghost .cube-face {
   filter:
     brightness(1.05)
     saturate(0.75)
