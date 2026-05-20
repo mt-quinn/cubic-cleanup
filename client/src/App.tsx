@@ -6954,7 +6954,7 @@ function App() {
               { key: 'games', label: 'Games', value: String(totalGames) },
               {
                 key: 'active',
-                label: 'Active',
+                label: 'Time',
                 value: formatDuration(ls.totalActivePlayMs),
               },
               {
