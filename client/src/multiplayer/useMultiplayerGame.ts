@@ -235,6 +235,11 @@ export const useMultiplayerGame = ({
       }))
   }, [room, playerId])
 
+  // Room mode: 'coop' for any pre-mode room, 'pvp' when the room
+  // was created competitively. Hoisted above the per-viewer hue
+  // shifts so PvP can pick a different (evenly-spread) palette.
+  const mode: RoomMode = (room?.mode ?? 'coop') as RoomMode
+
   // Every non-self player ordered by (slot - selfSlot + N) mod N.
   // That ordering means each viewer's first partner is "the next
   // seat after mine in the ring" and is stable across re-renders, so
@@ -253,19 +258,33 @@ export const useMultiplayerGame = ({
       .sort((a, b) => ringIndex(a) - ringIndex(b))
   }, [allPlayers])
 
-  // Hue per playerId for THIS viewer. Self → 0°, otherPlayers[i] →
-  // (i + 1) * HUE_STEP_DEG. Two viewers see each other at the same
-  // first-partner step; a third party may see them differently
-  // depending on their own ring position — this is the documented
-  // trade-off for "self always renders at default hue".
+  // Hue per playerId for THIS viewer.
+  //
+  // Co-op: partners are kept in the same warm half of the wheel as
+  // self (15° per step) so the table reads as one team — see
+  // HUE_STEP_DEG. With four co-op seats we land at 0/15/30/45° and
+  // the room still feels chromatically unified.
+  //
+  // PvP: distinguishability wins. We spread the seated players as
+  // evenly as possible around the full hue wheel for the current
+  // seat count, so each opponent's territory tint and cube color
+  // sits as far from every other as the geometry allows. Self stays
+  // at 0° (no view-dependent surprise) and partners take
+  // (i + 1) * 360/N. Recomputed on every membership change — the
+  // user explicitly accepted that colors may shift slightly when a
+  // new player joins or leaves.
   const hueShiftByPlayerId = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {}
     if (selfPlayer) out[selfPlayer.playerId] = 0
+    const isPvp = mode === 'pvp'
+    const seatCount = otherPlayers.length + (selfPlayer ? 1 : 0)
+    const pvpStep = seatCount > 0 ? 360 / seatCount : 0
     otherPlayers.forEach((p, i) => {
-      out[p.playerId] = (i + 1) * HUE_STEP_DEG
+      const step = isPvp ? pvpStep : HUE_STEP_DEG
+      out[p.playerId] = (i + 1) * step
     })
     return out
-  }, [selfPlayer, otherPlayers])
+  }, [selfPlayer, otherPlayers, mode])
 
   const game = useMemo<GameState | null>(() => {
     if (!room || !selfPlayer) return null
@@ -340,8 +359,6 @@ export const useMultiplayerGame = ({
     }
     return out
   }, [room])
-
-  const mode: RoomMode = (room?.mode ?? 'coop') as RoomMode
 
   const pvpTotalCells = useMemo<number>(() => {
     if (!room) return 0
