@@ -6570,11 +6570,116 @@ function App() {
               <div className="hexaclear-overlay-card hexaclear-menu-card">
                 <div className="title">Cubekill</div>
                 <div className="hexaclear-menu-hint">
-                  Drag pieces from the tray onto the board. Complete a
-                  full line or rosette to clear it.
+                  Drag pieces, complete lines and rosettes, keep the board alive.
                 </div>
 
-                <div className="hexaclear-menu-rows">
+                <div className="hexaclear-menu-actions">
+                  {hasStartedSession || isMultiplayer ? (
+                    <>
+                      <button
+                        type="button"
+                        className="hexaclear-reset hexaclear-menu-resume"
+                        onClick={() => {
+                          unlockAudioOnGesture()
+                          playUiClick()
+                          setShowMenu(false)
+                        }}
+                      >
+                        Resume
+                      </button>
+                      {isMultiplayer ? (
+                        <button
+                          type="button"
+                          className="hexaclear-menu-restart-link"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            handleLeaveRoom()
+                          }}
+                        >
+                          Leave co-op
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="hexaclear-menu-restart-link"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            resetGame()
+                          }}
+                        >
+                          Restart run
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="hexaclear-menu-new-game"
+                      onClick={() => {
+                        unlockAudioOnGesture()
+                        playUiClick()
+                        setHasStartedSession(true)
+                        setShowMenu(false)
+                      }}
+                    >
+                      New Game
+                    </button>
+                  )}
+                </div>
+
+                <div className="hexaclear-menu-library">
+                  <button
+                    type="button"
+                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-scores"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowHighScores(true)
+                    }}
+                  >
+                    <span className="hexaclear-menu-nav-title">
+                      High scores
+                    </span>
+                    <span className="hexaclear-menu-nav-subtitle">
+                      Leaderboards
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-stats"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowStats(true)
+                    }}
+                  >
+                    <span className="hexaclear-menu-nav-title">Stats</span>
+                    <span className="hexaclear-menu-nav-subtitle">
+                      Record book
+                    </span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="hexaclear-menu-howto-link"
+                  onClick={() => {
+                    unlockAudioOnGesture()
+                    playUiClick()
+                    setShowMenu(false)
+                    setShowScoring(true)
+                  }}
+                >
+                  How scoring works
+                </button>
+
+                <div className="hexaclear-menu-settings">
                   {isMultiplayer && (
                     <label className="hexaclear-menu-row">
                       <span className="hexaclear-menu-row-label">
@@ -6590,69 +6695,69 @@ function App() {
                       />
                     </label>
                   )}
-                  <label className="hexaclear-menu-row">
-                    <span className="hexaclear-menu-row-label">Volume</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={Math.round(volume * 100)}
-                      disabled={audioMuted}
-                      onChange={(e) => {
-                        const v = Number(e.target.value) / 100
-                        setVolumeState(v)
-                        setMasterVolume(v)
-                      }}
-                      aria-label="Volume"
-                    />
-                    <span className="hexaclear-menu-row-readout">
-                      {Math.round(volume * 100)}%
-                    </span>
-                  </label>
-                  <label className="hexaclear-menu-row">
-                    <span className="hexaclear-menu-row-label">Mute</span>
-                    <input
-                      type="checkbox"
-                      checked={audioMuted}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                        setAudioMutedState(next)
-                        setMuted(next)
-                        // After mute state is updated:
-                        //   unmuting -> click is now audible (signals "audio back")
-                        //   muting   -> click is silenced (visual change confirms it)
-                        playUiClick()
-                      }}
-                    />
-                  </label>
-                  <label className="hexaclear-menu-row">
-                    <span className="hexaclear-menu-row-label">
-                      Reduced motion
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={reducedMotion}
-                      onChange={(e) => {
-                        setReducedMotion(e.target.checked)
-                        playUiClick()
-                      }}
-                    />
-                  </label>
-                  <label className="hexaclear-menu-row">
-                    <span className="hexaclear-menu-row-label">
-                      Ad previews
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={adPreviews}
-                      onChange={(e) => {
-                        setAdPreviews(e.target.checked)
-                        playUiClick()
-                      }}
-                    />
-                  </label>
-                  <label className="hexaclear-menu-row">
+                  <div className="hexaclear-menu-audio-row">
+                    <label className="hexaclear-menu-volume">
+                      <span className="hexaclear-menu-row-label">Volume</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={Math.round(volume * 100)}
+                        disabled={audioMuted}
+                        onChange={(e) => {
+                          const v = Number(e.target.value) / 100
+                          setVolumeState(v)
+                          setMasterVolume(v)
+                        }}
+                        aria-label="Volume"
+                      />
+                      <span className="hexaclear-menu-row-readout">
+                        {Math.round(volume * 100)}%
+                      </span>
+                    </label>
+                    <label className="hexaclear-menu-mini-toggle">
+                      <input
+                        type="checkbox"
+                        checked={audioMuted}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                          setAudioMutedState(next)
+                          setMuted(next)
+                          // After mute state is updated:
+                          //   unmuting -> click is now audible (signals "audio back")
+                          //   muting   -> click is silenced (visual change confirms it)
+                          playUiClick()
+                        }}
+                      />
+                      <span>Mute</span>
+                    </label>
+                  </div>
+                  <div className="hexaclear-menu-toggle-grid">
+                    <label className="hexaclear-menu-mini-toggle">
+                      <input
+                        type="checkbox"
+                        checked={reducedMotion}
+                        onChange={(e) => {
+                          setReducedMotion(e.target.checked)
+                          playUiClick()
+                        }}
+                      />
+                      <span>Reduced motion</span>
+                    </label>
+                    <label className="hexaclear-menu-mini-toggle">
+                      <input
+                        type="checkbox"
+                        checked={adPreviews}
+                        onChange={(e) => {
+                          setAdPreviews(e.target.checked)
+                          playUiClick()
+                        }}
+                      />
+                      <span>Ad previews</span>
+                    </label>
+                  </div>
+                  <label className="hexaclear-menu-row hexaclear-menu-theme-row">
                     <span className="hexaclear-menu-row-label">Theme</span>
                     <select
                       className="hexaclear-menu-row-select"
@@ -6671,112 +6776,6 @@ function App() {
                     </select>
                   </label>
                 </div>
-
-                <div className="hexaclear-menu-links">
-                  <button
-                    type="button"
-                    className="hexaclear-menu-link"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowScoring(true)
-                    }}
-                  >
-                    How to score
-                  </button>
-                  <span className="hexaclear-menu-link-sep" aria-hidden="true">
-                    •
-                  </span>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-link"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowHighScores(true)
-                    }}
-                  >
-                    High scores
-                  </button>
-                  <span className="hexaclear-menu-link-sep" aria-hidden="true">
-                    •
-                  </span>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-link"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowStats(true)
-                    }}
-                  >
-                    Stats
-                  </button>
-                </div>
-
-                  {/* In MP we always show the Resume + Leave co-op
-                      pair, regardless of whether the player has
-                      placed a piece yet. The "fresh new game" menu
-                      pair only makes sense for single-player runs. */}
-                  {hasStartedSession || isMultiplayer ? (
-                  <>
-                    {isMultiplayer ? (
-                      <button
-                        type="button"
-                        className="hexaclear-menu-restart-link"
-                        onClick={() => {
-                          unlockAudioOnGesture()
-                          playUiClick()
-                          setShowMenu(false)
-                          handleLeaveRoom()
-                        }}
-                      >
-                        Leave co-op
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="hexaclear-menu-restart-link"
-                        onClick={() => {
-                          unlockAudioOnGesture()
-                          playUiClick()
-                          setShowMenu(false)
-                          resetGame()
-                        }}
-                      >
-                        Restart run
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      className="hexaclear-reset"
-                      onClick={() => {
-                        unlockAudioOnGesture()
-                        playUiClick()
-                        setShowMenu(false)
-                      }}
-                    >
-                      Resume
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="hexaclear-menu-new-game"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setHasStartedSession(true)
-                      setShowMenu(false)
-                    }}
-                  >
-                    New Game
-                  </button>
-                )}
               </div>
             </div>
           )}

@@ -1537,6 +1537,42 @@
   min-width: 320px;
 }
 
+[data-theme="win98"] .hexaclear-menu-actions,
+[data-theme="win98"] .hexaclear-menu-volume,
+[data-theme="win98"] .hexaclear-menu-mini-toggle,
+[data-theme="win98"] .hexaclear-menu-theme-row,
+[data-theme="win98"] .hexaclear-menu-nav-card {
+  background: var(--w98-surface) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-shadow)
+    var(--w98-shadow)
+    var(--w98-highlight) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--w98-text) !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-nav-card-stats {
+  outline: 1px dotted var(--w98-text) !important;
+  outline-offset: -4px !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-nav-title,
+[data-theme="win98"] .hexaclear-menu-nav-subtitle,
+[data-theme="win98"] .hexaclear-menu-mini-toggle,
+[data-theme="win98"] .hexaclear-menu-howto-link {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-howto-link {
+  text-align: left !important;
+  align-self: flex-start !important;
+}
+
 [data-theme="win98"] .hexaclear-menu-rows {
   border: 2px solid !important;
   border-color:
@@ -1574,7 +1610,8 @@
    the trough soak up whatever horizontal space is left in the row
    so the percentage readout always sits inside the row's right
    edge instead of overhanging the panel border. */
-[data-theme="win98"] .hexaclear-menu-row input[type="range"] {
+[data-theme="win98"] .hexaclear-menu-row input[type="range"],
+[data-theme="win98"] .hexaclear-menu-volume input[type="range"] {
   appearance: none;
   flex: 1 1 auto;
   width: auto;
@@ -1585,7 +1622,8 @@
   cursor: default;
 }
 
-[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-runnable-track {
+[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-runnable-track,
+[data-theme="win98"] .hexaclear-menu-volume input[type="range"]::-webkit-slider-runnable-track {
   height: 5px;
   background: var(--w98-surface);
   border: 1px solid;
@@ -1599,7 +1637,8 @@
   margin-bottom: 11px;
 }
 
-[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-thumb {
+[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-thumb,
+[data-theme="win98"] .hexaclear-menu-volume input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 16px;
   height: 28px;
@@ -1617,7 +1656,8 @@
   border-radius: 0;
 }
 
-[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-moz-range-thumb {
+[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-moz-range-thumb,
+[data-theme="win98"] .hexaclear-menu-volume input[type="range"]::-moz-range-thumb {
   width: 16px;
   height: 28px;
   background: var(--w98-surface);
@@ -1627,7 +1667,8 @@
 
 /* Checkboxes — a plain sunken square with a black ✓ when checked.
    Sized up to ~24px square for a finger-friendly tap target. */
-[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"] {
+[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"],
+[data-theme="win98"] .hexaclear-menu-mini-toggle input[type="checkbox"] {
   appearance: none;
   width: 24px;
   height: 24px;
@@ -1646,7 +1687,8 @@
   flex: 0 0 auto;
 }
 
-[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"]:checked::after {
+[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"]:checked::after,
+[data-theme="win98"] .hexaclear-menu-mini-toggle input[type="checkbox"]:checked::after {
   content: '✓';
   position: absolute;
   inset: 0;
