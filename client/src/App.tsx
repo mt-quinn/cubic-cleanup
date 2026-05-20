@@ -4507,6 +4507,21 @@ function App() {
     }
   }, [scale, hover])
 
+  type StatsTileTone = 'quiet' | 'analysis' | 'earned' | 'record'
+  type StatsTile = {
+    key: string
+    label: string
+    value: string
+    tone?: StatsTileTone
+  }
+  const getStatsTileClassName = (tone?: StatsTileTone) =>
+    [
+      'hexaclear-stats-tile',
+      tone ? `hexaclear-stats-tile-${tone}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
   // Per-run summary card. Rendered on every gameover modal under
   // the score/save section. Hidden when the run has zero placements
   // (e.g. instant abandon) since "0 pieces / 0s" is just noise.
@@ -4518,26 +4533,30 @@ function App() {
   // to 5 / 6 / 7 tiles as it earns them.
   const renderRunStatsSection = () => {
     if (runStats.piecesPlaced === 0) return null
-    const tiles: Array<{ key: string; label: string; value: string }> = [
+    const tiles: StatsTile[] = [
       {
         key: 'time',
         label: 'Time',
         value: formatDuration(runStats.activePlayMs),
+        tone: 'quiet',
       },
       {
         key: 'pieces',
         label: 'Pieces',
         value: String(runStats.piecesPlaced),
+        tone: 'quiet',
       },
       {
         key: 'clears',
         label: 'Clears',
         value: String(runStats.patternsCleared),
+        tone: runStats.patternsCleared > 0 ? 'earned' : 'quiet',
       },
       {
         key: 'rubies',
         label: 'Rubies',
         value: String(runStats.rubiesCleared),
+        tone: runStats.rubiesCleared > 0 ? 'earned' : 'quiet',
       },
     ]
     if (runStats.boardClears > 0) {
@@ -4545,6 +4564,7 @@ function App() {
         key: 'boards',
         label: 'Boards',
         value: String(runStats.boardClears),
+        tone: 'earned',
       })
     }
     if (runStats.bestCombo >= 2) {
@@ -4552,6 +4572,7 @@ function App() {
         key: 'combo',
         label: 'Combo',
         value: `×${runStats.bestCombo}`,
+        tone: 'record',
       })
     }
     if (runStats.bestStreak > 0) {
@@ -4559,6 +4580,7 @@ function App() {
         key: 'streak',
         label: 'Streak',
         value: String(runStats.bestStreak),
+        tone: runStats.bestStreak >= 2 ? 'earned' : 'quiet',
       })
     }
     if (runStats.topPlacementPoints > 0) {
@@ -4566,6 +4588,7 @@ function App() {
         key: 'top',
         label: 'Top hit',
         value: `+${runStats.topPlacementPoints}`,
+        tone: 'record',
       })
     }
     return (
@@ -4573,7 +4596,7 @@ function App() {
         <div className="hexaclear-gameover-section-label">This run</div>
         <div className="hexaclear-stats-tiles">
           {tiles.map((t) => (
-            <div key={t.key} className="hexaclear-stats-tile">
+            <div key={t.key} className={getStatsTileClassName(t.tone)}>
               <span className="hexaclear-stats-tile-value">{t.value}</span>
               <span className="hexaclear-stats-tile-label">{t.label}</span>
             </div>
@@ -6961,43 +6984,54 @@ function App() {
                 : 0
             const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
 
-            type Tile = { key: string; label: string; value: string }
-            const lifetimeTiles: Tile[] = [
-              { key: 'games', label: 'Games', value: String(totalGames) },
+            const lifetimeTiles: StatsTile[] = [
+              {
+                key: 'games',
+                label: 'Games',
+                value: String(totalGames),
+                tone: 'quiet',
+              },
               {
                 key: 'active',
                 label: 'Time',
                 value: formatDuration(ls.totalActivePlayMs),
+                tone: 'quiet',
               },
               {
                 key: 'avg',
                 label: 'Time/game',
                 value: formatDuration(avgRunMs),
+                tone: 'analysis',
               },
               {
                 key: 'clears-per-game',
                 label: 'Clears/game',
                 value: formatAverage(avgClearsPerGame),
+                tone: 'analysis',
               },
               {
                 key: 'score-per-game',
                 label: 'Score/game',
                 value: formatAverage(avgScorePerGame),
+                tone: 'analysis',
               },
               {
                 key: 'pieces',
                 label: 'Pieces',
                 value: String(ls.piecesPlaced),
+                tone: 'quiet',
               },
               {
                 key: 'clears',
                 label: 'Clears',
                 value: String(ls.patternsCleared),
+                tone: ls.patternsCleared > 0 ? 'earned' : 'quiet',
               },
               {
                 key: 'rubies',
                 label: 'Rubies',
                 value: String(ls.rubiesCleared),
+                tone: ls.rubiesCleared > 0 ? 'earned' : 'quiet',
               },
             ]
             if (ls.boardClears > 0) {
@@ -7005,24 +7039,28 @@ function App() {
                 key: 'boards',
                 label: 'Boards',
                 value: String(ls.boardClears),
+                tone: 'earned',
               })
             }
 
-            const byModeTiles: Tile[] = [
+            const byModeTiles: StatsTile[] = [
               {
                 key: 'endless',
                 label: 'Endless',
                 value: String(ls.gamesPlayedEndless),
+                tone: ls.gamesPlayedEndless > 0 ? 'earned' : 'quiet',
               },
               {
                 key: 'daily',
                 label: 'Daily',
                 value: String(ls.gamesPlayedDaily),
+                tone: ls.gamesPlayedDaily > 0 ? 'earned' : 'quiet',
               },
               {
                 key: 'coop',
                 label: 'Co-op',
                 value: String(ls.gamesPlayedCoop),
+                tone: ls.gamesPlayedCoop > 0 ? 'earned' : 'quiet',
               },
             ]
             if (ls.dailyDaysCleared.length > 0) {
@@ -7030,6 +7068,7 @@ function App() {
                 key: 'daily-days',
                 label: 'Days cleared',
                 value: String(ls.dailyDaysCleared.length),
+                tone: 'record',
               })
             }
             if (ls.coopPartnerIds.length > 0) {
@@ -7037,15 +7076,17 @@ function App() {
                 key: 'partners',
                 label: 'Partners',
                 value: String(ls.coopPartnerIds.length),
+                tone: 'earned',
               })
             }
 
-            const recordsTiles: Tile[] = []
+            const recordsTiles: StatsTile[] = []
             if (ls.bestEndlessScore > 0) {
               recordsTiles.push({
                 key: 'best-score',
                 label: 'Best score',
                 value: String(ls.bestEndlessScore),
+                tone: 'record',
               })
             }
             if (ls.bestDailyMoves !== null) {
@@ -7053,6 +7094,7 @@ function App() {
                 key: 'best-daily',
                 label: 'Best daily',
                 value: String(ls.bestDailyMoves),
+                tone: 'record',
               })
             }
             if (ls.bestCombo >= 2) {
@@ -7060,6 +7102,7 @@ function App() {
                 key: 'best-combo',
                 label: 'Best combo',
                 value: `×${ls.bestCombo}`,
+                tone: 'record',
               })
             }
             if (ls.bestStreak > 0) {
@@ -7067,6 +7110,7 @@ function App() {
                 key: 'best-streak',
                 label: 'Best streak',
                 value: String(ls.bestStreak),
+                tone: ls.bestStreak >= 2 ? 'record' : 'earned',
               })
             }
             if (ls.bestSinglePlacement > 0) {
@@ -7074,6 +7118,7 @@ function App() {
                 key: 'best-hit',
                 label: 'Top hit',
                 value: `+${ls.bestSinglePlacement}`,
+                tone: 'record',
               })
             }
             if (ls.longestRunMs > 0) {
@@ -7081,17 +7126,21 @@ function App() {
                 key: 'longest',
                 label: 'Longest',
                 value: formatDuration(ls.longestRunMs),
+                tone: 'earned',
               })
             }
 
-            const renderTileSection = (label: string, tiles: Tile[]) => {
+            const renderTileSection = (label: string, tiles: StatsTile[]) => {
               if (tiles.length === 0) return null
               return (
                 <div className="hexaclear-stats-section">
                   <div className="hexaclear-stats-section-label">{label}</div>
                   <div className="hexaclear-stats-tiles">
                     {tiles.map((t) => (
-                      <div key={t.key} className="hexaclear-stats-tile">
+                      <div
+                        key={t.key}
+                        className={getStatsTileClassName(t.tone)}
+                      >
                         <span className="hexaclear-stats-tile-value">
                           {t.value}
                         </span>
