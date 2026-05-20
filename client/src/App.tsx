@@ -2014,16 +2014,10 @@ function App() {
               // Best-effort write-through; quota errors are fine.
             }
           }
-          // If today's best changed under us, sync the header
-          // banner readout so the player sees the merged value
-          // without needing a reload.
-          const todayKey = getTodayKey()
-          const mergedToday = merged.dailyBestMovesByDate[todayKey]
-          if (mergedToday !== undefined) {
-            setTodayDailyBestMoves((existing) =>
-              existing === null || mergedToday < existing ? mergedToday : existing,
-            )
-          }
+          // The HUD's "Best" readout derives from
+          // lifetimeStats.dailyBestMovesByDate which we just wrote
+          // above, so the merged value flows through on the next
+          // render without needing a separate state nudge here.
         }
         setAccountSyncState('synced')
         setAccountMessage('Stats synced. This device now shows your combined total.')
@@ -2210,18 +2204,33 @@ function App() {
   const [savedBigGame, setSavedBigGame] = useState<GameState | null>(
     () => loadGameForMode('big'),
   )
-  const [todayDailyBestMoves, setTodayDailyBestMoves] = useState<number | null>(
-    () => {
-      if (typeof window === 'undefined') return null
-      const key = getTodayKey()
-      const raw = window.localStorage.getItem(
-        `cubic-daily-best-${key}`,
-      )
-      if (!raw) return null
-      const n = Number(raw)
-      return Number.isFinite(n) && n > 0 ? n : null
-    },
-  )
+  // Best (lowest) moves the player has recorded for the daily puzzle
+  // they are *currently* playing — today OR an archived date. The
+  // HUD's "Best" readout uses this so the value always matches the
+  // puzzle on screen instead of being pinned to today. `lifetimeStats`
+  // is the authoritative source (kept in sync by foldRunIntoLifetime
+  // and the boot-time backfill); we fall back to the per-day
+  // localStorage entry in case the stats map hasn't been backfilled
+  // yet for that day.
+  const currentDailyDateKey =
+    game.mode === 'daily' ? game.dailyDateKey ?? getTodayKey() : null
+  const currentDailyBestMoves = useMemo<number | null>(() => {
+    if (!currentDailyDateKey) return null
+    const fromStats = lifetimeStats.dailyBestMovesByDate[currentDailyDateKey]
+    if (typeof fromStats === 'number' && fromStats > 0) return fromStats
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(
+          `cubic-daily-best-${currentDailyDateKey}`,
+        )
+        if (raw) {
+          const n = Number(raw)
+          if (Number.isFinite(n) && n > 0) return n
+        }
+      } catch {}
+    }
+    return null
+  }, [currentDailyDateKey, lifetimeStats.dailyBestMovesByDate])
   const [dailyScoresDateKey, setDailyScoresDateKey] = useState<string>(() =>
     getTodayKey(),
   )
@@ -4521,16 +4530,15 @@ function App() {
       setPendingDailyHighScore(!dailyHighScoreSaved)
 
       // Track the best (lowest) move count for the puzzle the run
-      // belongs to. Today's runs update `cubic-daily-best-<today>`
-      // and bump the in-memory `todayDailyBestMoves` (which the
-      // header banner reads); past-day replays only update the
-      // archived day's `cubic-daily-best-<dateKey>` entry so the
-      // calendar's stored bests stay accurate but today's banner
-      // doesn't get clobbered by an unrelated archive run.
+      // belongs to. The HUD's "Best" readout derives from
+      // lifetimeStats.dailyBestMovesByDate (updated by
+      // foldRunIntoLifetime below), so we only need to keep the
+      // legacy `cubic-daily-best-<dateKey>` localStorage entry in
+      // sync here for the calendar fallback path and any
+      // pre-stats-map clients.
       if (typeof window !== 'undefined') {
         const todayKey = getTodayKey()
         const runDateKey = game.dailyDateKey ?? todayKey
-        const isArchiveRun = runDateKey !== todayKey
         const prevRaw = window.localStorage.getItem(
           `cubic-daily-best-${runDateKey}`,
         )
@@ -4540,11 +4548,6 @@ function App() {
           window.localStorage.setItem(
             `cubic-daily-best-${runDateKey}`,
             String(moves),
-          )
-        }
-        if (!isArchiveRun) {
-          setTodayDailyBestMoves((existing) =>
-            existing === null || moves < existing ? moves : existing,
           )
         }
       }
@@ -5109,11 +5112,20 @@ function App() {
         // for big until it gets its own leaderboard.
         const bestValue =
           game.mode === 'daily'
-            ? todayDailyBestMoves
+            ? currentDailyBestMoves
             : game.mode === 'big'
             ? null
             : bestScore
         const showBest = bestValue !== null && bestValue !== undefined
+        const dailyIsToday =
+          game.mode === 'daily' &&
+          (game.dailyDateKey ?? getTodayKey()) === getTodayKey()
+        const bestLabelText =
+          game.mode === 'daily'
+            ? dailyIsToday
+              ? 'Best (today)'
+              : 'Best'
+            : 'Best'
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
           game.mode === 'daily' ? dailyCubesRemaining : game.score
@@ -5139,9 +5151,7 @@ function App() {
               <div className="hexaclear-header-main-right">
                 {showBest && (
                   <div className="hexaclear-best-banner">
-                    <span className="label">
-                      {game.mode === 'daily' ? 'Best (today)' : 'Best'}
-                    </span>
+                    <span className="label">{bestLabelText}</span>
                     <span className="value">{bestValue}</span>
                   </div>
                 )}
@@ -5304,23 +5314,23 @@ function App() {
       {(() => {
         const rawBestValue =
           game.mode === 'daily'
-            ? todayDailyBestMoves
+            ? currentDailyBestMoves
             : game.mode === 'big'
             ? null
             : bestScore
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
           game.mode === 'daily' ? dailyCubesRemaining : game.score
-        // Modes that don't track a persistent best (Big / co-op)
-        // would otherwise leave the left LCD reading "---", which
-        // looks broken on a 7-segment display. We fall back to the
-        // live score there instead — same digits as the right LCD,
-        // but the "Best" label stays so the layout is preserved and
-        // it still reads as the slot reserved for a record. Modes
-        // that DO have a best but haven't recorded one yet (e.g.
-        // first-ever endless run) get the same fallback for the
-        // same reason.
-        const bestValue = rawBestValue ?? liveStatValue
+        // Modes other than daily that don't have a recorded best
+        // (Big / co-op, or a first-ever endless run) fall back to
+        // the live score so the LCD doesn't read "---" — the slot
+        // still reads as a reserved record area with its label
+        // intact. Daily mode is intentionally not given this
+        // fallback: if the player hasn't completed the daily puzzle
+        // currently on screen, we display "---" so they can tell
+        // that no personal best exists for that day yet.
+        const bestValue =
+          game.mode === 'daily' ? rawBestValue : rawBestValue ?? liveStatValue
         const bestLabel = 'Best'
         // 3 digits is the Minesweeper default; values >999 expand the
         // display naturally rather than truncating. The off-segment
