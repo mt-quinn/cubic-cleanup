@@ -734,13 +734,28 @@
   transform-origin: center;
 }
 
-/* Conflict ring in Win98: a 1.5px dashed outline so it reads as
-   "marked territory" without breaking the chrome aesthetic. */
+/* Conflict ring in Win98: a chunky inset colored frame so the
+   "this cube sits on someone else's territory" relationship — and
+   whose territory it is — both read at a glance. The previous
+   1.5px dashed hairline was too quiet to spot against a colorful
+   board. Slight inward scale keeps the frame from overflowing
+   into neighboring cells while leaving a fat band of the tinter's
+   color clearly visible around the cube body, and a pair of
+   1px dark drop-shadows traces the inner/outer edges of the
+   colored band so the frame stays legible on top of any cube
+   color. */
 [data-theme="win98"] .hexaclear-hex-conflict-ring {
   stroke: var(--cell-conflict-color, var(--w98-text));
-  stroke-width: 1.5;
-  stroke-dasharray: 3 2;
+  stroke-width: 5;
+  stroke-dasharray: none;
+  stroke-linejoin: miter;
   opacity: 1;
+  transform: scale(0.86);
+  transform-box: fill-box;
+  transform-origin: center;
+  filter:
+    drop-shadow(0 0 0.5px var(--w98-deep-shadow))
+    drop-shadow(0 0 0.5px var(--w98-deep-shadow));
 }
 
 /* Live partner-hover ghosts in Win98: the cube-faces silhouette
