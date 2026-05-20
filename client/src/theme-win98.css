@@ -1601,6 +1601,18 @@
   letter-spacing: 0 !important;
 }
 
+/* The wood theme leaves these containers flush against their parent
+   because the bevel is invisible. In win98 the bevel is a real frame,
+   so the inner controls need a few px of breathing room or they slam
+   into the chrome. */
+[data-theme="win98"] .hexaclear-menu-actions {
+  padding: 8px 10px !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-theme-row {
+  padding: 6px 10px !important;
+}
+
 [data-theme="win98"] .hexaclear-menu-nav-card-stats {
   outline: 1px dotted var(--w98-text) !important;
   outline-offset: -4px !important;
