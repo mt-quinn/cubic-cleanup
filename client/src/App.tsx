@@ -7459,15 +7459,17 @@ function App() {
 
                 <div className="hexaclear-menu-account">
                   <div>
-                    <div className="hexaclear-menu-account-label">Stats sync</div>
+                    <div className="hexaclear-menu-account-label">
+                      Stats &amp; daily history sync
+                    </div>
                     <div className="hexaclear-menu-account-status">
                       {authLoading
                         ? 'Checking account...'
                         : isAuthenticated
                         ? accountSyncState === 'syncing'
-                          ? 'Syncing online stats...'
+                          ? 'Syncing online stats and daily history...'
                           : 'Signed in'
-                        : 'Local stats only'}
+                        : 'Local only — sign in to sync stats and daily history'}
                     </div>
                   </div>
                   <button
@@ -7634,11 +7636,30 @@ function App() {
               lifetimeStats.gamesPlayedDaily +
               lifetimeStats.gamesPlayedCoop +
               lifetimeStats.gamesPlayedPvp
+            // Number of distinct daily puzzles this device will push
+            // to the account on sync. Use the synced map's keys when
+            // present (covers any backfilled days that aren't yet in
+            // dailyDaysCleared) and fall back to dailyDaysCleared so
+            // pre-backfill devices still report a sensible count.
+            const dailyClearedKeys = new Set<string>(
+              lifetimeStats.dailyDaysCleared,
+            )
+            for (const key of Object.keys(
+              lifetimeStats.dailyBestMovesByDate,
+            )) {
+              dailyClearedKeys.add(key)
+            }
+            const dailyClearedCount = dailyClearedKeys.size
             const summaryItems: StatDatum[] = [
               {
                 key: 'games',
                 label: 'Games',
                 value: String(totalGames),
+              },
+              {
+                key: 'daily',
+                label: 'Daily',
+                value: String(dailyClearedCount),
               },
               {
                 key: 'rubies',
@@ -7674,10 +7695,22 @@ function App() {
                 <div className="hexaclear-overlay-card hexaclear-account-card">
                   <div className="title">Stats Sync</div>
                   <div className="hexaclear-account-copy">
-                    <strong>Your stats on this device will be added to your online stats.</strong>
+                    <strong>
+                      Your lifetime stats and daily game history on this device
+                      will be merged into your online account.
+                    </strong>
                     <span>
-                      Nothing local will be lost. After sync, this device will show
-                      the combined online total.
+                      That includes {dailyClearedCount}{' '}
+                      {dailyClearedCount === 1
+                        ? 'cleared daily puzzle'
+                        : 'cleared daily puzzles'}{' '}
+                      from this device — the calendar will show every day
+                      you've cleared on any signed-in device, with the
+                      fewest-moves run kept on each.
+                    </span>
+                    <span>
+                      Nothing local is lost. After sync, this device shows the
+                      combined online total.
                     </span>
                   </div>
                   <div className="hexaclear-account-summary">

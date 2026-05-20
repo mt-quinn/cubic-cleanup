@@ -3933,7 +3933,11 @@ body {
 }
 .hexaclear-account-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Tiles flow into as many columns as the card width allows so a
+     5-stat list (Games / Daily / Rubies / Score / Time) still fits
+     on one row at the desktop card width and gracefully wraps to
+     two rows on narrow mobile cards. */
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
   gap: 0.42rem;
 }
 .hexaclear-account-stat {

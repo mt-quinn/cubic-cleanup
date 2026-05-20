@@ -421,8 +421,13 @@
   [data-theme="win98"] .hexaclear-scores-tab.is-active {
     padding: 6px 8px 4px 10px;
   }
+  /* The shared shorthand above sets `margin: 1px`, which silently
+     wipes out the base rule's `margin-left: auto` — re-assert it
+     here so the Menu button stays flush to the right edge of the
+     toolbar at narrow viewports too. */
   [data-theme="win98"] .hexaclear-menu-button {
     gap: 4px;
+    margin-left: auto;
   }
   [data-theme="win98"] .hexaclear-menu-button-icon,
   [data-theme="win98"] .hexaclear-menu-button-label {
@@ -448,6 +453,11 @@
   [data-theme="win98"] .hexaclear-mode-toggle .mode-pill.active,
   [data-theme="win98"] .hexaclear-scores-tab.is-active {
     padding: 5px 6px 3px 8px;
+  }
+  /* Defense in depth: keep the Menu button right-aligned in case a
+     future rule in this breakpoint reaches for the shorthand again. */
+  [data-theme="win98"] .hexaclear-menu-button {
+    margin-left: auto;
   }
   [data-theme="win98"] .hexaclear-menu-button-icon {
     display: none;
