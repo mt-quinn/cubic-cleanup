@@ -5497,13 +5497,23 @@ function App() {
           for (const p of mp.allPlayers) {
             nameByPlayerId.set(p.playerId, p.name)
           }
-          const colorForPlayer = (pid: string): string =>
-            tintCubeColor(
-              WOOD_CUBE_LEFT_HEX,
-              mp.hueShiftByPlayerId[pid] ?? 0,
-              0.05,
-              0.95,
-            )
+          // Track-fill color mirrors the player's cube color on the
+          // board so the HUD and the field stay in sync per theme:
+          //   * Wood: every player (incl. self) is a hue-shifted
+          //     warm wood-cube color; self happens to land on hue 0
+          //     and renders the unshifted gold.
+          //   * Win98: self uses the deep teal fill that solo cubes
+          //     wear, partners use the lighter teal partner-cube
+          //     fill rotated by their assigned hue.
+          const colorForPlayer = (pid: string): string => {
+            const hue = mp.hueShiftByPlayerId[pid] ?? 0
+            if (theme === 'win98') {
+              return pid === selfId
+                ? W98_SELF_FILL_HEX
+                : tintCubeColor(W98_PARTNER_FILL_HEX, hue, 0, 1)
+            }
+            return tintCubeColor(WOOD_CUBE_LEFT_HEX, hue, 0.05, 0.95)
+          }
           const ariaLabel =
             standings
               .map((s) => {
@@ -6920,13 +6930,18 @@ function App() {
                 winnerId !== null
                   ? nameByPlayerId.get(winnerId) ?? 'Player'
                   : null
-              const colorForPlayer = (pid: string): string =>
-                tintCubeColor(
-                  WOOD_CUBE_LEFT_HEX,
-                  mp.hueShiftByPlayerId[pid] ?? 0,
-                  0.05,
-                  0.95,
-                )
+              // Same theme-aware rule as the in-game HUD so the
+              // final standings on this modal match the colors the
+              // player saw on the board the whole match.
+              const colorForPlayer = (pid: string): string => {
+                const hue = mp.hueShiftByPlayerId[pid] ?? 0
+                if (theme === 'win98') {
+                  return pid === selfId
+                    ? W98_SELF_FILL_HEX
+                    : tintCubeColor(W98_PARTNER_FILL_HEX, hue, 0, 1)
+                }
+                return tintCubeColor(WOOD_CUBE_LEFT_HEX, hue, 0.05, 0.95)
+              }
               const thresholdPct = Math.round(mp.pvpThresholdRatio * 100)
               return (
                 <div className="hexaclear-overlay">
