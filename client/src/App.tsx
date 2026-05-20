@@ -1464,16 +1464,38 @@ function App() {
   // We pull the player's display name from the same localStorage key the
   // single-player high-score flow uses so the lobby auto-fills with
   // their familiar tag.
+  // Multiplayer display name is persisted under its own localStorage
+  // key (separate from the single-player high-score name) so changes
+  // in the MP lobby don't overwrite the high-score autofill. On first
+  // use we seed it from the SP high-score name when present so a
+  // returning player sees their familiar tag, then it diverges from
+  // there as soon as they edit it in the MP settings.
   const [mpPlayerName, setMpPlayerName] = useState<string>(() => {
     if (typeof window === 'undefined') return 'Player'
     try {
-      const saved = window.localStorage.getItem('cubic-player-name')
-      if (saved && saved.trim().length > 0) return saved
+      const mpSaved = window.localStorage.getItem('cubic-mp-player-name')
+      if (mpSaved && mpSaved.trim().length > 0) return mpSaved
+      const spSaved = window.localStorage.getItem('cubic-player-name')
+      if (spSaved && spSaved.trim().length > 0) return spSaved
     } catch {
       // Ignore — fall through to default.
     }
     return 'Player'
   })
+  // Persist any MP name edit immediately so reloading (or coming
+  // back later) keeps the player's chosen multiplayer identity.
+  // Empty strings are skipped — a transient empty state shouldn't
+  // wipe the saved value out from under them mid-edit.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const trimmed = mpPlayerName.trim()
+    if (trimmed.length === 0) return
+    try {
+      window.localStorage.setItem('cubic-mp-player-name', mpPlayerName)
+    } catch {
+      // Best-effort persistence — quota errors are non-fatal.
+    }
+  }, [mpPlayerName])
   const isMultiplayer = mpRoomCode !== null
   const mp = useMultiplayerGame({
     code: mpRoomCode,
