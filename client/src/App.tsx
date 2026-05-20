@@ -6579,7 +6579,14 @@ function App() {
             </div>
           )}
           {showMenu && (
-            <div className="hexaclear-overlay">
+            <div
+              className="hexaclear-overlay"
+              onPointerDown={(e) => {
+                if (e.target !== e.currentTarget) return
+                playUiClick()
+                setShowMenu(false)
+              }}
+            >
               <div className="hexaclear-overlay-card hexaclear-menu-card">
                 <div className="title">Cubekill</div>
                 <div className="hexaclear-menu-hint">
@@ -6603,7 +6610,7 @@ function App() {
                       {isMultiplayer ? (
                         <button
                           type="button"
-                          className="hexaclear-menu-restart-link"
+                          className="hexaclear-menu-danger-button"
                           onClick={() => {
                             unlockAudioOnGesture()
                             playUiClick()
@@ -6616,7 +6623,7 @@ function App() {
                       ) : (
                         <button
                           type="button"
-                          className="hexaclear-menu-restart-link"
+                          className="hexaclear-menu-danger-button"
                           onClick={() => {
                             unlockAudioOnGesture()
                             playUiClick()
@@ -6789,7 +6796,15 @@ function App() {
             </div>
           )}
           {showScoring && (
-            <div className="hexaclear-overlay">
+            <div
+              className="hexaclear-overlay"
+              onPointerDown={(e) => {
+                if (e.target !== e.currentTarget) return
+                playUiClick()
+                setShowScoring(false)
+                setShowMenu(true)
+              }}
+            >
               <div className="hexaclear-overlay-card hexaclear-scoring-card">
                 {game.mode === 'daily' ? (
                   <>
@@ -7194,7 +7209,15 @@ function App() {
             )
 
             return (
-              <div className="hexaclear-overlay">
+              <div
+                className="hexaclear-overlay"
+                onPointerDown={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  playUiClick()
+                  setShowStats(false)
+                  setShowMenu(true)
+                }}
+              >
                 <div className="hexaclear-overlay-card hexaclear-stats-card">
                   <div className="title">Stats</div>
                   {!hasAnyGame ? (
@@ -7360,7 +7383,15 @@ function App() {
               })
             }
             return (
-              <div className="hexaclear-overlay">
+              <div
+                className="hexaclear-overlay"
+                onPointerDown={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  playUiClick()
+                  setShowHighScores(false)
+                  setShowMenu(true)
+                }}
+              >
                 <div className="hexaclear-overlay-card hexaclear-history-card">
                   <div className="title">Daily History</div>
                   <div className="hexaclear-history-nav">

@@ -1578,7 +1578,8 @@
 [data-theme="win98"] .hexaclear-menu-volume,
 [data-theme="win98"] .hexaclear-menu-mini-toggle,
 [data-theme="win98"] .hexaclear-menu-theme-row,
-[data-theme="win98"] .hexaclear-menu-nav-card {
+[data-theme="win98"] .hexaclear-menu-nav-card,
+[data-theme="win98"] .hexaclear-menu-danger-button {
   background: var(--w98-surface) !important;
   border: 2px solid !important;
   border-color:
@@ -1589,6 +1590,12 @@
   border-radius: 0 !important;
   box-shadow: none !important;
   color: var(--w98-text) !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-danger-button {
+  color: #c80000 !important;
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
 }
 
 [data-theme="win98"] .hexaclear-menu-nav-card-stats {
