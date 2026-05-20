@@ -364,11 +364,19 @@ export const placePiece = mutation({
     const result = applyPlacement(fakeGame, piece, cellId)
     if (!result) throw new Error('Invalid placement')
 
+    // Snapshot the pre-placement ownership map so the tint pass below
+    // can attribute every cleared cell to whoever actually placed the
+    // cube that's now disappearing — clearing an opponent's tiles
+    // should reward THEM with territory, not the player who triggered
+    // the clear. Without this snapshot we'd lose those owners as soon
+    // as we delete them from the new map.
+    const prevCellOwners: Record<string, string> = room.cellOwners ?? {}
+
     // Update per-cell ownership: tag every cell the player just filled
     // with their playerId, then drop entries for any cells that the
-    // resulting clears swept off the board so partner-tinted relics
+    // resulting clears swept off the board so partner-owned relics
     // don't linger on cleared cells.
-    const cellOwners: Record<string, string> = { ...(room.cellOwners ?? {}) }
+    const cellOwners: Record<string, string> = { ...prevCellOwners }
     for (const cellId of result.placedCellIds) {
       cellOwners[cellId] = playerId
     }
@@ -376,14 +384,24 @@ export const placePiece = mutation({
       delete cellOwners[cellId]
     }
 
-    // Persistent tint of "who last cleared this cell". Every cell
-    // swept by this placement gets stamped to the placing player, even
-    // if they didn't physically place the cube — clearing the row was
-    // their act. Tints survive future placements until another clear
-    // overwrites them, and they drive the PvP territory race.
+    // Persistent tint of "who placed the cube that just got cleared
+    // from this cell". Each cleared cell is attributed to the player
+    // who put the cube there in the first place:
+    //   * cells just placed this turn → the current placer
+    //   * cells filled by an earlier turn → the prior owner from the
+    //     pre-placement snapshot
+    // This means clearing your opponent's tiles is a downside — you
+    // hand them more PvP territory. Tints survive future placements
+    // until another clear overwrites them.
+    const placedThisTurn = new Set<string>(result.placedCellIds)
     const cellTints: Record<string, string> = { ...(room.cellTints ?? {}) }
     for (const cellId of result.clearedCellIds) {
-      cellTints[cellId] = playerId
+      const placerForCell = placedThisTurn.has(cellId)
+        ? playerId
+        : prevCellOwners[cellId]
+      if (placerForCell) {
+        cellTints[cellId] = placerForCell
+      }
     }
 
     // New per-player hand: drop the just-played piece. If that empties the

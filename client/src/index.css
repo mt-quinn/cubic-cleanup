@@ -1437,23 +1437,30 @@ body {
   stroke: none;
 }
 
-/* PvP territory tints. Each cleared cell remembers who last cleared
-   it (cellTints on the server); we paint a translucent flood inside
-   the cell so empty ground still reads as "owned" without claiming
-   to be filled. Partner-owned territory uses a hue-rotated warm
-   gold; self-owned territory uses a subtle warm cream so the player
-   still recognizes their own ground at a glance. Filled cells
-   visually occlude the flood, which is the desired behavior — the
-   conflict ring (below) covers the "filled cell on another player's
-   territory" case. */
+/* PvP territory tints. Each cleared cell remembers the player who
+   placed the cube that just got swept (cellTints on the server); we
+   paint a translucent flood inside the cell so empty ground still
+   reads as "owned" without pretending to be filled. Partner-owned
+   territory uses a hue-rotated warm gold; self-owned territory uses
+   a warm cream so the player still recognizes their own ground at
+   a glance. Wood textures swallow low-opacity fills, so we lean on
+   relatively high alphas plus a colored stroke to make the tint
+   actually visible on the dark board. Filled cells visually occlude
+   the flood, which is the desired behavior — the conflict ring
+   (below) covers the "filled cell on another player's territory"
+   case. */
 .hexaclear-hex.empty.pvp-tinted-partner {
   fill: var(--cell-tint-color, #f9a23f);
-  fill-opacity: 0.28;
+  fill-opacity: 0.62;
+  stroke: var(--cell-tint-color, #f9a23f);
+  stroke-opacity: 0.9;
 }
 
 .hexaclear-hex.empty.pvp-tinted-self {
   fill: var(--cell-tint-color, #ffeaa3);
-  fill-opacity: 0.16;
+  fill-opacity: 0.48;
+  stroke: var(--cell-tint-color, #ffeaa3);
+  stroke-opacity: 0.85;
 }
 
 /* Conflict ring overlay drawn above the cube when an occupant sits
