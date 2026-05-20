@@ -2104,15 +2104,18 @@ function App() {
   const [lastSavedHighScoreDate, setLastSavedHighScoreDate] = useState<
     number | null
   >(null)
-  // Pagination state for the gameover modal's local-endless
-  // leaderboard. Defaults to whichever page contains the just-saved
-  // entry so the player drops in seeing their own row instead of
-  // the top of the list, then prev/next controls let them browse
-  // freely. The snap effect runs only when the gameover modal opens
-  // or a fresh save lands — it deliberately does NOT depend on
-  // `highScores` identity so user-driven prev/next clicks aren't
-  // clobbered.
+  // Pagination state for the gameover modal's leaderboards. Each
+  // tab keeps a local page (browsed via prev/next chevrons) and a
+  // separate global page so the player can flip between views
+  // without losing their place. The snap effects below run only
+  // when the gameover modal opens, when a fresh save lands, or
+  // when the relevant score query refetches — they deliberately do
+  // NOT depend on the entry-list identity so user-driven prev/next
+  // clicks aren't clobbered.
   const [gameoverEndlessPage, setGameoverEndlessPage] = useState(0)
+  const [gameoverEndlessGlobalPage, setGameoverEndlessGlobalPage] = useState(0)
+  const [gameoverDailyGlobalPage, setGameoverDailyGlobalPage] = useState(0)
+  const [gameoverCoopGlobalPage, setGameoverCoopGlobalPage] = useState(0)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   // Open the menu on load. The first gesture the player makes is
   // dismissing the menu, which gives us a clean moment to prime the
@@ -3762,6 +3765,56 @@ function App() {
     setGameoverEndlessPage(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.gameOver, game.mode, highScoreSaved, lastSavedHighScoreDate])
+
+  // Snap each gameover GLOBAL leaderboard to the page containing the
+  // player's row whenever the global query first resolves (or the
+  // player's identity changes). We key on the array length rather
+  // than identity so subsequent prev/next clicks aren't clobbered
+  // by Convex realtime refetches.
+  useEffect(() => {
+    if (!game.gameOver) return
+    if (game.mode !== 'endless') return
+    const list = globalEndlessScores
+    if (list === undefined) return
+    const idx = list.findIndex((e) => e.playerId === playerId)
+    setGameoverEndlessGlobalPage(
+      idx >= 0 ? Math.floor(idx / GAMEOVER_LEADERBOARD_PAGE_SIZE) : 0,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.gameOver, game.mode, playerId, globalEndlessScores?.length])
+
+  useEffect(() => {
+    if (!game.gameOver) return
+    if (game.mode !== 'daily') return
+    const list = globalDailyScores
+    if (list === undefined) return
+    const idx = list.findIndex((e) => e.playerId === playerId)
+    setGameoverDailyGlobalPage(
+      idx >= 0 ? Math.floor(idx / GAMEOVER_LEADERBOARD_PAGE_SIZE) : 0,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.gameOver, game.mode, playerId, globalDailyScores?.length])
+
+  useEffect(() => {
+    if (!game.gameOver) return
+    if (!isMultiplayer) return
+    const list = globalCoopScores
+    if (list === undefined) return
+    const groupKey = lastCoopSavedGroupKey
+    const idx =
+      groupKey === null
+        ? -1
+        : list.findIndex((e) => (e.playerIdsKey ?? '') === groupKey)
+    setGameoverCoopGlobalPage(
+      idx >= 0 ? Math.floor(idx / GAMEOVER_LEADERBOARD_PAGE_SIZE) : 0,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    game.gameOver,
+    isMultiplayer,
+    lastCoopSavedGroupKey,
+    globalCoopScores?.length,
+  ])
 
   // Single-action "Copy Link" used from the co-op HUD. If we're not
   // already in a room, we lazily spin one up so the link points at a
@@ -6526,16 +6579,11 @@ function App() {
                     showGlobalLeaderboard && globalEndlessScores === undefined
                   const globalTop = (globalEndlessScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
-                  const visibleCount = GAMEOVER_LEADERBOARD_PAGE_SIZE
-                  const globalVisible = globalTop.slice(0, visibleCount)
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
                   )
                   const playerGlobalRank =
                     playerGlobalIndex === -1 ? null : playerGlobalIndex + 1
-                  const globalShowsPlayer =
-                    playerGlobalRank !== null &&
-                    playerGlobalRank <= visibleCount
                   const playerGlobalEntry =
                     playerGlobalIndex === -1
                       ? null
@@ -6562,6 +6610,30 @@ function App() {
                     localPageStart,
                     localPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE,
                   )
+                  // Global pagination math. Same shape as local —
+                  // `gameoverEndlessGlobalPage` is seeded by its own
+                  // snap effect so the modal opens framed on the
+                  // player's row when they're on the global board.
+                  const globalPageCount = Math.max(
+                    1,
+                    Math.ceil(
+                      globalTop.length / GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                    ),
+                  )
+                  const globalPageIndex = Math.min(
+                    Math.max(0, gameoverEndlessGlobalPage),
+                    globalPageCount - 1,
+                  )
+                  const globalPageStart =
+                    globalPageIndex * GAMEOVER_LEADERBOARD_PAGE_SIZE
+                  const globalVisible = globalTop.slice(
+                    globalPageStart,
+                    globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                  )
+                  const globalShowsPlayer =
+                    playerGlobalIndex >= globalPageStart &&
+                    playerGlobalIndex <
+                      globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE
                   if (
                     !usingGlobal &&
                     localTop.length === 0 &&
@@ -6600,7 +6672,7 @@ function App() {
                           ) : (
                             <ol className="hexaclear-scores-list">
                               {globalVisible.map((entry, idx) => {
-                                const rank = idx + 1
+                                const rank = globalPageStart + idx + 1
                                 const isYou = entry.playerId === playerId
                                 const chipClass = [
                                   'hexaclear-rank-chip',
@@ -6632,6 +6704,49 @@ function App() {
                                 )
                               })}
                             </ol>
+                          )}
+                          {globalPageCount > 1 && (
+                            <div className="hexaclear-scores-pagination">
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Previous page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverEndlessGlobalPage((p) =>
+                                    Math.max(0, p - 1),
+                                  )
+                                }}
+                                disabled={globalPageIndex === 0}
+                              >
+                                ‹
+                              </button>
+                              <span className="hexaclear-scores-page-label">
+                                {globalPageStart + 1}–
+                                {Math.min(
+                                  globalPageStart +
+                                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                                  globalTop.length,
+                                )}{' '}
+                                of {globalTop.length}
+                              </span>
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Next page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverEndlessGlobalPage((p) =>
+                                    Math.min(globalPageCount - 1, p + 1),
+                                  )
+                                }}
+                                disabled={
+                                  globalPageIndex >= globalPageCount - 1
+                                }
+                              >
+                                ›
+                              </button>
+                            </div>
                           )}
                           {playerGlobalRank !== null && !globalShowsPlayer &&
                             playerGlobalEntry && (
@@ -6956,7 +7071,6 @@ function App() {
                   const usingGlobal = showGlobalLeaderboard
                   const visibleCount = GAMEOVER_LEADERBOARD_PAGE_SIZE
                   const localVisible = localTop.slice(0, visibleCount)
-                  const globalVisible = globalTop.slice(0, visibleCount)
                   const groupKey = lastCoopSavedGroupKey
                   const groupGlobalIndex =
                     groupKey === null
@@ -6966,13 +7080,32 @@ function App() {
                         )
                   const groupGlobalRank =
                     groupGlobalIndex === -1 ? null : groupGlobalIndex + 1
-                  const globalShowsGroup =
-                    groupGlobalRank !== null &&
-                    groupGlobalRank <= visibleCount
                   const groupGlobalEntry =
                     groupGlobalIndex === -1
                       ? null
                       : globalTop[groupGlobalIndex]
+                  // Co-op global pagination — snap effect points us
+                  // at the page containing the group's row.
+                  const globalPageCount = Math.max(
+                    1,
+                    Math.ceil(
+                      globalTop.length / GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                    ),
+                  )
+                  const globalPageIndex = Math.min(
+                    Math.max(0, gameoverCoopGlobalPage),
+                    globalPageCount - 1,
+                  )
+                  const globalPageStart =
+                    globalPageIndex * GAMEOVER_LEADERBOARD_PAGE_SIZE
+                  const globalVisible = globalTop.slice(
+                    globalPageStart,
+                    globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                  )
+                  const globalShowsGroup =
+                    groupGlobalIndex >= globalPageStart &&
+                    groupGlobalIndex <
+                      globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE
                   const showSection =
                     usingGlobal ||
                     localVisible.length > 0 ||
@@ -7010,7 +7143,7 @@ function App() {
                           ) : (
                             <ol className="hexaclear-scores-list">
                               {globalVisible.map((entry, idx) => {
-                                const rank = idx + 1
+                                const rank = globalPageStart + idx + 1
                                 const isYou =
                                   groupKey !== null &&
                                   (entry.playerIdsKey ?? '') === groupKey
@@ -7044,6 +7177,49 @@ function App() {
                                 )
                               })}
                             </ol>
+                          )}
+                          {globalPageCount > 1 && (
+                            <div className="hexaclear-scores-pagination">
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Previous page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverCoopGlobalPage((p) =>
+                                    Math.max(0, p - 1),
+                                  )
+                                }}
+                                disabled={globalPageIndex === 0}
+                              >
+                                ‹
+                              </button>
+                              <span className="hexaclear-scores-page-label">
+                                {globalPageStart + 1}–
+                                {Math.min(
+                                  globalPageStart +
+                                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                                  globalTop.length,
+                                )}{' '}
+                                of {globalTop.length}
+                              </span>
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Next page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverCoopGlobalPage((p) =>
+                                    Math.min(globalPageCount - 1, p + 1),
+                                  )
+                                }}
+                                disabled={
+                                  globalPageIndex >= globalPageCount - 1
+                                }
+                              >
+                                ›
+                              </button>
+                            </div>
                           )}
                           {groupGlobalRank !== null &&
                             !globalShowsGroup &&
@@ -7255,20 +7431,36 @@ function App() {
                     showGlobalLeaderboard && globalDailyScores === undefined
                   const globalTop = (globalDailyScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
-                  const visibleCount = GAMEOVER_LEADERBOARD_PAGE_SIZE
-                  const globalVisible = globalTop.slice(0, visibleCount)
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
                   )
                   const playerGlobalRank =
                     playerGlobalIndex === -1 ? null : playerGlobalIndex + 1
-                  const globalShowsPlayer =
-                    playerGlobalRank !== null &&
-                    playerGlobalRank <= visibleCount
                   const playerGlobalEntry =
                     playerGlobalIndex === -1
                       ? null
                       : globalTop[playerGlobalIndex]
+                  // Daily global pagination — same shape as endless.
+                  const globalPageCount = Math.max(
+                    1,
+                    Math.ceil(
+                      globalTop.length / GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                    ),
+                  )
+                  const globalPageIndex = Math.min(
+                    Math.max(0, gameoverDailyGlobalPage),
+                    globalPageCount - 1,
+                  )
+                  const globalPageStart =
+                    globalPageIndex * GAMEOVER_LEADERBOARD_PAGE_SIZE
+                  const globalVisible = globalTop.slice(
+                    globalPageStart,
+                    globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                  )
+                  const globalShowsPlayer =
+                    playerGlobalIndex >= globalPageStart &&
+                    playerGlobalIndex <
+                      globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE
                   if (
                     !usingGlobal &&
                     localVisible.length === 0 &&
@@ -7309,7 +7501,7 @@ function App() {
                           ) : (
                             <ol className="hexaclear-scores-list">
                               {globalVisible.map((entry, idx) => {
-                                const rank = idx + 1
+                                const rank = globalPageStart + idx + 1
                                 const isYou = entry.playerId === playerId
                                 const chipClass = [
                                   'hexaclear-rank-chip',
@@ -7342,6 +7534,49 @@ function App() {
                                 )
                               })}
                             </ol>
+                          )}
+                          {globalPageCount > 1 && (
+                            <div className="hexaclear-scores-pagination">
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Previous page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverDailyGlobalPage((p) =>
+                                    Math.max(0, p - 1),
+                                  )
+                                }}
+                                disabled={globalPageIndex === 0}
+                              >
+                                ‹
+                              </button>
+                              <span className="hexaclear-scores-page-label">
+                                {globalPageStart + 1}–
+                                {Math.min(
+                                  globalPageStart +
+                                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                                  globalTop.length,
+                                )}{' '}
+                                of {globalTop.length}
+                              </span>
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Next page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverDailyGlobalPage((p) =>
+                                    Math.min(globalPageCount - 1, p + 1),
+                                  )
+                                }}
+                                disabled={
+                                  globalPageIndex >= globalPageCount - 1
+                                }
+                              >
+                                ›
+                              </button>
+                            </div>
                           )}
                           {playerGlobalRank !== null && !globalShowsPlayer &&
                             playerGlobalEntry && (
