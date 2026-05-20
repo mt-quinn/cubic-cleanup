@@ -8833,7 +8833,7 @@ function App() {
                   >
                     {tabButton('endless', 'Endless')}
                     {tabButton('daily', 'Daily')}
-                    {tabButton('coop', 'Multi')}
+                    {tabButton('coop', 'Co-op')}
                     {tabButton('pvp', 'PvP')}
                   </div>
 
