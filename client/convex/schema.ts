@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
+import { authTables } from '@convex-dev/auth/server'
 
 // Multiplayer rooms for co-op Big mode. One row per active room.
 //
@@ -91,7 +92,32 @@ const hoverValidator = v.object({
   ts: v.number(),
 })
 
+export const lifetimeStatsValidator = v.object({
+  startedTrackingAt: v.number(),
+  totalActivePlayMs: v.number(),
+  gamesPlayedEndless: v.number(),
+  gamesPlayedDaily: v.number(),
+  gamesPlayedCoop: v.number(),
+  piecesPlaced: v.number(),
+  cubesPlaced: v.number(),
+  patternsCleared: v.number(),
+  rubiesCleared: v.number(),
+  boardClears: v.number(),
+  totalScore: v.number(),
+  scoredGamesPlayed: v.number(),
+  bestEndlessScore: v.number(),
+  bestDailyMoves: v.union(v.number(), v.null()),
+  bestCombo: v.number(),
+  bestStreak: v.number(),
+  bestSinglePlacement: v.number(),
+  longestRunMs: v.number(),
+  dailyDaysCleared: v.array(v.string()),
+  dailyDaysPlayed: v.array(v.string()),
+  coopPartnerIds: v.array(v.string()),
+})
+
 export default defineSchema({
+  ...authTables,
   rooms: defineTable({
     code: v.string(),
     state: v.union(
@@ -161,4 +187,10 @@ export default defineSchema({
     .index('by_score', ['score'])
     .index('by_room_finished', ['roomCode', 'finishedAt'])
     .index('by_group', ['playerIdsKey']),
+
+  accountStats: defineTable({
+    userId: v.id('users'),
+    stats: lifetimeStatsValidator,
+    updatedAt: v.number(),
+  }).index('by_user', ['userId']),
 })

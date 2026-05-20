@@ -3377,6 +3377,50 @@ body {
   gap: 0.45rem;
   padding-top: 0.1rem;
 }
+.hexaclear-menu-account {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid rgba(255, 205, 143, 0.16);
+  border-radius: 0.8rem;
+  background: rgba(255, 205, 143, 0.04);
+}
+.hexaclear-menu-account-label {
+  color: #ffe8a3;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hexaclear-menu-account-status {
+  color: rgba(255, 239, 212, 0.68);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.hexaclear-menu-account-button,
+.hexaclear-menu-account-secondary {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+  padding: 0.45rem 0.7rem !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 205, 143, 0.44) !important;
+  background: rgba(255, 205, 143, 0.1) !important;
+  color: #ffe8c7 !important;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 0.72rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hexaclear-menu-account-button:hover,
+.hexaclear-menu-account-secondary:hover {
+  filter: brightness(1.1);
+}
 .hexaclear-menu-settings-label {
   font-size: 0.68rem;
   font-weight: 900;
@@ -3446,6 +3490,155 @@ body {
 .hexaclear-menu-theme-row + .hexaclear-menu-theme-row,
 .hexaclear-menu-settings .hexaclear-menu-row + .hexaclear-menu-row {
   border-top: 0;
+}
+
+/* --- Account sync modal --------------------------------------------- */
+.hexaclear-account-card {
+  text-align: left;
+  min-width: 18rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.25rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.hexaclear-account-card .title {
+  text-align: center;
+  font-family: 'Monoton', system-ui, sans-serif;
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: 1.55rem;
+  letter-spacing: 0.06em;
+  color: #ffe8a3;
+  text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
+  margin: 0;
+}
+.hexaclear-account-copy {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.7rem 0.78rem;
+  border: 1px solid rgba(255, 205, 143, 0.2);
+  border-radius: 0.8rem;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 211, 118, 0.16), transparent 42%),
+    rgba(36, 20, 12, 0.42);
+  color: rgba(255, 239, 212, 0.8);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+.hexaclear-account-copy strong {
+  color: #ffe8a3;
+  font-weight: 900;
+}
+.hexaclear-account-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+.hexaclear-account-stat {
+  display: grid;
+  gap: 0.14rem;
+  padding: 0.5rem 0.35rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 205, 143, 0.12);
+  background: rgba(255, 205, 143, 0.045);
+  text-align: center;
+}
+.hexaclear-account-stat span {
+  color: #fff2cf;
+  font-size: 0.92rem;
+  font-weight: 1000;
+  line-height: 1;
+}
+.hexaclear-account-stat strong {
+  color: rgba(255, 239, 212, 0.64);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hexaclear-account-message {
+  border: 1px solid rgba(127, 221, 159, 0.28);
+  border-radius: 0.62rem;
+  padding: 0.52rem 0.65rem;
+  background: rgba(40, 134, 74, 0.14);
+  color: #d7ffdf;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.hexaclear-account-message.is-error {
+  border-color: rgba(255, 149, 124, 0.38);
+  background: rgba(132, 42, 24, 0.18);
+  color: #ffd2c2;
+}
+.hexaclear-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+}
+.hexaclear-account-online {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(255, 205, 143, 0.12);
+  border-radius: 0.65rem;
+  background: rgba(255, 205, 143, 0.04);
+}
+.hexaclear-account-online span {
+  color: #fff2cf;
+  font-weight: 900;
+}
+.hexaclear-account-online strong {
+  color: rgba(255, 239, 212, 0.68);
+  font-size: 0.72rem;
+}
+.hexaclear-account-form {
+  display: grid;
+  gap: 0.55rem;
+}
+.hexaclear-account-form label {
+  display: grid;
+  gap: 0.24rem;
+  color: rgba(255, 239, 212, 0.72);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.hexaclear-account-form input {
+  min-height: 2.3rem;
+  border: 1px solid rgba(255, 205, 143, 0.24);
+  border-radius: 0.62rem;
+  background: rgba(18, 11, 8, 0.55);
+  color: #fff2cf;
+  font: 800 16px 'Nunito', system-ui, sans-serif;
+  padding: 0.45rem 0.58rem;
+}
+.hexaclear-account-mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+.hexaclear-account-mode-row button {
+  border: 1px solid rgba(255, 205, 143, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 205, 143, 0.04);
+  color: rgba(255, 239, 212, 0.68);
+  font: 900 0.7rem 'Nunito', system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  padding: 0.42rem 0.5rem;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hexaclear-account-mode-row button.is-active {
+  border-color: rgba(255, 205, 143, 0.55);
+  background: rgba(255, 205, 143, 0.12);
+  color: #ffe8a3;
+}
+.hexaclear-account-card > .hexaclear-reset {
+  align-self: center;
 }
 
 /* --- Scoring modal --------------------------------------------------- */

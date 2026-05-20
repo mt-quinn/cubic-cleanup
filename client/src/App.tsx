@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAuthActions, useConvexAuth } from '@convex-dev/auth/react'
 import { useMutation, useQuery } from 'convex/react'
 import {
   getBoardDefinitionForMode,
@@ -39,11 +40,18 @@ import {
   applyPlacementToRunStats,
   createEmptyLifetimeStats,
   createEmptyRunStats,
+  calculateStatsSyncDelta,
+  clearStatsSyncAccountId,
   foldRunIntoLifetime,
   formatDuration,
   formatFriendlyDate,
   loadLifetimeStats,
+  loadStatsSyncAccountId,
+  loadStatsSyncBaseline,
+  loadStatsSyncLastAt,
   saveLifetimeStats,
+  saveStatsSyncAccountId,
+  saveStatsSyncBaseline,
 } from './stats'
 import type { LifetimeStats, RunStats } from './stats'
 import {
@@ -1598,6 +1606,13 @@ function App() {
   const submitEndlessGlobal = useMutation(api.leaderboard.submitEndlessScore)
   const submitDailyGlobal = useMutation(api.leaderboard.submitDailyScore)
   const submitCoopGlobal = useMutation(api.leaderboard.submitCoopScore)
+  const mergeAccountStats = useMutation(api.accountStats.mergeMyStats)
+  const { signIn, signOut } = useAuthActions()
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth()
+  const accountStatsQuery = useQuery(
+    api.accountStats.getMyStats,
+    isAuthenticated ? {} : 'skip',
+  )
   // Track whether we've already attempted to join the current room so a
   // single failure or a full-room error doesn't get retried in a loop on
   // every render.
@@ -1738,6 +1753,19 @@ function App() {
   // a peer surface — same overlay treatment, just rendering the
   // lifetime totals instead.
   const [showStats, setShowStats] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
+  const [accountFormVisible, setAccountFormVisible] = useState(false)
+  const [accountMode, setAccountMode] = useState<'signIn' | 'signUp'>('signIn')
+  const [accountEmail, setAccountEmail] = useState('')
+  const [accountPassword, setAccountPassword] = useState('')
+  const [accountMessage, setAccountMessage] = useState<string | null>(null)
+  const [accountError, setAccountError] = useState<string | null>(null)
+  const [accountSyncState, setAccountSyncState] = useState<
+    'idle' | 'syncing' | 'synced'
+  >('idle')
+  const [statsSyncLastAt, setStatsSyncLastAt] = useState<number | null>(() =>
+    typeof window === 'undefined' ? null : loadStatsSyncLastAt(),
+  )
   // Daily-history calendar modal. Toggled from the History button
   // we slot into the daily-mode top bar, and powers the past-day
   // replay flow (any cleared / played day on the calendar is
@@ -1766,6 +1794,50 @@ function App() {
       ? createEmptyLifetimeStats()
       : loadLifetimeStats(),
   )
+  const syncStatsToAccount = useCallback(
+    async (stats: LifetimeStats, accountIdOverride?: string) => {
+      const accountId =
+        accountIdOverride ?? accountStatsQuery?.userId ?? loadStatsSyncAccountId()
+      if (!accountId) return null
+      setAccountSyncState('syncing')
+      setAccountError(null)
+      try {
+        const baseline = loadStatsSyncBaseline(accountId)
+        const delta = calculateStatsSyncDelta(stats, baseline)
+        const merged = await mergeAccountStats({ delta })
+        saveLifetimeStats(merged)
+        saveStatsSyncAccountId(accountId)
+        saveStatsSyncBaseline(accountId, merged)
+        setStatsSyncLastAt(loadStatsSyncLastAt())
+        setLifetimeStats(merged)
+        setAccountSyncState('synced')
+        setAccountMessage('Stats synced. This device now shows your combined total.')
+        return merged
+      } catch (err) {
+        setAccountSyncState('idle')
+        setAccountError(
+          err instanceof Error ? err.message : 'Stats sync did not complete.',
+        )
+        return null
+      }
+    },
+    [accountStatsQuery?.userId, mergeAccountStats],
+  )
+  const autoSyncedAccountRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isAuthenticated || !accountStatsQuery?.userId) {
+      autoSyncedAccountRef.current = null
+      return
+    }
+    if (autoSyncedAccountRef.current === accountStatsQuery.userId) return
+    autoSyncedAccountRef.current = accountStatsQuery.userId
+    void syncStatsToAccount(lifetimeStats, accountStatsQuery.userId)
+  }, [
+    accountStatsQuery?.userId,
+    isAuthenticated,
+    lifetimeStats,
+    syncStatsToAccount,
+  ])
   // Which leaderboard tab the High Scores modal is currently showing.
   // The modal used to stack endless + daily (+ co-op when global was
   // on) end-to-end, which made the page get long. Now we render
@@ -3250,6 +3322,9 @@ function App() {
           coopPartnerIds: partnerIds,
         })
         saveLifetimeStats(next)
+        if (isAuthenticated) {
+          void syncStatsToAccount(next)
+        }
         return next
       })
     }
@@ -3265,6 +3340,8 @@ function App() {
     game.moves,
     game.dailyCompleted,
     isMultiplayer,
+    isAuthenticated,
+    syncStatsToAccount,
   ])
 
   const isActivelyPlaying =
@@ -3272,6 +3349,7 @@ function App() {
     !showMenu &&
     !showHighScores &&
     !showStats &&
+    !showAccount &&
     !showScoring &&
     !showDailyHistory
   useEffect(() => {
@@ -3290,6 +3368,46 @@ function App() {
     }, 500)
     return () => window.clearInterval(interval)
   }, [isActivelyPlaying])
+
+  const handleAccountSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setAccountError(null)
+    setAccountMessage(null)
+    setAccountSyncState('syncing')
+    try {
+      await signIn('password', {
+        email: accountEmail.trim(),
+        password: accountPassword,
+        flow: accountMode,
+      })
+      setAccountMessage('Signed in. Combining this device with online stats...')
+      setAccountPassword('')
+    } catch (err) {
+      setAccountSyncState('idle')
+      setAccountError(
+        err instanceof Error
+          ? err.message
+          : accountMode === 'signUp'
+          ? 'Could not create account.'
+          : 'Could not sign in.',
+      )
+    }
+  }
+
+  const handleAccountSignOut = async () => {
+    setAccountError(null)
+    setAccountMessage(null)
+    setAccountSyncState('syncing')
+    try {
+      await signOut()
+      clearStatsSyncAccountId()
+      setAccountSyncState('idle')
+      setAccountMessage('Signed out. Local stats remain on this device.')
+    } catch (err) {
+      setAccountSyncState('idle')
+      setAccountError(err instanceof Error ? err.message : 'Could not sign out.')
+    }
+  }
 
   // Snap the gameover endless leaderboard to whichever page contains
   // the player's just-saved row, so the modal opens framed on their
@@ -6694,6 +6812,33 @@ function App() {
                   </button>
                 </div>
 
+                <div className="hexaclear-menu-account">
+                  <div>
+                    <div className="hexaclear-menu-account-label">Stats sync</div>
+                    <div className="hexaclear-menu-account-status">
+                      {authLoading
+                        ? 'Checking account...'
+                        : isAuthenticated
+                        ? accountSyncState === 'syncing'
+                          ? 'Syncing online stats...'
+                          : 'Signed in'
+                        : 'Local stats only'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-account-button"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowAccount(true)
+                    }}
+                  >
+                    {isAuthenticated ? 'Manage' : 'Sign in'}
+                  </button>
+                </div>
+
                 <div className="hexaclear-menu-settings">
                   <div className="hexaclear-menu-settings-label">Settings</div>
                   {isMultiplayer && (
@@ -6795,6 +6940,217 @@ function App() {
               </div>
             </div>
           )}
+          {showAccount && (() => {
+            const totalGames =
+              lifetimeStats.gamesPlayedEndless +
+              lifetimeStats.gamesPlayedDaily +
+              lifetimeStats.gamesPlayedCoop
+            const summaryItems: StatDatum[] = [
+              {
+                key: 'games',
+                label: 'Games',
+                value: String(totalGames),
+              },
+              {
+                key: 'rubies',
+                label: 'Rubies',
+                value: String(lifetimeStats.rubiesCleared),
+              },
+              {
+                key: 'score',
+                label: 'Score',
+                value: String(lifetimeStats.totalScore),
+              },
+              {
+                key: 'time',
+                label: 'Time',
+                value: formatDuration(lifetimeStats.totalActivePlayMs),
+              },
+            ]
+            const lastSyncedLabel =
+              statsSyncLastAt === null
+                ? null
+                : `Last synced ${formatFriendlyDate(statsSyncLastAt)}`
+
+            return (
+              <div
+                className="hexaclear-overlay"
+                onPointerDown={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  playUiClick()
+                  setShowAccount(false)
+                  setShowMenu(true)
+                }}
+              >
+                <div className="hexaclear-overlay-card hexaclear-account-card">
+                  <div className="title">Stats Sync</div>
+                  <div className="hexaclear-account-copy">
+                    <strong>Your stats on this device will be added to your online stats.</strong>
+                    <span>
+                      Nothing local will be lost. After sync, this device will show
+                      the combined online total.
+                    </span>
+                  </div>
+                  <div className="hexaclear-account-summary">
+                    {summaryItems.map((item) => (
+                      <div key={item.key} className="hexaclear-account-stat">
+                        <span>{item.value}</span>
+                        <strong>{item.label}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  {accountError && (
+                    <div className="hexaclear-account-message is-error">
+                      {accountError}
+                    </div>
+                  )}
+                  {accountMessage && (
+                    <div className="hexaclear-account-message">
+                      {accountMessage}
+                    </div>
+                  )}
+                  {isAuthenticated ? (
+                    <div className="hexaclear-account-actions">
+                      <div className="hexaclear-account-online">
+                        <span>
+                          {accountStatsQuery?.email ?? 'Signed in account'}
+                        </span>
+                        <strong>
+                          {accountSyncState === 'syncing'
+                            ? 'Syncing...'
+                            : lastSyncedLabel ?? 'Ready to sync'}
+                        </strong>
+                      </div>
+                      <button
+                        type="button"
+                        className="hexaclear-reset"
+                        disabled={accountSyncState === 'syncing'}
+                        onClick={() => {
+                          playUiClick()
+                          void syncStatsToAccount(lifetimeStats)
+                        }}
+                      >
+                        Sync now
+                      </button>
+                      <button
+                        type="button"
+                        className="hexaclear-menu-danger-button"
+                        disabled={accountSyncState === 'syncing'}
+                        onClick={() => {
+                          playUiClick()
+                          void handleAccountSignOut()
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {!accountFormVisible ? (
+                        <div className="hexaclear-account-actions">
+                          <button
+                            type="button"
+                            className="hexaclear-reset"
+                            onClick={() => {
+                              playUiClick()
+                              setAccountMode('signIn')
+                              setAccountFormVisible(true)
+                            }}
+                          >
+                            Continue to sign in
+                          </button>
+                          <button
+                            type="button"
+                            className="hexaclear-menu-account-secondary"
+                            onClick={() => {
+                              playUiClick()
+                              setAccountMode('signUp')
+                              setAccountFormVisible(true)
+                            }}
+                          >
+                            Create account
+                          </button>
+                        </div>
+                      ) : (
+                        <form
+                          className="hexaclear-account-form"
+                          onSubmit={handleAccountSubmit}
+                        >
+                          <div className="hexaclear-account-mode-row">
+                            <button
+                              type="button"
+                              className={
+                                accountMode === 'signIn' ? 'is-active' : ''
+                              }
+                              onClick={() => setAccountMode('signIn')}
+                            >
+                              Sign in
+                            </button>
+                            <button
+                              type="button"
+                              className={
+                                accountMode === 'signUp' ? 'is-active' : ''
+                              }
+                              onClick={() => setAccountMode('signUp')}
+                            >
+                              Create
+                            </button>
+                          </div>
+                          <label>
+                            <span>Email</span>
+                            <input
+                              type="email"
+                              value={accountEmail}
+                              autoComplete="email"
+                              required
+                              onChange={(e) => setAccountEmail(e.target.value)}
+                            />
+                          </label>
+                          <label>
+                            <span>Password</span>
+                            <input
+                              type="password"
+                              value={accountPassword}
+                              autoComplete={
+                                accountMode === 'signUp'
+                                  ? 'new-password'
+                                  : 'current-password'
+                              }
+                              minLength={8}
+                              required
+                              onChange={(e) => setAccountPassword(e.target.value)}
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            className="hexaclear-reset"
+                            disabled={accountSyncState === 'syncing' || authLoading}
+                          >
+                            {accountSyncState === 'syncing'
+                              ? 'Working...'
+                              : accountMode === 'signUp'
+                              ? 'Create and sync'
+                              : 'Sign in and sync'}
+                          </button>
+                        </form>
+                      )}
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="hexaclear-reset"
+                    onClick={() => {
+                      playUiClick()
+                      setShowAccount(false)
+                      setShowMenu(true)
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
           {showScoring && (
             <div
               className="hexaclear-overlay"

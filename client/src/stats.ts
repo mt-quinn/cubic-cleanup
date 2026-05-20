@@ -66,6 +66,11 @@ export type LifetimeStats = {
 }
 
 export const STATS_KEY = 'cubic-stats-v1'
+export const STATS_SYNC_ACCOUNT_KEY = 'cubic-stats-sync-account-id'
+export const STATS_SYNC_LAST_AT_KEY = 'cubic-stats-sync-last-at'
+
+const statsSyncBaselineKey = (accountId: string) =>
+  `cubic-stats-sync-baseline-${accountId}`
 
 export const createEmptyRunStats = (now: number = Date.now()): RunStats => ({
   startedAt: now,
@@ -154,6 +159,174 @@ export const saveLifetimeStats = (stats: LifetimeStats): void => {
   } catch {
     // Quota exceeded / disabled storage / private browsing — silently
     // skip. Stats are best-effort.
+  }
+}
+
+const parseLifetimeStats = (raw: string | null): LifetimeStats | null => {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<LifetimeStats>
+    if (!parsed || typeof parsed !== 'object') return null
+    const base = createEmptyLifetimeStats()
+    return {
+      ...base,
+      ...parsed,
+      dailyDaysCleared: Array.isArray(parsed.dailyDaysCleared)
+        ? parsed.dailyDaysCleared.filter((s) => typeof s === 'string')
+        : [],
+      dailyDaysPlayed: Array.isArray(parsed.dailyDaysPlayed)
+        ? parsed.dailyDaysPlayed.filter((s) => typeof s === 'string')
+        : [],
+      coopPartnerIds: Array.isArray(parsed.coopPartnerIds)
+        ? parsed.coopPartnerIds.filter((s) => typeof s === 'string')
+        : [],
+      startedTrackingAt:
+        typeof parsed.startedTrackingAt === 'number' &&
+        parsed.startedTrackingAt > 0 &&
+        parsed.startedTrackingAt <= Date.now() + 1000
+          ? parsed.startedTrackingAt
+          : base.startedTrackingAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export const loadStatsSyncAccountId = (): string | null => {
+  try {
+    if (typeof window === 'undefined') return null
+    const raw = window.localStorage.getItem(STATS_SYNC_ACCOUNT_KEY)
+    return raw && raw.length > 0 ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export const saveStatsSyncAccountId = (accountId: string): void => {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(STATS_SYNC_ACCOUNT_KEY, accountId)
+  } catch {
+    // Best-effort UI metadata.
+  }
+}
+
+export const clearStatsSyncAccountId = (): void => {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.removeItem(STATS_SYNC_ACCOUNT_KEY)
+  } catch {
+    // Best-effort UI metadata.
+  }
+}
+
+export const loadStatsSyncBaseline = (
+  accountId: string,
+): LifetimeStats | null => {
+  try {
+    if (typeof window === 'undefined') return null
+    return parseLifetimeStats(
+      window.localStorage.getItem(statsSyncBaselineKey(accountId)),
+    )
+  } catch {
+    return null
+  }
+}
+
+export const saveStatsSyncBaseline = (
+  accountId: string,
+  stats: LifetimeStats,
+): void => {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(statsSyncBaselineKey(accountId), JSON.stringify(stats))
+    window.localStorage.setItem(STATS_SYNC_LAST_AT_KEY, String(Date.now()))
+  } catch {
+    // Best-effort; stats still remain local.
+  }
+}
+
+export const loadStatsSyncLastAt = (): number | null => {
+  try {
+    if (typeof window === 'undefined') return null
+    const raw = window.localStorage.getItem(STATS_SYNC_LAST_AT_KEY)
+    if (!raw) return null
+    const value = Number(raw)
+    return Number.isFinite(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
+const positiveDelta = (current: number, baseline: number): number =>
+  Math.max(0, Math.round(current - baseline))
+
+const newSetValues = (current: string[], baseline: string[]): string[] => {
+  const baselineSet = new Set(baseline)
+  return Array.from(
+    new Set(current.filter((value) => value && !baselineSet.has(value))),
+  )
+}
+
+// Compute the one-time local contribution to upload for an account. For a
+// first sync there is no baseline, so the whole local profile is added; after
+// a successful merge, the returned server snapshot becomes the baseline and
+// future uploads contain only newly earned local totals.
+export const calculateStatsSyncDelta = (
+  current: LifetimeStats,
+  baseline: LifetimeStats | null,
+): LifetimeStats => {
+  const base = baseline ?? createEmptyLifetimeStats(current.startedTrackingAt)
+  return {
+    startedTrackingAt: current.startedTrackingAt,
+    totalActivePlayMs: positiveDelta(
+      current.totalActivePlayMs,
+      base.totalActivePlayMs,
+    ),
+    gamesPlayedEndless: positiveDelta(
+      current.gamesPlayedEndless,
+      base.gamesPlayedEndless,
+    ),
+    gamesPlayedDaily: positiveDelta(
+      current.gamesPlayedDaily,
+      base.gamesPlayedDaily,
+    ),
+    gamesPlayedCoop: positiveDelta(current.gamesPlayedCoop, base.gamesPlayedCoop),
+    piecesPlaced: positiveDelta(current.piecesPlaced, base.piecesPlaced),
+    cubesPlaced: positiveDelta(current.cubesPlaced, base.cubesPlaced),
+    patternsCleared: positiveDelta(
+      current.patternsCleared,
+      base.patternsCleared,
+    ),
+    rubiesCleared: positiveDelta(current.rubiesCleared, base.rubiesCleared),
+    boardClears: positiveDelta(current.boardClears, base.boardClears),
+    totalScore: positiveDelta(current.totalScore, base.totalScore),
+    scoredGamesPlayed: positiveDelta(
+      current.scoredGamesPlayed,
+      base.scoredGamesPlayed,
+    ),
+    bestEndlessScore:
+      current.bestEndlessScore > base.bestEndlessScore
+        ? current.bestEndlessScore
+        : 0,
+    bestDailyMoves:
+      current.bestDailyMoves !== null &&
+      (base.bestDailyMoves === null || current.bestDailyMoves < base.bestDailyMoves)
+        ? current.bestDailyMoves
+        : null,
+    bestCombo: current.bestCombo > base.bestCombo ? current.bestCombo : 1,
+    bestStreak: current.bestStreak > base.bestStreak ? current.bestStreak : 0,
+    bestSinglePlacement:
+      current.bestSinglePlacement > base.bestSinglePlacement
+        ? current.bestSinglePlacement
+        : 0,
+    longestRunMs: current.longestRunMs > base.longestRunMs ? current.longestRunMs : 0,
+    dailyDaysCleared: newSetValues(
+      current.dailyDaysCleared,
+      base.dailyDaysCleared,
+    ),
+    dailyDaysPlayed: newSetValues(current.dailyDaysPlayed, base.dailyDaysPlayed),
+    coopPartnerIds: newSetValues(current.coopPartnerIds, base.coopPartnerIds),
   }
 }
 

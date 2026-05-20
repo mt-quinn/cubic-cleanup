@@ -8,7 +8,10 @@
  * @module
  */
 
+import type * as accountStats from "../accountStats.js";
+import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
+import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as rooms from "../rooms.js";
 
@@ -19,7 +22,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountStats: typeof accountStats;
+  auth: typeof auth;
   crons: typeof crons;
+  http: typeof http;
   leaderboard: typeof leaderboard;
   rooms: typeof rooms;
 }>;
