@@ -1609,13 +1609,8 @@ body {
   position: absolute;
   inset: 0;
   display: flex;
-  /* `safe center` keeps short cards centered but pins overflowing
-     cards to the top so the player can scroll them — without
-     `safe`, a too-tall card overflows above the viewport and is
-     unreachable. */
-  align-items: safe center;
+  align-items: center;
   justify-content: center;
-  padding: 1rem;
   background: radial-gradient(circle, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.95));
   /* Tall modal cards (e.g. high scores with many entries) can overflow
      the board wrapper and visually extend down over the hand area.
@@ -1624,11 +1619,6 @@ body {
      intercepted by hand-piece slots. Lift the overlay above all
      in-game UI so the modal always wins. */
   z-index: 50;
-  /* Allow the modal card to scroll inside the overlay when it
-     genuinely is too tall for the viewport (a 9-tile run on a
-     short phone, big leaderboard, etc.) — without this the card
-     just got clipped against the chrome above and below it. */
-  overflow-y: auto;
 }
 
 .hexaclear-overlay-card {
