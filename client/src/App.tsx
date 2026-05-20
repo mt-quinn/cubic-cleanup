@@ -5369,6 +5369,114 @@ function App() {
       )}
 
       <main className="hexaclear-main">
+        {/* PvP territory race bar lives ABOVE the board in its own
+            row so it never overlaps the play surface (the old
+            board-HUD overlay path was centering it vertically over
+            the cubes). The bar shows every seated player's territory
+            share, with a threshold marker for the win line and a
+            small legend strip below. */}
+        {isMultiplayer && mp.mode === 'pvp' && (() => {
+          const standings = mp.pvpStandings
+          const thresholdPct = Math.min(1, mp.pvpThresholdRatio) * 100
+          const selfId = mp.selfPlayer?.playerId ?? null
+          const nameByPlayerId = new Map<string, string>()
+          for (const p of mp.allPlayers) nameByPlayerId.set(p.playerId, p.name)
+          const colorForPlayer = (pid: string): string =>
+            tintCubeColor(
+              WOOD_CUBE_LEFT_HEX,
+              mp.hueShiftByPlayerId[pid] ?? 0,
+              0.05,
+              0.95,
+            )
+          const ariaLabel =
+            standings
+              .map((s) => {
+                const name =
+                  s.playerId === selfId
+                    ? 'You'
+                    : nameByPlayerId.get(s.playerId) ?? 'Player'
+                return `${name} ${Math.round(s.ratio * 100)}%`
+              })
+              .join(', ') || 'No territory yet'
+          return (
+            <div
+              className="hexaclear-pvp-banner hexaclear-pvp-hud"
+              aria-label={`Territory: ${ariaLabel}. Win threshold ${Math.round(
+                thresholdPct,
+              )}%.`}
+            >
+              <div
+                className={[
+                  'hexaclear-pvp-bar',
+                  mp.winnerPlayerId ? 'is-won' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                role="img"
+              >
+                {standings.map((s) => {
+                  const w = Math.max(0, s.ratio) * 100
+                  if (w <= 0) return null
+                  const isSelfSeg = s.playerId === selfId
+                  return (
+                    <div
+                      key={s.playerId}
+                      className={[
+                        'hexaclear-pvp-bar-seg',
+                        isSelfSeg ? 'is-self' : '',
+                        mp.winnerPlayerId === s.playerId
+                          ? 'is-winner'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={{
+                        width: `${w}%`,
+                        background: colorForPlayer(s.playerId),
+                      }}
+                    />
+                  )
+                })}
+                <div
+                  className="hexaclear-pvp-bar-threshold"
+                  style={{ left: `${thresholdPct}%` }}
+                  aria-hidden="true"
+                />
+              </div>
+              <div className="hexaclear-pvp-legend">
+                {standings.map((s) => {
+                  const name =
+                    s.playerId === selfId
+                      ? 'You'
+                      : nameByPlayerId.get(s.playerId) ?? 'Player'
+                  return (
+                    <span
+                      key={s.playerId}
+                      className={[
+                        'hexaclear-pvp-legend-entry',
+                        s.playerId === selfId ? 'is-self' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <span
+                        className="hexaclear-pvp-legend-swatch"
+                        style={{ background: colorForPlayer(s.playerId) }}
+                        aria-hidden="true"
+                      />
+                      <span className="hexaclear-pvp-legend-name">
+                        {name}
+                      </span>
+                      <span className="hexaclear-pvp-legend-pct">
+                        {Math.round(s.ratio * 100)}%
+                      </span>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
         <div
           className={[
             'hexaclear-board-wrapper',
@@ -6051,124 +6159,15 @@ function App() {
               aria-hidden="true"
             />
           )}
-          <div
-            className={[
-              'hexaclear-board-hud',
-              isMultiplayer && mp.mode === 'pvp'
-                ? 'hexaclear-board-hud-pvp'
-                : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
+          <div className="hexaclear-board-hud">
             {isMultiplayer && mp.mode === 'pvp' ? (
-              // PvP race-bar replaces the streak/score readout. A
-              // single horizontal bar shows every seated player's
-              // territory share with a threshold marker for the win
-              // line, plus a legend strip below. Sits left-of (or
-              // above-of) the copy CTA in the same HUD row.
-              (() => {
-                const standings = mp.pvpStandings
-                const thresholdPct = Math.min(1, mp.pvpThresholdRatio) * 100
-                const selfId = mp.selfPlayer?.playerId ?? null
-                const nameByPlayerId = new Map<string, string>()
-                for (const p of mp.allPlayers) nameByPlayerId.set(p.playerId, p.name)
-                const colorForPlayer = (pid: string): string =>
-                  tintCubeColor(
-                    WOOD_CUBE_LEFT_HEX,
-                    mp.hueShiftByPlayerId[pid] ?? 0,
-                    0.05,
-                    0.95,
-                  )
-                const ariaLabel =
-                  standings
-                    .map((s) => {
-                      const name =
-                        s.playerId === selfId
-                          ? 'You'
-                          : nameByPlayerId.get(s.playerId) ?? 'Player'
-                      return `${name} ${Math.round(s.ratio * 100)}%`
-                    })
-                    .join(', ') || 'No territory yet'
-                return (
-                  <div
-                    className="board-hud-block hexaclear-pvp-hud"
-                    aria-label={`Territory: ${ariaLabel}. Win threshold ${Math.round(
-                      thresholdPct,
-                    )}%.`}
-                  >
-                    <div
-                      className={[
-                        'hexaclear-pvp-bar',
-                        mp.winnerPlayerId ? 'is-won' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      role="img"
-                    >
-                      {standings.map((s) => {
-                        const w = Math.max(0, s.ratio) * 100
-                        if (w <= 0) return null
-                        const isSelfSeg = s.playerId === selfId
-                        return (
-                          <div
-                            key={s.playerId}
-                            className={[
-                              'hexaclear-pvp-bar-seg',
-                              isSelfSeg ? 'is-self' : '',
-                              mp.winnerPlayerId === s.playerId
-                                ? 'is-winner'
-                                : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                            style={{
-                              width: `${w}%`,
-                              background: colorForPlayer(s.playerId),
-                            }}
-                          />
-                        )
-                      })}
-                      <div
-                        className="hexaclear-pvp-bar-threshold"
-                        style={{ left: `${thresholdPct}%` }}
-                        aria-hidden="true"
-                      />
-                    </div>
-                    <div className="hexaclear-pvp-legend">
-                      {standings.map((s) => {
-                        const name =
-                          s.playerId === selfId
-                            ? 'You'
-                            : nameByPlayerId.get(s.playerId) ?? 'Player'
-                        return (
-                          <span
-                            key={s.playerId}
-                            className={[
-                              'hexaclear-pvp-legend-entry',
-                              s.playerId === selfId ? 'is-self' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                          >
-                            <span
-                              className="hexaclear-pvp-legend-swatch"
-                              style={{ background: colorForPlayer(s.playerId) }}
-                              aria-hidden="true"
-                            />
-                            <span className="hexaclear-pvp-legend-name">
-                              {name}
-                            </span>
-                            <span className="hexaclear-pvp-legend-pct">
-                              {Math.round(s.ratio * 100)}%
-                            </span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()
+              // PvP renders no left-side overlay block — the race bar
+              // lives in its own dedicated row above the board (see
+              // `.hexaclear-pvp-banner` mounted as a sibling of
+              // `.hexaclear-board-wrapper`). Keeping a placeholder
+              // here preserves the flex layout so the Copy Link CTA
+              // sits in its usual right-side slot.
+              <div className="board-hud-block left" aria-hidden="true" />
             ) : game.mode === 'daily' ? (
               <div className="board-hud-block left">
                 {game.moves === 0 ? (

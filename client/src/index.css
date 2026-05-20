@@ -537,17 +537,20 @@ body {
   pointer-events: none;
 }
 
-/* PvP layout variant: the race bar wants the whole HUD width to
-   itself; the copy CTA (when present) drops in beside it on wide
-   screens and stacks on narrow. */
-.hexaclear-board-hud.hexaclear-board-hud-pvp {
-  align-items: center;
-  gap: 0.6rem;
+/* PvP race-bar banner: lifted out of the absolute-positioned board
+   HUD overlay so it sits in its own dedicated row above the board
+   (the overlay path was visually centering the bar over the play
+   surface). Renders as a full-width block at the top of <main>. */
+.hexaclear-pvp-banner {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.45rem 0.5rem;
+  margin: 0 auto 0.4rem;
+  box-sizing: border-box;
 }
 
 .hexaclear-pvp-hud {
   pointer-events: auto;
-  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
