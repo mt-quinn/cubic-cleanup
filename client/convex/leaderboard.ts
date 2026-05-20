@@ -23,8 +23,25 @@ const MAX_NAME_LENGTH = 20
 const ENDLESS_TOP_N = 100
 const DAILY_TOP_N = 100
 const COOP_TOP_N = 100
+const PVP_TOP_N = 100
 const COOP_NAME_SEPARATOR = ' & '
 const MAX_COMBINED_NAME_LENGTH = 80
+
+// Derived "global rank" stat: games played × win rate, where
+// winRate = wins / (wins + losses). Rewards both volume (more games)
+// and skill (higher win share). A player with 10 W / 0 L scores 10;
+// a player with 50 W / 50 L scores 50; a 100-game flat zero scores 0.
+// Shames are folded into losses on submit, so this matches the
+// gameover-time bookkeeping.
+const computePvpRankScore = (
+  wins: number,
+  losses: number,
+  gamesPlayed: number,
+): number => {
+  const ranked = wins + losses
+  if (ranked <= 0) return 0
+  return gamesPlayed * (wins / ranked)
+}
 
 const sanitizeName = (raw: string): string => {
   const trimmed = (raw ?? '').trim()
@@ -376,6 +393,125 @@ export const getCoopScoresForPlayer = query({
         playerIds: e.playerIds,
         playerIdsKey: e.playerIdsKey ?? computeGroupKey(e.playerIds),
       }))
+  },
+})
+
+// ---------- PvP leaderboard --------------------------------------------
+//
+// One row per playerId, mutated each time that player finishes a PvP
+// match. `submitPvpResult` increments the right counter (wins / losses)
+// and recomputes the derived rankScore in the same transaction so
+// the by_rank index stays consistent with the underlying counters.
+// SHAME matches submit as a loss for every seated player — the
+// caller is responsible for firing one submit per local participant.
+export const submitPvpResult = mutation({
+  args: {
+    playerId: v.string(),
+    name: v.string(),
+    outcome: v.union(v.literal('win'), v.literal('loss')),
+  },
+  handler: async (ctx, { playerId, name, outcome }) => {
+    const cleanName = sanitizeName(name)
+    const now = Date.now()
+    const existing = await ctx.db
+      .query('pvpScores')
+      .withIndex('by_player', (q) => q.eq('playerId', playerId))
+      .unique()
+    if (existing) {
+      const wins = existing.wins + (outcome === 'win' ? 1 : 0)
+      const losses = existing.losses + (outcome === 'loss' ? 1 : 0)
+      const gamesPlayed = existing.gamesPlayed + 1
+      await ctx.db.patch(existing._id, {
+        name: cleanName,
+        wins,
+        losses,
+        gamesPlayed,
+        rankScore: computePvpRankScore(wins, losses, gamesPlayed),
+        updatedAt: now,
+      })
+    } else {
+      const wins = outcome === 'win' ? 1 : 0
+      const losses = outcome === 'loss' ? 1 : 0
+      const gamesPlayed = 1
+      await ctx.db.insert('pvpScores', {
+        playerId,
+        name: cleanName,
+        wins,
+        losses,
+        gamesPlayed,
+        rankScore: computePvpRankScore(wins, losses, gamesPlayed),
+        updatedAt: now,
+      })
+    }
+    return null
+  },
+})
+
+// Top N PvP players, ordered by either the derived rank score
+// (default) or raw wins. Reactive — flips immediately when a
+// match submission lands.
+export const getTopPvpScores = query({
+  args: {
+    sortBy: v.union(v.literal('rank'), v.literal('wins')),
+  },
+  handler: async (ctx, { sortBy }) => {
+    const indexName = sortBy === 'wins' ? 'by_wins' : 'by_rank'
+    const rows = await ctx.db
+      .query('pvpScores')
+      .withIndex(indexName)
+      .order('desc')
+      .take(PVP_TOP_N)
+    return rows.map((r) => ({
+      playerId: r.playerId,
+      name: r.name,
+      wins: r.wins,
+      losses: r.losses,
+      gamesPlayed: r.gamesPlayed,
+      rankScore: r.rankScore,
+    }))
+  },
+})
+
+// Rank lookup for a small batch of playerIds (the seated roster of
+// an active PvP match, typically 2–8). Returns the rank-by-
+// rankScore position 1..N for each, or null if the player has no
+// row yet. Collects every row once and walks it in one pass so the
+// per-player cost is constant in seated-roster size.
+export const getPvpRanksForPlayers = query({
+  args: { playerIds: v.array(v.string()) },
+  handler: async (ctx, { playerIds }) => {
+    const out: Record<
+      string,
+      {
+        rank: number
+        wins: number
+        losses: number
+        gamesPlayed: number
+        rankScore: number
+      } | null
+    > = {}
+    for (const pid of playerIds) out[pid] = null
+    if (playerIds.length === 0) return out
+    const wanted = new Set(playerIds)
+    const all = await ctx.db
+      .query('pvpScores')
+      .withIndex('by_rank')
+      .order('desc')
+      .collect()
+    let position = 0
+    for (const row of all) {
+      position += 1
+      if (wanted.has(row.playerId)) {
+        out[row.playerId] = {
+          rank: position,
+          wins: row.wins,
+          losses: row.losses,
+          gamesPlayed: row.gamesPlayed,
+          rankScore: row.rankScore,
+        }
+      }
+    }
+    return out
   },
 })
 

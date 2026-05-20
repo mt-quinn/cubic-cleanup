@@ -29,6 +29,17 @@ export type UseMultiplayerGameArgs = {
   name: string
 }
 
+export type RoomMode = 'coop' | 'pvp'
+
+// Per-player share of the PvP territory. `count` is the raw cell count
+// owned (last clear attribution), `ratio` is count / totalCells. The
+// HUD reads these directly to size race-bar segments and show %s.
+export type PvpStandingsEntry = {
+  playerId: string
+  count: number
+  ratio: number
+}
+
 export type MultiplayerEmote = {
   emoji: string
   ts: number
@@ -63,9 +74,36 @@ export type UseMultiplayerGameResult = {
   // submit the gameover to the global co-op leaderboard.
   updatedAt: number | null
   lastPlacement: MultiplayerLastPlacement | null
+  // Which multiplayer flavor this room is running. Defaults to 'coop'
+  // for any legacy rooms that pre-date the field.
+  mode: RoomMode
   // cellId -> playerId map for partner-piece tinting on the shared
   // board. Empty / undefined when single-player.
   cellOwners: Record<string, string>
+  // Persistent "who last cleared this cell" map. Survives subsequent
+  // fills until another clear overwrites it. Drives the empty-cell
+  // tint render and the PvP territory race.
+  cellTints: Record<string, string>
+  // Cells where the current placer (cellOwners) and the persistent
+  // tinter (cellTints) are different players — a temporary occupant
+  // sitting on someone else's territory. Renderer draws a colored
+  // ring around these.
+  conflictCellIds: Set<string>
+  // Per-player tint counts + ratios for the PvP HUD. Sorted by ratio
+  // desc so the leaderboard renders top-down without re-sorting.
+  // Empty in co-op rooms.
+  pvpStandings: PvpStandingsEntry[]
+  // Total cells on the shared board (denominator for ratios). 0 until
+  // the room's board is observed.
+  pvpTotalCells: number
+  // (1/N) ratio above which a player has crossed the win threshold.
+  // Renderer draws the threshold marker at this position on the race
+  // bar. 0 in co-op.
+  pvpThresholdRatio: number
+  // Set the moment a PvP player crosses the threshold; null in co-op
+  // or when a PvP match ends in SHAME. Drives the win modal vs SHAME
+  // branching at game over.
+  winnerPlayerId: string | null
   // Latest emote per playerId (room.lastEmotes flattened to a map).
   // Clients enforce the 10s display window themselves so a stale ts
   // simply renders as "no emote" without needing a server cleanup.
@@ -284,6 +322,71 @@ export const useMultiplayerGame = ({
     return room.cellOwners
   }, [room])
 
+  const cellTints = useMemo<Record<string, string>>(() => {
+    if (!room || !room.cellTints) return {}
+    return room.cellTints
+  }, [room])
+
+  // Cells where someone has placed a cube (cellOwners) on top of
+  // territory whose tint belongs to a different player (cellTints).
+  // The renderer puts a ring around these so the conflict reads at a
+  // glance.
+  const conflictCellIds = useMemo<Set<string>>(() => {
+    const out = new Set<string>()
+    if (!room || !room.cellOwners || !room.cellTints) return out
+    for (const [cellId, ownerId] of Object.entries(room.cellOwners)) {
+      const tintId = room.cellTints[cellId]
+      if (tintId && tintId !== ownerId) out.add(cellId)
+    }
+    return out
+  }, [room])
+
+  const mode: RoomMode = (room?.mode ?? 'coop') as RoomMode
+
+  const pvpTotalCells = useMemo<number>(() => {
+    if (!room) return 0
+    return Object.keys(room.board).length
+  }, [room])
+
+  // Per-player territory totals + ratios, sorted high → low so the
+  // HUD's leader is always first. Only seated players appear (a
+  // disconnected player's tints survive on the board but they no
+  // longer count toward standings, matching the server-side win
+  // check).
+  const pvpStandings = useMemo<PvpStandingsEntry[]>(() => {
+    if (!room || mode !== 'pvp') return []
+    const tints = room.cellTints ?? {}
+    const seatedIds = new Set(room.players.map((p) => p.playerId))
+    const counts = new Map<string, number>()
+    for (const seatedId of seatedIds) counts.set(seatedId, 0)
+    for (const tintId of Object.values(tints)) {
+      if (!seatedIds.has(tintId)) continue
+      counts.set(tintId, (counts.get(tintId) ?? 0) + 1)
+    }
+    const total = pvpTotalCells || 1
+    const entries: PvpStandingsEntry[] = []
+    for (const [pid, count] of counts.entries()) {
+      entries.push({ playerId: pid, count, ratio: count / total })
+    }
+    entries.sort((a, b) => b.ratio - a.ratio)
+    return entries
+  }, [room, mode, pvpTotalCells])
+
+  // Win threshold ratio used for the race-bar marker and "to win"
+  // copy in the PvP UI. Mirrors the server-side rule (1/N + 0.05 of
+  // the board, equivalent to (100/N)+5%) so the visual marker lines
+  // up exactly with the cell count that triggers a win.
+  const pvpThresholdRatio = useMemo<number>(() => {
+    if (mode !== 'pvp') return 0
+    const n = room?.players.length ?? 0
+    if (n <= 0) return 0
+    return Math.min(1, 1 / n + 0.05)
+  }, [mode, room])
+
+  const winnerPlayerId: string | null = (room?.winnerPlayerId ?? null) as
+    | string
+    | null
+
   const emoteByPlayerId = useMemo<Record<string, MultiplayerEmote>>(() => {
     if (!room) return {}
     const out: Record<string, MultiplayerEmote> = {}
@@ -350,7 +453,14 @@ export const useMultiplayerGame = ({
     allPlayers,
     updatedAt: room?.updatedAt ?? null,
     lastPlacement: room?.lastPlacement ?? null,
+    mode,
     cellOwners,
+    cellTints,
+    conflictCellIds,
+    pvpStandings,
+    pvpTotalCells,
+    pvpThresholdRatio,
+    winnerPlayerId,
     emoteByPlayerId,
     hoverByPlayerId,
     hueShiftByPlayerId,

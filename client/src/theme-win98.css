@@ -397,6 +397,66 @@
   text-transform: none;
 }
 
+/* Narrow viewports (mobile portrait): the 4-pill toolbar +
+   ⚙️ Menu can blow past the room width once a Daily-mode "History"
+   button is along for the ride. Shrink padding / font / icon
+   density first so the bar collapses to one row before resorting
+   to wrap. Keeps tap targets >=30px tall, which is still in
+   acceptable touch range. */
+@media (max-width: 480px) {
+  [data-theme="win98"] .hexaclear-mode-toggle .mode-pill,
+  [data-theme="win98"] .hexaclear-menu-button,
+  [data-theme="win98"] .hexaclear-scores-tab {
+    font-size: 13px;
+    padding: 5px 9px;
+    min-height: 30px;
+    margin: 1px;
+  }
+  [data-theme="win98"] .hexaclear-mode-toggle .mode-pill:active,
+  [data-theme="win98"] .hexaclear-menu-button:active,
+  [data-theme="win98"] .hexaclear-scores-tab:active {
+    padding: 6px 8px 4px 10px;
+  }
+  [data-theme="win98"] .hexaclear-mode-toggle .mode-pill.active,
+  [data-theme="win98"] .hexaclear-scores-tab.is-active {
+    padding: 6px 8px 4px 10px;
+  }
+  [data-theme="win98"] .hexaclear-menu-button {
+    gap: 4px;
+  }
+  [data-theme="win98"] .hexaclear-menu-button-icon,
+  [data-theme="win98"] .hexaclear-menu-button-label {
+    font-size: 13px;
+  }
+}
+
+/* Extra-narrow viewports (small phones): drop the decorative
+   ⚙️ icon from the Menu button entirely — the "Menu" word alone
+   still reads. Squeeze padding another notch so the strip
+   definitely fits Endless | Daily | Multi | History | Menu on
+   one line at ~340px viewport width. */
+@media (max-width: 380px) {
+  [data-theme="win98"] .hexaclear-mode-toggle .mode-pill,
+  [data-theme="win98"] .hexaclear-menu-button,
+  [data-theme="win98"] .hexaclear-scores-tab {
+    font-size: 12px;
+    padding: 4px 7px;
+  }
+  [data-theme="win98"] .hexaclear-mode-toggle .mode-pill:active,
+  [data-theme="win98"] .hexaclear-menu-button:active,
+  [data-theme="win98"] .hexaclear-scores-tab:active,
+  [data-theme="win98"] .hexaclear-mode-toggle .mode-pill.active,
+  [data-theme="win98"] .hexaclear-scores-tab.is-active {
+    padding: 5px 6px 3px 8px;
+  }
+  [data-theme="win98"] .hexaclear-menu-button-icon {
+    display: none;
+  }
+  [data-theme="win98"] .hexaclear-menu-button-label {
+    font-size: 12px;
+  }
+}
+
 /* Hide the Wood-theme best banner + live-stat — Win98 surfaces
    these in the LCD row below. */
 [data-theme="win98"] .hexaclear-best-banner,
@@ -633,6 +693,28 @@
   fill: var(--w98-partner-fill-tint, var(--w98-cube-fill-partner));
 }
 
+/* PvP territory tints in Win98. The wood theme uses a translucent
+   warm flood; Win98's flat palette would muddy that, so we use a
+   subtle solid wash inside the otherwise-empty cell instead. */
+[data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-partner {
+  fill: var(--cell-tint-color, #b9d0c8);
+  fill-opacity: 0.55;
+}
+
+[data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-self {
+  fill: var(--cell-tint-color, #e2dfb5);
+  fill-opacity: 0.5;
+}
+
+/* Conflict ring in Win98: a 1.5px dashed outline so it reads as
+   "marked territory" without breaking the chrome aesthetic. */
+[data-theme="win98"] .hexaclear-hex-conflict-ring {
+  stroke: var(--cell-conflict-color, var(--w98-text));
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+  opacity: 1;
+}
+
 /* Live partner-hover ghosts in Win98: the cube-faces silhouette
    used by the wood theme is `display: none` here (cube faces are
    hidden globally in Win98), so we instead reveal the flat polygon
@@ -755,6 +837,237 @@
 [data-theme="win98"] .hexaclear-coop-cta.is-copied {
   background: #6fbcbc;
   color: var(--w98-text);
+}
+
+/* Pre-room Co-op | PvP toggle styled as classic Win98 push-button
+   group: flat surface, recessed bevel on the active option, square
+   corners, no glow. */
+[data-theme="win98"] .hexaclear-coop-mode-toggle {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 2px;
+  gap: 2px;
+}
+
+[data-theme="win98"] .hexaclear-coop-mode-pill {
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border: 2px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-shadow)
+    var(--w98-shadow)
+    var(--w98-highlight);
+  border-radius: 0;
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 2px 10px;
+}
+
+[data-theme="win98"] .hexaclear-coop-mode-pill.is-active {
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow: inset 1px 1px 0 var(--w98-shadow);
+}
+
+/* PvP race bar in Win98: flat surface with the standard sunken
+   bevel, square corners, and no glow. Threshold marker reads as a
+   classic black notch instead of a glowing line. */
+[data-theme="win98"] .hexaclear-pvp-bar {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  border-radius: 0;
+  box-shadow: none;
+  height: 18px;
+}
+
+[data-theme="win98"] .hexaclear-pvp-bar-seg {
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.5),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="win98"] .hexaclear-pvp-bar-threshold {
+  background: var(--w98-text);
+  box-shadow: none;
+  top: -1px;
+  bottom: -1px;
+}
+
+[data-theme="win98"] .hexaclear-pvp-legend {
+  color: var(--w98-text);
+  text-shadow: none;
+}
+
+[data-theme="win98"] .hexaclear-pvp-legend-swatch {
+  border: 1px solid var(--w98-deep-shadow);
+  box-shadow: none;
+}
+
+/* PvP gameover modal in Win98: flat backgrounds, Tahoma headings,
+   no glow. SHAME headline becomes a big dimmed system-font label,
+   WIN headline a normal-weight system title. */
+[data-theme="win98"] .hexaclear-pvp-gameover {
+  background: var(--w98-surface) !important;
+  filter: none !important;
+}
+
+[data-theme="win98"] .hexaclear-pvp-shame-title,
+[data-theme="win98"] .hexaclear-pvp-win-title {
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  color: var(--w98-text-on-navy) !important;
+  text-shadow: none !important;
+  background: var(--w98-titlebar);
+  margin: 2px !important;
+  padding: 3px 6px !important;
+  text-align: left;
+  font-size: 16px !important;
+  animation: none !important;
+}
+
+[data-theme="win98"] .hexaclear-pvp-shame-subtitle {
+  font-family: inherit !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em;
+  color: var(--w98-text) !important;
+  font-size: 18px !important;
+  text-transform: none;
+  margin: 0.4rem 0;
+}
+
+[data-theme="win98"] .hexaclear-pvp-shame-blurb,
+[data-theme="win98"] .hexaclear-pvp-win-subtitle {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+}
+
+[data-theme="win98"] .hexaclear-pvp-standings {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  border-radius: 0;
+}
+
+[data-theme="win98"] .hexaclear-pvp-standings-row {
+  color: var(--w98-text);
+  font-family: inherit;
+}
+
+[data-theme="win98"] .hexaclear-pvp-standings-row.is-winner {
+  background: var(--w98-titlebar);
+  color: var(--w98-text-on-navy);
+}
+
+[data-theme="win98"] .hexaclear-pvp-standings-swatch {
+  border: 1px solid var(--w98-deep-shadow);
+  box-shadow: none;
+}
+
+/* PvP global-rank chip under the SmileyRow names in Win98: flatten
+   to a plain inline text label with parens for the system-font
+   aesthetic. No pill background; no rounded corners. */
+[data-theme="win98"] .hexaclear-smiley-rank {
+  background: transparent !important;
+  border: none !important;
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-weight: 700;
+  font-size: 11px !important;
+  padding: 0 !important;
+  margin-top: 1px;
+  letter-spacing: 0 !important;
+}
+[data-theme="win98"] .hexaclear-smiley-rank.is-unranked {
+  color: var(--w98-shadow) !important;
+  font-weight: 400 !important;
+  font-style: italic;
+  font-size: 10px !important;
+}
+
+/* PvP leaderboard tab in Win98: flatten sort toggle, header row,
+   and value pills so the chrome matches the rest of the modal. */
+[data-theme="win98"] .hexaclear-pvp-sort-toggle {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  border-radius: 0;
+  padding: 2px;
+}
+
+[data-theme="win98"] .hexaclear-pvp-sort-pill {
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border: 2px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-shadow)
+    var(--w98-shadow)
+    var(--w98-highlight);
+  border-radius: 0;
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 2px 10px;
+}
+
+[data-theme="win98"] .hexaclear-pvp-sort-pill.is-active {
+  background: var(--w98-surface);
+  color: var(--w98-text);
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow: inset 1px 1px 0 var(--w98-shadow);
+}
+
+[data-theme="win98"] .hexaclear-pvp-scores-header {
+  color: var(--w98-text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: inherit;
+  font-weight: 700;
+  border-bottom-color: var(--w98-shadow);
+}
+
+[data-theme="win98"] .hexaclear-pvp-record {
+  color: var(--w98-text);
+}
+
+[data-theme="win98"] .hexaclear-pvp-record-rate {
+  color: var(--w98-deep-shadow);
+  opacity: 0.75;
 }
 [data-theme="win98"] .hexaclear-emote-trigger-img {
   display: block;
@@ -2285,10 +2598,27 @@
 
 [data-theme="win98"] .hexaclear-history-day {
   font-size: 13px !important;
+  font-weight: 700 !important;
 }
+/* Best-moves badge on cleared days. Without a treatment it reads as
+   a second date and confuses the eye (e.g. "17 / 52" looks like two
+   day numbers). We render it smaller, regular weight, in italics, in
+   parens, and with a subtle accent color so it scans clearly as a
+   subordinate score readout rather than another date. */
 [data-theme="win98"] .hexaclear-history-best {
-  font-size: 10px !important;
-  margin-top: 1px !important;
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  font-style: italic !important;
+  color: var(--w98-deep-shadow, #1a1a1a) !important;
+  opacity: 0.7;
+  margin-top: 0 !important;
+  letter-spacing: 0 !important;
+}
+[data-theme="win98"] .hexaclear-history-best::before {
+  content: '(';
+}
+[data-theme="win98"] .hexaclear-history-best::after {
+  content: ')';
 }
 
 /* Same opt-out for the prev/next month chevrons so they read as
@@ -2317,10 +2647,12 @@
   color: #fff !important;
 }
 [data-theme="win98"] .hexaclear-history-cell.is-active .hexaclear-history-best {
+  /* Active-day cell uses the inverted (navy + white) palette so the
+     subordinate score also needs to flip to a light tone — keep it
+     italic + parenthesized via the base rule above, but pop the
+     color so it stays legible on the dark background. */
   color: #fff !important;
-}
-[data-theme="win98"] .hexaclear-history-best {
-  color: var(--w98-text) !important;
+  opacity: 0.85;
 }
 [data-theme="win98"] .hexaclear-history-legend {
   color: var(--w98-text) !important;

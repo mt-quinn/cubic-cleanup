@@ -38,6 +38,11 @@ export type LifetimeStats = {
   gamesPlayedEndless: number
   gamesPlayedDaily: number
   gamesPlayedCoop: number
+  // PvP territory-race totals. Wins counts matches this device won;
+  // shames counts matches that ended with no winner (everyone stuck).
+  gamesPlayedPvp: number
+  pvpWins: number
+  pvpShames: number
   piecesPlaced: number
   cubesPlaced: number
   patternsCleared: number
@@ -45,7 +50,8 @@ export type LifetimeStats = {
   boardClears: number
   // Aggregate score for scored modes (endless, big, co-op). Daily is
   // move-ranked rather than score-ranked, so it does not contribute to
-  // Score/game.
+  // Score/game. PvP is a territory race, not a score race, so it
+  // contributes neither — only its own per-mode counters above.
   totalScore: number
   scoredGamesPlayed: number
   // Records (single best across the whole device).
@@ -63,6 +69,11 @@ export type LifetimeStats = {
   // Distinct co-op partner playerIds (excluding self) the device has
   // finished a co-op run with.
   coopPartnerIds: string[]
+  // Per-day best move count, keyed by the same `YYYY-M-D` date keys
+  // dailyDaysCleared uses. Synced to the account so signing in on a
+  // fresh device pulls in every cleared day's best — without this
+  // the history calendar would only ever show local clears.
+  dailyBestMovesByDate: Record<string, number>
 }
 
 export const STATS_KEY = 'cubic-stats-v1'
@@ -93,6 +104,9 @@ export const createEmptyLifetimeStats = (
   gamesPlayedEndless: 0,
   gamesPlayedDaily: 0,
   gamesPlayedCoop: 0,
+  gamesPlayedPvp: 0,
+  pvpWins: 0,
+  pvpShames: 0,
   piecesPlaced: 0,
   cubesPlaced: 0,
   patternsCleared: 0,
@@ -109,7 +123,27 @@ export const createEmptyLifetimeStats = (
   dailyDaysCleared: [],
   dailyDaysPlayed: [],
   coopPartnerIds: [],
+  dailyBestMovesByDate: {},
 })
+
+// Coerce a parsed JSON value into a sanitized
+// `dailyBestMovesByDate` map. Drops non-string keys and any value
+// that isn't a finite positive integer so a malformed entry can't
+// corrupt the calendar.
+const sanitizeDailyBestMovesMap = (
+  raw: unknown,
+): Record<string, number> => {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof key !== 'string' || key.length === 0) continue
+    const num = typeof value === 'number' ? value : Number(value)
+    if (Number.isFinite(num) && num > 0) {
+      out[key] = Math.floor(num)
+    }
+  }
+  return out
+}
 
 // Defensive loader: any malformed payload (parse error, wrong type,
 // missing field) collapses to a fresh stats record so the rest of
@@ -136,6 +170,9 @@ export const loadLifetimeStats = (): LifetimeStats => {
       coopPartnerIds: Array.isArray(parsed.coopPartnerIds)
         ? parsed.coopPartnerIds.filter((s) => typeof s === 'string')
         : [],
+      dailyBestMovesByDate: sanitizeDailyBestMovesMap(
+        parsed.dailyBestMovesByDate,
+      ),
       // Cap the started-tracking-at to a sane value: if the stored
       // value is in the future or wildly old, fall back to "now" so
       // the profile modal doesn't show "tracking since 1970" or
@@ -180,6 +217,9 @@ const parseLifetimeStats = (raw: string | null): LifetimeStats | null => {
       coopPartnerIds: Array.isArray(parsed.coopPartnerIds)
         ? parsed.coopPartnerIds.filter((s) => typeof s === 'string')
         : [],
+      dailyBestMovesByDate: sanitizeDailyBestMovesMap(
+        parsed.dailyBestMovesByDate,
+      ),
       startedTrackingAt:
         typeof parsed.startedTrackingAt === 'number' &&
         parsed.startedTrackingAt > 0 &&
@@ -268,6 +308,25 @@ const newSetValues = (current: string[], baseline: string[]): string[] => {
   )
 }
 
+// Per-day best-moves delta: include any key where the local best is
+// strictly fewer moves than the baseline (or where the baseline
+// doesn't know about that day yet). Sent in the upload payload and
+// merged on the server with a per-key min.
+const newDailyBestEntries = (
+  current: Record<string, number>,
+  baseline: Record<string, number>,
+): Record<string, number> => {
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(current)) {
+    if (!Number.isFinite(value) || value <= 0) continue
+    const prev = baseline[key]
+    if (prev === undefined || value < prev) {
+      out[key] = Math.floor(value)
+    }
+  }
+  return out
+}
+
 // Compute the one-time local contribution to upload for an account. For a
 // first sync there is no baseline, so the whole local profile is added; after
 // a successful merge, the returned server snapshot becomes the baseline and
@@ -292,6 +351,9 @@ export const calculateStatsSyncDelta = (
       base.gamesPlayedDaily,
     ),
     gamesPlayedCoop: positiveDelta(current.gamesPlayedCoop, base.gamesPlayedCoop),
+    gamesPlayedPvp: positiveDelta(current.gamesPlayedPvp, base.gamesPlayedPvp),
+    pvpWins: positiveDelta(current.pvpWins, base.pvpWins),
+    pvpShames: positiveDelta(current.pvpShames, base.pvpShames),
     piecesPlaced: positiveDelta(current.piecesPlaced, base.piecesPlaced),
     cubesPlaced: positiveDelta(current.cubesPlaced, base.cubesPlaced),
     patternsCleared: positiveDelta(
@@ -327,6 +389,10 @@ export const calculateStatsSyncDelta = (
     ),
     dailyDaysPlayed: newSetValues(current.dailyDaysPlayed, base.dailyDaysPlayed),
     coopPartnerIds: newSetValues(current.coopPartnerIds, base.coopPartnerIds),
+    dailyBestMovesByDate: newDailyBestEntries(
+      current.dailyBestMovesByDate,
+      base.dailyBestMovesByDate,
+    ),
   }
 }
 
@@ -361,9 +427,23 @@ export const applyPlacementToRunStats = (
   topPlacementPoints: Math.max(prev.topPlacementPoints, args.pointsGained),
 })
 
+export type MultiplayerMode = 'coop' | 'pvp'
+
 export type FoldRunIntoLifetimeArgs = {
   mode: GameModeId
   isMultiplayer: boolean
+  // Which multiplayer variant this finished run was. Null in solo
+  // (must be null whenever isMultiplayer is false). Drives the per-
+  // mode game counter and PvP win/shame attribution.
+  mpMode: MultiplayerMode | null
+  // True when the local device's player won the PvP match (i.e. the
+  // server set winnerPlayerId to this device's playerId). Ignored in
+  // co-op or solo.
+  pvpSelfWon: boolean
+  // True when a PvP match ended with no winner — i.e. every seated
+  // player got stuck before anyone crossed the threshold (the
+  // "SHAME" path). Ignored in co-op or solo.
+  pvpShame: boolean
   // Final game-state values at gameover.
   finalScore: number
   finalMoves: number
@@ -400,18 +480,30 @@ export const foldRunIntoLifetime = (
     longestRunMs: Math.max(prev.longestRunMs, run.activePlayMs),
   }
 
+  // PvP is a territory race, not a score race, so it doesn't
+  // contribute to totalScore / scoredGamesPlayed. Only co-op and the
+  // single-player scored modes do.
   const isScoredRun =
-    args.isMultiplayer || args.mode === 'endless' || args.mode === 'big'
+    (args.isMultiplayer && args.mpMode === 'coop') ||
+    args.mode === 'endless' ||
+    args.mode === 'big'
   if (isScoredRun) {
     next.totalScore = prev.totalScore + args.finalScore
     next.scoredGamesPlayed = prev.scoredGamesPlayed + 1
   }
 
   // Per-mode game counter. Co-op rolls up under `gamesPlayedCoop`
-  // regardless of board size; the solo big-board variant (no
-  // multiplayer) currently rolls up under endless since it shares
-  // the endless scoring loop.
-  if (args.isMultiplayer) {
+  // regardless of board size; PvP under its own counter (plus win /
+  // shame tallies). Solo big-board (no multiplayer) rolls up under
+  // endless since it shares the endless scoring loop.
+  if (args.isMultiplayer && args.mpMode === 'pvp') {
+    next.gamesPlayedPvp = prev.gamesPlayedPvp + 1
+    if (args.pvpSelfWon) {
+      next.pvpWins = prev.pvpWins + 1
+    } else if (args.pvpShame) {
+      next.pvpShames = prev.pvpShames + 1
+    }
+  } else if (args.isMultiplayer) {
     next.gamesPlayedCoop = prev.gamesPlayedCoop + 1
     if (args.coopPartnerIds.length > 0) {
       const set = new Set(prev.coopPartnerIds)
@@ -445,7 +537,10 @@ export const foldRunIntoLifetime = (
   }
 
   // Daily play log: every run logs the day as "played" regardless
-  // of clear, but only clears flip it to "cleared".
+  // of clear, but only clears flip it to "cleared". Cleared days
+  // also write their move count into dailyBestMovesByDate (per-key
+  // min over any prior entry) so other signed-in devices can show
+  // the right "best for this day" badge on the calendar.
   if (args.mode === 'daily' && args.dailyDateKey) {
     const playedSet = new Set(prev.dailyDaysPlayed)
     playedSet.add(args.dailyDateKey)
@@ -454,6 +549,15 @@ export const foldRunIntoLifetime = (
       const clearedSet = new Set(prev.dailyDaysCleared)
       clearedSet.add(args.dailyDateKey)
       next.dailyDaysCleared = Array.from(clearedSet)
+      if (args.finalMoves > 0) {
+        const incumbent = prev.dailyBestMovesByDate[args.dailyDateKey]
+        if (incumbent === undefined || args.finalMoves < incumbent) {
+          next.dailyBestMovesByDate = {
+            ...prev.dailyBestMovesByDate,
+            [args.dailyDateKey]: Math.floor(args.finalMoves),
+          }
+        }
+      }
     }
   }
 

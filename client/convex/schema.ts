@@ -98,6 +98,11 @@ export const lifetimeStatsValidator = v.object({
   gamesPlayedEndless: v.number(),
   gamesPlayedDaily: v.number(),
   gamesPlayedCoop: v.number(),
+  // PvP counters are optional so older account-stats rows keep validating
+  // until they're folded into a run that backfills them to 0.
+  gamesPlayedPvp: v.optional(v.number()),
+  pvpWins: v.optional(v.number()),
+  pvpShames: v.optional(v.number()),
   piecesPlaced: v.number(),
   cubesPlaced: v.number(),
   patternsCleared: v.number(),
@@ -114,6 +119,13 @@ export const lifetimeStatsValidator = v.object({
   dailyDaysCleared: v.array(v.string()),
   dailyDaysPlayed: v.array(v.string()),
   coopPartnerIds: v.array(v.string()),
+  // Per-day best move count map keyed by `YYYY-M-D`. Powers the
+  // history calendar's "what's my best for this day" badge across
+  // signed-in devices — without this the calendar can only see the
+  // per-day localStorage entries that originated on the local box.
+  // Optional so older accountStats rows keep validating; missing
+  // entries are merged with a per-key min.
+  dailyBestMovesByDate: v.optional(v.record(v.string(), v.number())),
 })
 
 export default defineSchema({
@@ -125,6 +137,9 @@ export default defineSchema({
       v.literal('playing'),
       v.literal('gameover'),
     ),
+    // Co-op (default, shared score) vs free-for-all PvP territory race.
+    // Optional so older rooms validate; missing == 'coop'.
+    mode: v.optional(v.union(v.literal('coop'), v.literal('pvp'))),
     board: v.record(v.string(), cellStateValidator),
     goldenCellIds: v.array(v.string()),
     score: v.number(),
@@ -133,6 +148,13 @@ export default defineSchema({
     players: v.array(playerValidator),
     lastPlacement: v.union(v.null(), lastPlacementValidator),
     cellOwners: cellOwnersValidator,
+    // Persistent per-cell tint of whoever last cleared that cell.
+    // Survives subsequent fills until another clear overwrites it.
+    // Drives the PvP territory race and the empty-cell tint render.
+    cellTints: v.optional(v.record(v.string(), v.string())),
+    // Set the moment a PvP player crosses the win threshold so all
+    // clients can render the win modal. Null in co-op or in PvP SHAME.
+    winnerPlayerId: v.optional(v.union(v.string(), v.null())),
     lastEmotes: v.optional(v.array(emoteValidator)),
     hovers: v.optional(v.array(hoverValidator)),
     createdAt: v.number(),
@@ -193,4 +215,24 @@ export default defineSchema({
     stats: lifetimeStatsValidator,
     updatedAt: v.number(),
   }).index('by_user', ['userId']),
+
+  // Global PvP leaderboard. ONE row per playerId reflecting their
+  // lifetime PvP record. Every match end fires an upsert that bumps
+  // the right counter (wins on a self-win, losses on a loss or a
+  // SHAME — shames count as a loss for every seated player) and
+  // recomputes `rankScore` = gamesPlayed × winRate, where winRate =
+  // wins / (wins + losses). Sort is by rankScore by default and by
+  // wins when the leaderboard tab toggles to the "Most wins" view.
+  pvpScores: defineTable({
+    playerId: v.string(),
+    name: v.string(),
+    wins: v.number(),
+    losses: v.number(),
+    gamesPlayed: v.number(),
+    rankScore: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_player', ['playerId'])
+    .index('by_rank', ['rankScore'])
+    .index('by_wins', ['wins']),
 })

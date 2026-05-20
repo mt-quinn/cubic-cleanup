@@ -85,10 +85,16 @@ export const createRoom = mutation({
   args: {
     playerId: v.string(),
     name: v.string(),
+    // Which multiplayer flavor this room is. Default 'coop' preserves
+    // the pre-PvP behavior for any older client / un-migrated link.
+    mode: v.optional(v.union(v.literal('coop'), v.literal('pvp'))),
     // Optional snapshot of the host's current single-player co-op
     // (Big) board. When present we seed the new room with it so the
     // host's in-progress run is preserved when they invite a friend.
-    // Otherwise we boot a fresh empty co-op board.
+    // Otherwise we boot a fresh empty co-op board. We deliberately
+    // skip the seed in PvP rooms so both players start from an empty
+    // untinted board (a host's in-progress big run would otherwise
+    // give them a head start on territory).
     seed: v.optional(
       v.object({
         board: v.record(
@@ -102,7 +108,8 @@ export const createRoom = mutation({
       }),
     ),
   },
-  handler: async (ctx, { playerId, name, seed }) => {
+  handler: async (ctx, { playerId, name, mode, seed }) => {
+    const roomMode: 'coop' | 'pvp' = mode ?? 'coop'
     // Try a few times to land on an unused code. Collisions are rare with
     // a 24^4 alphabet (~330k) so this almost always lands on the first.
     let code: string | null = null
@@ -121,9 +128,12 @@ export const createRoom = mutation({
       throw new Error('Could not allocate a free room code, try again')
     }
 
-    const board = seed?.board ?? createEmptyBoard(MODE)
+    // PvP starts fresh regardless of host's solo state so neither
+    // player walks in with pre-tinted territory.
+    const effectiveSeed = roomMode === 'pvp' ? undefined : seed
+    const board = effectiveSeed?.board ?? createEmptyBoard(MODE)
     const goldenCellIds =
-      seed?.goldenCellIds ?? spawnInitialRubies(board, MODE, 3)
+      effectiveSeed?.goldenCellIds ?? spawnInitialRubies(board, MODE, 3)
     const hand = dealPlayableHand(board, 30, Math.random, MODE)
     const now = Date.now()
 
@@ -139,11 +149,12 @@ export const createRoom = mutation({
     const id = await ctx.db.insert('rooms', {
       code,
       state: 'waiting',
+      mode: roomMode,
       board,
       goldenCellIds,
-      score: seed?.score ?? 0,
-      streak: seed?.streak ?? 0,
-      moves: seed?.moves ?? 0,
+      score: effectiveSeed?.score ?? 0,
+      streak: effectiveSeed?.streak ?? 0,
+      moves: effectiveSeed?.moves ?? 0,
       players: [
         {
           playerId,
@@ -157,12 +168,14 @@ export const createRoom = mutation({
       ],
       lastPlacement: null,
       cellOwners,
+      cellTints: {},
+      winnerPlayerId: null,
       lastEmotes: [],
       createdAt: now,
       updatedAt: now,
     })
 
-    return { code, roomId: id }
+    return { code, roomId: id, mode: roomMode }
   },
 })
 
@@ -263,6 +276,13 @@ export const joinRoom = mutation({
     for (const [cellId, ownerId] of Object.entries(cellOwners)) {
       if (ownerId === stalest.playerId) cellOwners[cellId] = playerId
     }
+    // Inherit the evicted seat's persistent tint territory too so PvP
+    // standings stay attributed to whoever is sitting in the seat,
+    // not to a ghost player who can no longer win anyway.
+    const cellTints: Record<string, string> = { ...(room.cellTints ?? {}) }
+    for (const [cellId, tintId] of Object.entries(cellTints)) {
+      if (tintId === stalest.playerId) cellTints[cellId] = playerId
+    }
     // Drop any stale hover the evicted player left behind so the
     // new occupant's first frame doesn't inherit a ghost.
     const hovers = (room.hovers ?? []).filter(
@@ -271,6 +291,7 @@ export const joinRoom = mutation({
     await ctx.db.patch(room._id, {
       players,
       cellOwners,
+      cellTints,
       hovers,
       state: 'playing',
       updatedAt: now,
@@ -355,6 +376,16 @@ export const placePiece = mutation({
       delete cellOwners[cellId]
     }
 
+    // Persistent tint of "who last cleared this cell". Every cell
+    // swept by this placement gets stamped to the placing player, even
+    // if they didn't physically place the cube — clearing the row was
+    // their act. Tints survive future placements until another clear
+    // overwrites them, and they drive the PvP territory race.
+    const cellTints: Record<string, string> = { ...(room.cellTints ?? {}) }
+    for (const cellId of result.clearedCellIds) {
+      cellTints[cellId] = playerId
+    }
+
     // New per-player hand: drop the just-played piece. If that empties the
     // player's hand, deal a fresh playable hand against the new board.
     const remainingHand = (player.hand as ActivePiece[]).filter(
@@ -398,7 +429,49 @@ export const placePiece = mutation({
     const anyoneCanMove = updatedPlayers.some((p) =>
       hasAnyValidMove(result.board, p.hand as ActivePiece[], MODE),
     )
-    const gameOver = !anyoneCanMove
+    const stuckGameOver = !anyoneCanMove
+
+    // PvP instant-win check. After applying this placement's tints,
+    // count how many cells each seated player owns. The first one
+    // past (1/N + 0.05) of the board — equivalent to the user-facing
+    // (100/N)+5% rule — wins immediately and ends the match. The
+    // extra 5 % over parity keeps the post-fill stretch competitive
+    // when seated players are otherwise neck and neck. In co-op we
+    // skip this entirely; in stuck SHAME the winner stays null.
+    const roomMode: 'coop' | 'pvp' = room.mode ?? 'coop'
+    let winnerPlayerId: string | null = room.winnerPlayerId ?? null
+    if (roomMode === 'pvp' && winnerPlayerId === null) {
+      const totalCells = Object.keys(result.board).length
+      const seatedCount = updatedPlayers.length
+      if (totalCells > 0 && seatedCount > 0) {
+        const tintCounts = new Map<string, number>()
+        for (const ownerId of Object.values(cellTints)) {
+          tintCounts.set(ownerId, (tintCounts.get(ownerId) ?? 0) + 1)
+        }
+        // (100/N)+5% in cell units. ceil so a board that doesn't
+        // divide evenly still requires a strictly-better-than-parity
+        // win, and clamp to at least one cell over parity for tiny
+        // boards where the 5% slack rounds to zero.
+        const parity = totalCells / seatedCount
+        const slack = Math.max(1, Math.ceil(totalCells * 0.05))
+        const threshold = Math.ceil(parity + slack)
+        // Only seated players can win; tints left behind by a
+        // disconnected player don't count toward an absent victor.
+        const seatedIds = new Set(updatedPlayers.map((p) => p.playerId))
+        for (const seatedId of seatedIds) {
+          const count = tintCounts.get(seatedId) ?? 0
+          if (count >= threshold) {
+            winnerPlayerId = seatedId
+            break
+          }
+        }
+      }
+    }
+
+    // Compose the final game-over flag: either everyone is stuck
+    // (SHAME in PvP, normal co-op end) OR a PvP winner has crossed
+    // the threshold this placement.
+    const gameOver = stuckGameOver || winnerPlayerId !== null
 
     const now = Date.now()
 
@@ -437,6 +510,8 @@ export const placePiece = mutation({
       players: updatedPlayers,
       lastPlacement,
       cellOwners,
+      cellTints,
+      winnerPlayerId,
       hovers,
       state: gameOver ? 'gameover' : 'playing',
       updatedAt: now,
@@ -447,6 +522,7 @@ export const placePiece = mutation({
       cleared,
       boardCleared: result.boardCleared,
       gameOver,
+      winnerPlayerId,
     }
   },
 })
@@ -565,6 +641,11 @@ export const restartRoom = mutation({
       players,
       lastPlacement: null,
       cellOwners: {},
+      // Wipe persistent tints and any prior winner so the next match
+      // is a clean territory race. Mode is intentionally preserved —
+      // restarting a PvP room gives you another PvP match.
+      cellTints: {},
+      winnerPlayerId: null,
       lastEmotes: [],
       hovers: [],
       state: players.length >= 1 ? 'playing' : 'waiting',

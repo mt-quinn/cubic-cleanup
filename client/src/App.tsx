@@ -56,8 +56,9 @@ import {
 import type { LifetimeStats, RunStats } from './stats'
 import {
   buildRoomShareUrl,
-  readRoomCodeFromUrl,
+  readRoomFromUrl,
   setRoomCodeInUrl,
+  type RoomMode,
 } from './multiplayer/roomUrl'
 import { WebHaptics } from 'web-haptics'
 import './index.css'
@@ -763,6 +764,11 @@ const EMOTE_OPTIONS = [
 type SmileyRowPlayer = {
   playerId: string
   name: string
+  // Optional global PvP rank chip drawn under the player's name.
+  // Populated only when the active room is PvP and the server has
+  // a row for this playerId; null while the row hasn't been
+  // computed yet, undefined for co-op (chip suppressed entirely).
+  pvpRank?: number | null
 }
 
 type SmileyRowProps = {
@@ -882,6 +888,23 @@ const SmileyRow = ({
             <span className="hexaclear-smiley-name" aria-hidden="true">
               {player.name}
             </span>
+            {player.pvpRank !== undefined && (
+              <span
+                className={[
+                  'hexaclear-smiley-rank',
+                  player.pvpRank === null ? 'is-unranked' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label={
+                  player.pvpRank === null
+                    ? `${player.name} is unranked`
+                    : `${player.name} is ranked #${player.pvpRank} in PvP`
+                }
+              >
+                {player.pvpRank === null ? 'unranked' : `#${player.pvpRank}`}
+              </span>
+            )}
             {isSelf && show && (
               <div
                 className="hexaclear-emote-panel"
@@ -1416,8 +1439,22 @@ function App() {
   // logic remains fully intact when no room is active.
   const playerIdRef = useRef<string>(getOrCreatePlayerId())
   const playerId = playerIdRef.current
-  const [mpRoomCode, setMpRoomCode] = useState<string | null>(() =>
-    readRoomCodeFromUrl(),
+  // Read both the room code and the (optional) requested mode from the
+  // launch URL so an incoming player auto-joins a PvP room as PvP. The
+  // server still gets final say once it returns the room doc, but
+  // seeding the local mpPendingMode keeps the lobby UI consistent
+  // during the connecting-but-not-yet-joined window.
+  const initialRoomFromUrl = useMemo(() => readRoomFromUrl(), [])
+  const [mpRoomCode, setMpRoomCode] = useState<string | null>(
+    initialRoomFromUrl.code,
+  )
+  // The mode the player picked in the lobby toggle before clicking
+  // copy. Once the room is created this becomes locked (the link the
+  // partner uses carries the mode), so the toggle is hidden post-copy.
+  // Auto-join with ?mode=pvp seeds this to 'pvp' so the local UI
+  // matches the partner's chosen mode while the join is in flight.
+  const [mpPendingMode, setMpPendingMode] = useState<RoomMode>(
+    initialRoomFromUrl.mode === 'pvp' ? 'pvp' : 'coop',
   )
   // We pull the player's display name from the same localStorage key the
   // single-player high-score flow uses so the lobby auto-fills with
@@ -1473,6 +1510,66 @@ function App() {
     }
     return out
   }, [isMultiplayer, mp.cellOwners, mp.selfPlayer])
+
+  // PvP territory tints: persistent per-cell "last clearer" map.
+  // `cellTintHueByCellId` maps each tinted cell to the hue rotation
+  // to apply for THIS viewer (self → 0°, so tints owned by self
+  // render in the default warm palette and are intentionally omitted
+  // here — the renderer only flood-tints partner-owned territory so
+  // self's own ground stays neutral and easy to read).
+  // `tintedCellIds` is the full set including self, so we can detect
+  // "filled cell on someone else's tint" (conflict ring) regardless
+  // of viewer.
+  const cellTintHueByCellId = useMemo<Record<string, number>>(() => {
+    if (!isMultiplayer || mp.mode !== 'pvp') return {}
+    const out: Record<string, number> = {}
+    const selfId = mp.selfPlayer?.playerId
+    for (const [cellId, tintId] of Object.entries(mp.cellTints)) {
+      if (!tintId || tintId === selfId) continue
+      const hue = mp.hueShiftByPlayerId[tintId] ?? 0
+      if (hue !== 0) out[cellId] = hue
+    }
+    return out
+  }, [
+    isMultiplayer,
+    mp.mode,
+    mp.cellTints,
+    mp.hueShiftByPlayerId,
+    mp.selfPlayer,
+  ])
+  // Self-tinted cells get their own marker so the renderer can still
+  // visually distinguish "my territory" from a truly untouched cell —
+  // we use a subtle warm overlay rather than the partner hue rotation.
+  const selfTintedCellIds = useMemo<Set<string>>(() => {
+    if (!isMultiplayer || mp.mode !== 'pvp') return new Set()
+    const selfId = mp.selfPlayer?.playerId
+    if (!selfId) return new Set()
+    const out = new Set<string>()
+    for (const [cellId, tintId] of Object.entries(mp.cellTints)) {
+      if (tintId === selfId) out.add(cellId)
+    }
+    return out
+  }, [isMultiplayer, mp.mode, mp.cellTints, mp.selfPlayer])
+  // Cells where the current occupant (cellOwners) and the tint
+  // (cellTints) belong to different players — render a colored ring
+  // around the cell in the tinter's color so the conflict reads.
+  const conflictCellIds = mp.conflictCellIds
+  const conflictTintHueByCellId = useMemo<Record<string, number>>(() => {
+    if (!isMultiplayer || mp.mode !== 'pvp') return {}
+    const out: Record<string, number> = {}
+    for (const cellId of conflictCellIds) {
+      const tintId = mp.cellTints[cellId]
+      if (!tintId) continue
+      out[cellId] = mp.hueShiftByPlayerId[tintId] ?? 0
+    }
+    return out
+  }, [
+    isMultiplayer,
+    mp.mode,
+    conflictCellIds,
+    mp.cellTints,
+    mp.hueShiftByPlayerId,
+  ])
 
   // Per-playerId emote, narrowed to "still inside its 10s display
   // window". Once the window closes the corresponding smiley falls
@@ -1606,6 +1703,7 @@ function App() {
   const submitEndlessGlobal = useMutation(api.leaderboard.submitEndlessScore)
   const submitDailyGlobal = useMutation(api.leaderboard.submitDailyScore)
   const submitCoopGlobal = useMutation(api.leaderboard.submitCoopScore)
+  const submitPvpGlobal = useMutation(api.leaderboard.submitPvpResult)
   const mergeAccountStats = useMutation(api.accountStats.mergeMyStats)
   const { signIn, signOut } = useAuthActions()
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth()
@@ -1794,6 +1892,58 @@ function App() {
       ? createEmptyLifetimeStats()
       : loadLifetimeStats(),
   )
+  // One-shot backfill: existing accounts predate the synced
+  // dailyBestMovesByDate map and only have per-day best moves in
+  // `cubic-daily-best-<dateKey>` localStorage. Seed the map from
+  // those local slots (plus any cleared day with no slot but a runs
+  // list) so the next stats sync uploads them to the account and
+  // every signed-in device can render them on the calendar.
+  const dailyBestBackfillRanRef = useRef(false)
+  useEffect(() => {
+    if (dailyBestBackfillRanRef.current) return
+    if (typeof window === 'undefined') return
+    dailyBestBackfillRanRef.current = true
+    const candidates = new Set<string>(lifetimeStats.dailyDaysCleared)
+    // Also pick up any `cubic-daily-best-…` keys lying around in
+    // case `dailyDaysCleared` is stale (e.g. archive replay only
+    // wrote the per-day key without rebuilding the cleared set).
+    try {
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i)
+        if (key && key.startsWith('cubic-daily-best-')) {
+          candidates.add(key.slice('cubic-daily-best-'.length))
+        }
+      }
+    } catch {
+      // Ignore; we'll just backfill from dailyDaysCleared.
+    }
+    const additions: Record<string, number> = {}
+    for (const dateKey of candidates) {
+      if (lifetimeStats.dailyBestMovesByDate[dateKey] !== undefined) continue
+      try {
+        const raw = window.localStorage.getItem(`cubic-daily-best-${dateKey}`)
+        const parsed = raw ? Number.parseInt(raw, 10) : NaN
+        if (Number.isFinite(parsed) && parsed > 0) {
+          additions[dateKey] = parsed
+        }
+      } catch {
+        // Skip this day; the next clear will populate it.
+      }
+    }
+    if (Object.keys(additions).length === 0) return
+    setLifetimeStats((prev) => {
+      const next = {
+        ...prev,
+        dailyBestMovesByDate: { ...prev.dailyBestMovesByDate, ...additions },
+      }
+      try {
+        saveLifetimeStats(next)
+      } catch {
+        // Best-effort persistence; in-memory copy still wins for this session.
+      }
+      return next
+    })
+  }, [lifetimeStats.dailyDaysCleared, lifetimeStats.dailyBestMovesByDate])
   const syncStatsToAccount = useCallback(
     async (stats: LifetimeStats, accountIdOverride?: string) => {
       const accountId =
@@ -1804,12 +1954,59 @@ function App() {
       try {
         const baseline = loadStatsSyncBaseline(accountId)
         const delta = calculateStatsSyncDelta(stats, baseline)
-        const merged = await mergeAccountStats({ delta })
+        const rawMerged = await mergeAccountStats({ delta })
+        // The server validator marks the PvP counters as optional so
+        // legacy accountStats rows keep validating during the
+        // migration window; on the client we model them as required
+        // (default 0) so reads stay simple. Top them up at the
+        // boundary so the client type lines up.
+        const merged: LifetimeStats = {
+          ...rawMerged,
+          gamesPlayedPvp: rawMerged.gamesPlayedPvp ?? 0,
+          pvpWins: rawMerged.pvpWins ?? 0,
+          pvpShames: rawMerged.pvpShames ?? 0,
+          dailyBestMovesByDate: rawMerged.dailyBestMovesByDate ?? {},
+        }
         saveLifetimeStats(merged)
         saveStatsSyncAccountId(accountId)
         saveStatsSyncBaseline(accountId, merged)
         setStatsSyncLastAt(loadStatsSyncLastAt())
         setLifetimeStats(merged)
+        // Write through the merged per-day best moves to the
+        // `cubic-daily-best-<dateKey>` localStorage cache so any
+        // surface that still reads from the per-day key (legacy
+        // call sites + the calendar's localStorage fallback for
+        // pre-sync days) reflects the cross-device merge too.
+        // Only writes when the merged value is strictly better
+        // (or new) so we never regress a locally-recorded best.
+        if (typeof window !== 'undefined') {
+          for (const [dateKey, moves] of Object.entries(
+            merged.dailyBestMovesByDate,
+          )) {
+            try {
+              const slot = `cubic-daily-best-${dateKey}`
+              const existingRaw = window.localStorage.getItem(slot)
+              const existing = existingRaw
+                ? Number.parseInt(existingRaw, 10)
+                : NaN
+              if (!Number.isFinite(existing) || moves < existing) {
+                window.localStorage.setItem(slot, String(moves))
+              }
+            } catch {
+              // Best-effort write-through; quota errors are fine.
+            }
+          }
+          // If today's best changed under us, sync the header
+          // banner readout so the player sees the merged value
+          // without needing a reload.
+          const todayKey = getTodayKey()
+          const mergedToday = merged.dailyBestMovesByDate[todayKey]
+          if (mergedToday !== undefined) {
+            setTodayDailyBestMoves((existing) =>
+              existing === null || mergedToday < existing ? mergedToday : existing,
+            )
+          }
+        }
         setAccountSyncState('synced')
         setAccountMessage('Stats synced. This device now shows your combined total.')
         return merged
@@ -1844,8 +2041,12 @@ function App() {
   // exactly one board at a time and let the player flip between
   // them via a tab strip. The 'coop' tab is only available while
   // the global toggle is on (there is no local co-op store).
-  type HighScoreTab = 'endless' | 'daily' | 'coop'
+  type HighScoreTab = 'endless' | 'daily' | 'coop' | 'pvp'
   const [highScoreTab, setHighScoreTab] = useState<HighScoreTab>('endless')
+  // PvP leaderboard secondary sort: by derived rank score (games ×
+  // win-rate) or by raw wins. Lives at the App level so the toggle
+  // state survives modal close/open.
+  const [pvpSortBy, setPvpSortBy] = useState<'rank' | 'wins'>('rank')
   // Within each tab the leaderboard is paginated 10 at a time so the
   // modal height stays predictable even at the daily / endless
   // 100-entry global cap. Page index is per-tab and zero-based; the
@@ -1855,7 +2056,7 @@ function App() {
   // get declared after this block.
   const [highScorePages, setHighScorePages] = useState<
     Record<HighScoreTab, number>
-  >({ endless: 0, daily: 0, coop: 0 })
+  >({ endless: 0, daily: 0, coop: 0, pvp: 0 })
   // When on, the high-scores card swaps the local lists for live
   // global queries. Local stays first-class — we never wipe local
   // entries when the toggle flips. Defaults to ON for new players so
@@ -2030,6 +2231,68 @@ function App() {
     api.leaderboard.getTopCoopScores,
     wantsGlobalSubscription ? {} : 'skip',
   )
+  // Global PvP leaderboard. Subscribed only when the High Scores
+  // card is open AND the active tab is 'pvp'; the sort flips the
+  // server-side ordering. (No 'showGlobalLeaderboard' gate because
+  // the PvP leaderboard is global-only — there's no local PvP
+  // store.) Reactive, so a fresh win submission re-orders the list
+  // in place without a manual refetch.
+  const wantsPvpLeaderboard =
+    showHighScores && highScoreTab === 'pvp'
+  const globalPvpScores = useQuery(
+    api.leaderboard.getTopPvpScores,
+    wantsPvpLeaderboard ? { sortBy: pvpSortBy } : 'skip',
+  )
+  // Per-seated-player rank lookup for the in-game SmileyRow chip.
+  // Only fires when actively in a PvP match. The lookup batches all
+  // seated players in one query so the cost is one round-trip per
+  // roster change.
+  const pvpSeatedIdsKey = useMemo(() => {
+    if (!isMultiplayer || mp.mode !== 'pvp') return null
+    return mp.allPlayers
+      .map((p) => p.playerId)
+      .sort()
+      .join('|')
+    // We deliberately include selfPlayer so the key changes when our
+    // seat reconnects under a different playerId (theoretical).
+  }, [isMultiplayer, mp.mode, mp.allPlayers])
+  const pvpSeatedRankArgs = useMemo(() => {
+    if (!pvpSeatedIdsKey) return null
+    return { playerIds: pvpSeatedIdsKey.split('|') }
+  }, [pvpSeatedIdsKey])
+  const pvpSeatedRanks = useQuery(
+    api.leaderboard.getPvpRanksForPlayers,
+    pvpSeatedRankArgs ?? 'skip',
+  )
+
+  // Build the SmileyRow players (self + partners) with optional
+  // PvP rank chips attached. In co-op the chip is omitted entirely
+  // by leaving pvpRank undefined; in PvP we attach the rank from
+  // the live query (or null while the lookup is loading / for a
+  // brand-new player with no row yet).
+  const smileyRowSelfPlayer = useMemo<SmileyRowPlayer | null>(() => {
+    if (!mp.selfPlayer) return null
+    const base: SmileyRowPlayer = {
+      playerId: mp.selfPlayer.playerId,
+      name: mp.selfPlayer.name,
+    }
+    if (isMultiplayer && mp.mode === 'pvp') {
+      base.pvpRank = pvpSeatedRanks?.[mp.selfPlayer.playerId]?.rank ?? null
+    }
+    return base
+  }, [mp.selfPlayer, isMultiplayer, mp.mode, pvpSeatedRanks])
+  const smileyRowOtherPlayers = useMemo<SmileyRowPlayer[]>(() => {
+    return mp.otherPlayers.map((p) => {
+      const base: SmileyRowPlayer = {
+        playerId: p.playerId,
+        name: p.name,
+      }
+      if (isMultiplayer && mp.mode === 'pvp') {
+        base.pvpRank = pvpSeatedRanks?.[p.playerId]?.rank ?? null
+      }
+      return base
+    })
+  }, [mp.otherPlayers, isMultiplayer, mp.mode, pvpSeatedRanks])
   const [goldenPopupCellIds, setGoldenPopupCellIds] = useState<string[]>([])
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
   const [dailyHitPulseCells, setDailyHitPulseCells] = useState<string[]>([])
@@ -3093,8 +3356,9 @@ function App() {
   // Start (or replay) the daily puzzle for a specific calendar
   // day, dispatched from the history calendar modal. Past-day
   // puzzles share the same seeded layout as the day they
-  // originally ran on, but they're treated as local-only — see
-  // `handleSaveDailyHighScore` for the global-submission gate.
+  // originally ran on, and a new best on any past day still
+  // upserts that day's row on the global daily leaderboard — see
+  // `handleSaveDailyHighScore` for the submission gate.
   // We piggy-back on the existing daily slot (`savedDailyGame`)
   // so that switching back to "Daily" via the mode toggle
   // resumes whatever puzzle the player was last on, archive or
@@ -3155,6 +3419,10 @@ function App() {
     setRoomCodeInUrl(null)
     setMpShareUrl(null)
     setMpError(null)
+    // Reset the lobby-mode toggle to the common-case default so the
+    // next room the player creates starts as co-op unless they
+    // explicitly flip to PvP again.
+    setMpPendingMode('coop')
     joinAttemptRef.current = { code: '', attempted: false }
     // Drop straight back into a fresh single-player big game so the
     // local view doesn't keep showing the just-left shared board.
@@ -3310,11 +3578,29 @@ function App() {
             .map((p) => p.playerId)
             .filter((pid) => pid !== playerId)
         : []
-      const dateKey = game.mode === 'daily' ? getTodayKey() : null
+      // Use the puzzle's own date key (not the clock-day key) so
+      // archive replays roll into the correct calendar slot in
+      // both dailyDaysCleared/Played and dailyBestMovesByDate. The
+      // explicit today fallback keeps single-mode-flow daily runs
+      // working when the game state doesn't carry an explicit key.
+      const dateKey =
+        game.mode === 'daily' ? (game.dailyDateKey ?? getTodayKey()) : null
+      // Pull MP outcome details off the live room so PvP wins /
+      // shames roll up into the right counters. mp.mode falls back
+      // to 'coop' for any legacy room without a mode field.
+      const mpMode = isMultiplayer ? mp.mode : null
+      const pvpWinnerId = isMultiplayer ? mp.winnerPlayerId : null
+      const pvpSelfWon =
+        isMultiplayer && mpMode === 'pvp' && pvpWinnerId === playerId
+      const pvpShame =
+        isMultiplayer && mpMode === 'pvp' && pvpWinnerId === null
       setLifetimeStats((prev) => {
         const next = foldRunIntoLifetime(prev, finishedRun, {
           mode: game.mode as 'endless' | 'daily' | 'big',
           isMultiplayer,
+          mpMode,
+          pvpSelfWon,
+          pvpShame,
           finalScore: game.score,
           finalMoves: game.moves,
           dailyCleared: game.dailyCompleted,
@@ -3327,6 +3613,19 @@ function App() {
         }
         return next
       })
+      // Mirror PvP outcomes to the global PvP leaderboard. Each
+      // client fires its own submit so the per-player counter
+      // upserts independently — SHAME folds in as a loss for every
+      // seated player because the local pvpShame flag is true for
+      // everyone when no winner crossed the threshold.
+      if (isMultiplayer && mpMode === 'pvp') {
+        const outcome: 'win' | 'loss' = pvpSelfWon ? 'win' : 'loss'
+        submitPvpGlobal({
+          playerId,
+          name: mpPlayerName,
+          outcome,
+        }).catch(() => {})
+      }
     }
     prevGameOverRef.current = game.gameOver
     // We intentionally exclude runStats / mp.allPlayers from deps to
@@ -3457,7 +3756,9 @@ function App() {
     // their in-progress run carries over when a friend joins. We
     // only seed when the local game is in 'big' mode and has already
     // had at least one move; otherwise an empty fresh board is fine
-    // and lets the server roll new initial rubies.
+    // and lets the server roll new initial rubies. PvP rooms ignore
+    // the seed server-side so both players start from an empty
+    // untinted board — passing it is harmless but redundant.
     const seedFromLocal =
       game.mode === 'big' && game.moves > 0
         ? {
@@ -3469,6 +3770,11 @@ function App() {
           }
         : undefined
 
+    // Snapshot the toggle's current value so subsequent re-renders
+    // during the async chain can't change which mode we ultimately
+    // create the room with.
+    const createMode: RoomMode = mpPendingMode
+
     // Kick off the URL resolution. This IIFE returns synchronously
     // (it returns a Promise) so the clipboard.write call below still
     // runs inside the click gesture.
@@ -3479,17 +3785,21 @@ function App() {
         const res = await createRoomMutation({
           playerId,
           name: mpPlayerName,
+          mode: createMode,
           seed: seedFromLocal,
         })
         if (!res?.code) throw new Error('No code returned')
         code = res.code
         setMpRoomCode(code)
-        setRoomCodeInUrl(code)
-        url = buildRoomShareUrl(code)
+        setRoomCodeInUrl(code, createMode === 'pvp' ? 'pvp' : null)
+        url = buildRoomShareUrl(code, createMode === 'pvp' ? 'pvp' : null)
         setMpShareUrl(url)
         joinAttemptRef.current = { code, attempted: true }
       } else if (!url) {
-        url = buildRoomShareUrl(code)
+        url = buildRoomShareUrl(
+          code,
+          mp.mode === 'pvp' ? 'pvp' : null,
+        )
         setMpShareUrl(url)
       }
       if (!url) throw new Error('No share URL available')
@@ -3722,6 +4032,12 @@ function App() {
       cells: { q: number; r: number; cellId: string; onBoard: boolean }[]
     }
     const out: Ghost[] = []
+    // PvP hides opponent intent — never project a partner ghost when
+    // the room is competitive. Senders also short-circuit their
+    // broadcasts in PvP (see the hover-emit effects below) so this
+    // map should be empty there, but we still guard the renderer in
+    // case a stale or malicious entry lands.
+    if (mp.mode === 'pvp') return out
     const boardDef = getBoardDefinitionForMode(game.mode)
     const cellById = new Map(boardDef.cells.map((c) => [c.id, c]))
     for (const [hoverPlayerId, hover] of Object.entries(mp.hoverByPlayerId)) {
@@ -3745,6 +4061,7 @@ function App() {
     return out
   }, [
     isMultiplayer,
+    mp.mode,
     mp.hoverByPlayerId,
     mp.allPlayers,
     mp.hueShiftByPlayerId,
@@ -3793,8 +4110,12 @@ function App() {
   } | null>(null)
   const hoverTrailingTimerRef = useRef<number | null>(null)
   const mpSetHover = mp.setHover
+  // PvP rooms keep piece intent hidden — skip every hover broadcast
+  // path so we don't pay the bandwidth or leak the preview. Co-op
+  // (and any legacy room without a mode) still publishes ghosts.
+  const shouldShareHover = isMultiplayer && mp.mode !== 'pvp'
   useEffect(() => {
-    if (!isMultiplayer) return
+    if (!shouldShareHover) return
 
     const desiredPieceId = selectedPieceId ?? null
     const desiredCellId =
@@ -3867,7 +4188,7 @@ function App() {
       flush,
       HOVER_THROTTLE_MS - sinceLast,
     )
-  }, [isMultiplayer, selectedPieceId, hover?.cellId, mpSetHover])
+  }, [shouldShareHover, selectedPieceId, hover?.cellId, mpSetHover])
 
   // Re-emit the current hover periodically while it's stationary so
   // partners' stale-out timers (HOVER_STALE_MS in the hook) don't
@@ -3875,7 +4196,7 @@ function App() {
   // mouses over one cell without moving for >3s would see their
   // ghost vanish for the partner.
   useEffect(() => {
-    if (!isMultiplayer) return
+    if (!shouldShareHover) return
     const id = window.setInterval(() => {
       const last = lastHoverSentRef.current
       if (!last) return
@@ -3885,13 +4206,13 @@ function App() {
       mpSetHover(last.pieceId, last.cellId).catch(() => {})
     }, HOVER_REFRESH_MS)
     return () => window.clearInterval(id)
-  }, [isMultiplayer, mpSetHover])
+  }, [shouldShareHover, mpSetHover])
 
   // On unmount / room exit, drop any lingering ghost so a partner
   // doesn't see us frozen on our last cell for the stale-out grace
   // window.
   useEffect(() => {
-    if (!isMultiplayer) return
+    if (!shouldShareHover) return
     return () => {
       if (hoverTrailingTimerRef.current !== null) {
         window.clearTimeout(hoverTrailingTimerRef.current)
@@ -3903,7 +4224,7 @@ function App() {
         lastHoverSentRef.current = { pieceId: null, cellId: null, ts: Date.now() }
       }
     }
-  }, [isMultiplayer, mpSetHover])
+  }, [shouldShareHover, mpSetHover])
 
   useEffect(() => {
     if (game.moves > 0) {
@@ -4261,8 +4582,8 @@ function App() {
   // near the high-scores tab state; only the reset effect lives
   // here, where its dependencies are in scope.)
   useEffect(() => {
-    setHighScorePages({ endless: 0, daily: 0, coop: 0 })
-  }, [showHighScores, showGlobalLeaderboard, dailyScoresDateKey])
+    setHighScorePages({ endless: 0, daily: 0, coop: 0, pvp: 0 })
+  }, [showHighScores, showGlobalLeaderboard, dailyScoresDateKey, pvpSortBy])
 
   // Persist the current game state on every change so that a refresh
   // resumes exactly where the player left off. Each mode owns its own
@@ -4341,12 +4662,8 @@ function App() {
     // Route this save to whichever calendar day this run is for.
     // Today's runs hit `cubic-daily-runs-<today>`; an archive replay
     // (history-calendar pick) hits the day it was started on, even
-    // if the run wraps over midnight on the player's clock. The
-    // archive flag also gates global submission below — past-day
-    // replays are local-only by design.
+    // if the run wraps over midnight on the player's clock.
     const runDateKey = game.dailyDateKey ?? getTodayKey()
-    const todayKey = getTodayKey()
-    const isArchiveRun = runDateKey !== todayKey
     const entry: DailyHighScoreEntry = {
       name,
       moves: pendingDailyMoves,
@@ -4373,27 +4690,27 @@ function App() {
     setDailyRunsToken((t) => t + 1)
     setPendingDailyHighScore(false)
     setDailyHighScoreSaved(true)
-    // Only mirror to the global daily leaderboard when this is the
-    // new local #1 for *today* (fewer moves than every other entry
-    // for the same dateKey) AND the run is an actual today run.
-    // Past-day replays are explicitly excluded so the global
-    // leaderboard for a given date stays the historical snapshot
-    // it already is.
-    if (isArchiveRun) return
-    const todays = next.filter(
-      (e) => getDateKeyFromTimestamp(e.date) === todayKey,
-    )
-    const top = todays[0]
-    const isNewLocalBestToday =
+    // Mirror to the global daily leaderboard whenever this run is a
+    // new local best for its dateKey — regardless of whether the
+    // run was today's puzzle or an archive replay. The global server
+    // upsert is keyed on (playerId, dateKey) and only accepts
+    // strictly-better moves, so historical bests overwrite older
+    // submissions safely and a slower replay is a silent no-op.
+    const dayRuns = [
+      ...loadDailyRunsForDateKey(runDateKey),
+      entry,
+    ].sort((a, b) => a.moves - b.moves || a.date - b.date)
+    const top = dayRuns[0]
+    const isNewLocalBestForDay =
       top !== undefined &&
       top.moves === entry.moves &&
       top.date === entry.date
-    if (isNewLocalBestToday) {
+    if (isNewLocalBestForDay) {
       submitDailyGlobal({
         playerId,
         name,
         moves: entry.moves,
-        dateKey: todayKey,
+        dateKey: runDateKey,
         savedAt: entry.date,
       }).catch(() => {})
     }
@@ -4829,7 +5146,7 @@ function App() {
               {isMultiplayer ? (
                 <div className="hexaclear-mode-toggle hexaclear-mode-toggle-coop">
                   <span className="mode-pill active" aria-disabled="true">
-                    Co-op
+                    Multi
                   </span>
                 </div>
               ) : (
@@ -4883,7 +5200,7 @@ function App() {
                       }
                     }}
                   >
-                    Co-op
+                    Multi
                   </button>
                 </div>
               )}
@@ -4930,8 +5247,8 @@ function App() {
                 <SmileyRow
                   show={showEmotePanel}
                   setShow={setShowEmotePanel}
-                  selfPlayer={mp.selfPlayer}
-                  otherPlayers={mp.otherPlayers}
+                  selfPlayer={smileyRowSelfPlayer}
+                  otherPlayers={smileyRowOtherPlayers}
                   activeEmoteByPlayerId={activeEmoteByPlayerId}
                   onSend={(emoji) => {
                     playUiClick()
@@ -5025,8 +5342,8 @@ function App() {
               <SmileyRow
                 show={showEmotePanel}
                 setShow={setShowEmotePanel}
-                selfPlayer={mp.selfPlayer}
-                otherPlayers={mp.otherPlayers}
+                selfPlayer={smileyRowSelfPlayer}
+                otherPlayers={smileyRowOtherPlayers}
                 activeEmoteByPlayerId={activeEmoteByPlayerId}
                 onSend={(emoji) => {
                   playUiClick()
@@ -5245,6 +5562,54 @@ function App() {
 
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
+                // PvP territory tint: every cleared cell wears the
+                // last-clearer's hue as a translucent overlay so
+                // empty ground reads as "owned territory" without
+                // pretending to be filled. Partner tints flood with
+                // a hue-rotated warm gold; self tints get a subtle
+                // warm cream so own-territory still feels neutral.
+                const partnerTintHue = cellTintHueByCellId[cell.id]
+                const isPartnerTinted = partnerTintHue !== undefined
+                const isSelfTinted = selfTintedCellIds.has(cell.id)
+                const tintOverlayColor = isPartnerTinted
+                  ? tintCubeColor(
+                      WOOD_CUBE_LEFT_HEX,
+                      partnerTintHue ?? 0,
+                      0.1,
+                      0.85,
+                    )
+                  : isSelfTinted
+                  ? WOOD_CUBE_TOP_HEX
+                  : null
+                const conflictTintHue = conflictTintHueByCellId[cell.id]
+                const isConflict = conflictTintHue !== undefined
+                const conflictStrokeColor = isConflict
+                  ? tintCubeColor(
+                      WOOD_CUBE_LEFT_HEX,
+                      conflictTintHue ?? 0,
+                      0.05,
+                      1,
+                    )
+                  : null
+
+                const cellTintStyle: React.CSSProperties = {}
+                if (tintOverlayColor) {
+                  ;(cellTintStyle as Record<string, string>)[
+                    '--cell-tint-color'
+                  ] = tintOverlayColor
+                }
+                if (conflictStrokeColor) {
+                  ;(cellTintStyle as Record<string, string>)[
+                    '--cell-conflict-color'
+                  ] = conflictStrokeColor
+                }
+                const polygonStyle =
+                  partnerHueStyle ||
+                  tintOverlayColor ||
+                  conflictStrokeColor
+                    ? { ...(partnerHueStyle ?? {}), ...cellTintStyle }
+                    : undefined
+
                 return (
                   <g
                     key={cell.id}
@@ -5265,6 +5630,8 @@ function App() {
                         isInvalidDrop ? 'invalid-drop' : '',
                         willClearInPreview ? 'preview-clear' : '',
                         isPartnerOwned ? 'partner-piece' : '',
+                        isPartnerTinted ? 'pvp-tinted-partner' : '',
+                        isSelfTinted ? 'pvp-tinted-self' : '',
                         ...clearingClasses,
                         inPreview
                           ? previewValid
@@ -5274,7 +5641,7 @@ function App() {
                       ]
                         .filter(Boolean)
                         .join(' ')}
-                      style={partnerHueStyle}
+                      style={polygonStyle}
                       role="button"
                       tabIndex={0}
                       aria-label={`${
@@ -5354,6 +5721,21 @@ function App() {
                           +10
                         </text>
                       )}
+                    {/* PvP conflict ring: a filled cube sits on a
+                        cell whose persistent tint belongs to another
+                        player. Render a colored outline over the
+                        cube so the disputed territory reads at a
+                        glance — the player's color stays the cube's
+                        body, the tinter's color frames it. */}
+                    {isConflict && isFilled && (
+                      <polygon
+                        points={points}
+                        className="hexaclear-hex-conflict-ring"
+                        style={polygonStyle}
+                        pointerEvents="none"
+                        aria-hidden="true"
+                      />
+                    )}
                     {/* Ruby capture uses the same clear animation as other cubes;
                         only the +10 popup is special. */}
                     {DEBUG_SHOW_COORDS && (
@@ -5669,8 +6051,125 @@ function App() {
               aria-hidden="true"
             />
           )}
-          <div className="hexaclear-board-hud">
-            {game.mode === 'daily' ? (
+          <div
+            className={[
+              'hexaclear-board-hud',
+              isMultiplayer && mp.mode === 'pvp'
+                ? 'hexaclear-board-hud-pvp'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {isMultiplayer && mp.mode === 'pvp' ? (
+              // PvP race-bar replaces the streak/score readout. A
+              // single horizontal bar shows every seated player's
+              // territory share with a threshold marker for the win
+              // line, plus a legend strip below. Sits left-of (or
+              // above-of) the copy CTA in the same HUD row.
+              (() => {
+                const standings = mp.pvpStandings
+                const thresholdPct = Math.min(1, mp.pvpThresholdRatio) * 100
+                const selfId = mp.selfPlayer?.playerId ?? null
+                const nameByPlayerId = new Map<string, string>()
+                for (const p of mp.allPlayers) nameByPlayerId.set(p.playerId, p.name)
+                const colorForPlayer = (pid: string): string =>
+                  tintCubeColor(
+                    WOOD_CUBE_LEFT_HEX,
+                    mp.hueShiftByPlayerId[pid] ?? 0,
+                    0.05,
+                    0.95,
+                  )
+                const ariaLabel =
+                  standings
+                    .map((s) => {
+                      const name =
+                        s.playerId === selfId
+                          ? 'You'
+                          : nameByPlayerId.get(s.playerId) ?? 'Player'
+                      return `${name} ${Math.round(s.ratio * 100)}%`
+                    })
+                    .join(', ') || 'No territory yet'
+                return (
+                  <div
+                    className="board-hud-block hexaclear-pvp-hud"
+                    aria-label={`Territory: ${ariaLabel}. Win threshold ${Math.round(
+                      thresholdPct,
+                    )}%.`}
+                  >
+                    <div
+                      className={[
+                        'hexaclear-pvp-bar',
+                        mp.winnerPlayerId ? 'is-won' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      role="img"
+                    >
+                      {standings.map((s) => {
+                        const w = Math.max(0, s.ratio) * 100
+                        if (w <= 0) return null
+                        const isSelfSeg = s.playerId === selfId
+                        return (
+                          <div
+                            key={s.playerId}
+                            className={[
+                              'hexaclear-pvp-bar-seg',
+                              isSelfSeg ? 'is-self' : '',
+                              mp.winnerPlayerId === s.playerId
+                                ? 'is-winner'
+                                : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            style={{
+                              width: `${w}%`,
+                              background: colorForPlayer(s.playerId),
+                            }}
+                          />
+                        )
+                      })}
+                      <div
+                        className="hexaclear-pvp-bar-threshold"
+                        style={{ left: `${thresholdPct}%` }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                    <div className="hexaclear-pvp-legend">
+                      {standings.map((s) => {
+                        const name =
+                          s.playerId === selfId
+                            ? 'You'
+                            : nameByPlayerId.get(s.playerId) ?? 'Player'
+                        return (
+                          <span
+                            key={s.playerId}
+                            className={[
+                              'hexaclear-pvp-legend-entry',
+                              s.playerId === selfId ? 'is-self' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                          >
+                            <span
+                              className="hexaclear-pvp-legend-swatch"
+                              style={{ background: colorForPlayer(s.playerId) }}
+                              aria-hidden="true"
+                            />
+                            <span className="hexaclear-pvp-legend-name">
+                              {name}
+                            </span>
+                            <span className="hexaclear-pvp-legend-pct">
+                              {Math.round(s.ratio * 100)}%
+                            </span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()
+            ) : game.mode === 'daily' ? (
               <div className="board-hud-block left">
                 {game.moves === 0 ? (
                   <span className="value small">
@@ -5705,13 +6204,64 @@ function App() {
               </div>
             )}
             {/* Copy Link CTA only renders when an invite is actually
-                useful: solo Co-op (pre-room) or in MP with at least
+                useful: solo Multi (pre-room) or in MP with at least
                 one open seat left. Once the room is full, the button
                 steps out of the way — sharing the link again would
                 only invite an evictor at that point. */}
             {game.mode === 'big' &&
               (!isMultiplayer || mp.allPlayers.length < 8) && (
               <div className="board-hud-block right hexaclear-coop-block">
+                {/* Co-op vs PvP toggle. Visible only while the room
+                    doesn't exist yet (mpRoomCode === null) — once the
+                    host clicks Copy Link the room is created with the
+                    displayed mode, the shared link encodes it, and the
+                    toggle hides because the mode is now locked. */}
+                {!isMultiplayer && (
+                  <div
+                    className="hexaclear-coop-mode-toggle"
+                    role="radiogroup"
+                    aria-label="Multiplayer mode"
+                  >
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={mpPendingMode === 'coop'}
+                      className={[
+                        'hexaclear-coop-mode-pill',
+                        mpPendingMode === 'coop' ? 'is-active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        if (mpPendingMode !== 'coop') {
+                          playUiClick()
+                          setMpPendingMode('coop')
+                        }
+                      }}
+                    >
+                      Co-op
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={mpPendingMode === 'pvp'}
+                      className={[
+                        'hexaclear-coop-mode-pill',
+                        mpPendingMode === 'pvp' ? 'is-active' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        if (mpPendingMode !== 'pvp') {
+                          playUiClick()
+                          setMpPendingMode('pvp')
+                        }
+                      }}
+                    >
+                      PvP
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   className={[
@@ -6157,7 +6707,148 @@ function App() {
               </div>
             </div>
           )}
-          {game.gameOver && game.mode === 'big' && !gameOverWindingDown && (
+          {game.gameOver &&
+            game.mode === 'big' &&
+            !gameOverWindingDown &&
+            isMultiplayer &&
+            mp.mode === 'pvp' &&
+            (() => {
+              // PvP-specific game-over modal. Two variants on the same
+              // shell: a "WIN" celebration when winnerPlayerId is set,
+              // and a desaturated "SHAME — NOBODY WINS" screen when
+              // every seated player got stuck before anyone crossed
+              // the threshold. Both variants show the final
+              // territory standings so each player sees how close
+              // they were.
+              const selfId = mp.selfPlayer?.playerId ?? null
+              const winnerId = mp.winnerPlayerId
+              const isShame = winnerId === null
+              const selfWon = !isShame && winnerId === selfId
+              const nameByPlayerId = new Map<string, string>()
+              for (const p of mp.allPlayers) {
+                nameByPlayerId.set(p.playerId, p.name)
+              }
+              const winnerName =
+                winnerId !== null
+                  ? nameByPlayerId.get(winnerId) ?? 'Player'
+                  : null
+              const colorForPlayer = (pid: string): string =>
+                tintCubeColor(
+                  WOOD_CUBE_LEFT_HEX,
+                  mp.hueShiftByPlayerId[pid] ?? 0,
+                  0.05,
+                  0.95,
+                )
+              const thresholdPct = Math.round(mp.pvpThresholdRatio * 100)
+              return (
+                <div className="hexaclear-overlay">
+                  <div
+                    className={[
+                      'hexaclear-overlay-card',
+                      'hexaclear-gameover-card',
+                      'hexaclear-pvp-gameover',
+                      isShame ? 'is-shame' : 'is-win',
+                      selfWon ? 'is-self-won' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {isShame ? (
+                      <>
+                        <div className="title hexaclear-pvp-shame-title">
+                          SHAME
+                        </div>
+                        <div className="hexaclear-pvp-shame-subtitle">
+                          NOBODY WINS
+                        </div>
+                        <div className="hexaclear-pvp-shame-blurb">
+                          Every player ran out of moves before anyone
+                          claimed {thresholdPct}% of the field.
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="title hexaclear-pvp-win-title">
+                          {selfWon ? 'You Win!' : `${winnerName} Wins`}
+                        </div>
+                        <div className="hexaclear-pvp-win-subtitle">
+                          First past {thresholdPct}% of the field.
+                        </div>
+                      </>
+                    )}
+
+                    <div className="hexaclear-pvp-standings">
+                      <div className="hexaclear-pvp-standings-label">
+                        Final standings
+                      </div>
+                      <ol className="hexaclear-pvp-standings-list">
+                        {mp.pvpStandings.map((s, idx) => {
+                          const name =
+                            s.playerId === selfId
+                              ? 'You'
+                              : nameByPlayerId.get(s.playerId) ?? 'Player'
+                          const isWinner = s.playerId === winnerId
+                          return (
+                            <li
+                              key={s.playerId}
+                              className={[
+                                'hexaclear-pvp-standings-row',
+                                isWinner ? 'is-winner' : '',
+                                s.playerId === selfId ? 'is-self' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                            >
+                              <span className="hexaclear-pvp-standings-rank">
+                                {idx + 1}
+                              </span>
+                              <span
+                                className="hexaclear-pvp-standings-swatch"
+                                style={{
+                                  background: colorForPlayer(s.playerId),
+                                }}
+                                aria-hidden="true"
+                              />
+                              <span className="hexaclear-pvp-standings-name">
+                                {name}
+                              </span>
+                              <span className="hexaclear-pvp-standings-pct">
+                                {Math.round(s.ratio * 100)}%
+                              </span>
+                            </li>
+                          )
+                        })}
+                      </ol>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="hexaclear-gameover-cta"
+                      onClick={() => {
+                        playUiClick()
+                        handleRestartCoop()
+                      }}
+                    >
+                      New match
+                    </button>
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link"
+                      onClick={() => {
+                        playUiClick()
+                        handleLeaveRoom()
+                      }}
+                    >
+                      Back to single player
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+          {game.gameOver &&
+            game.mode === 'big' &&
+            !gameOverWindingDown &&
+            !(isMultiplayer && mp.mode === 'pvp') && (
             <div className="hexaclear-overlay">
               <div className="hexaclear-overlay-card hexaclear-gameover-card">
                 <div className="title">
@@ -6941,7 +7632,8 @@ function App() {
             const totalGames =
               lifetimeStats.gamesPlayedEndless +
               lifetimeStats.gamesPlayedDaily +
-              lifetimeStats.gamesPlayedCoop
+              lifetimeStats.gamesPlayedCoop +
+              lifetimeStats.gamesPlayedPvp
             const summaryItems: StatDatum[] = [
               {
                 key: 'games',
@@ -7334,12 +8026,14 @@ function App() {
             const hasAnyGame =
               ls.gamesPlayedEndless +
                 ls.gamesPlayedDaily +
-                ls.gamesPlayedCoop >
+                ls.gamesPlayedCoop +
+                ls.gamesPlayedPvp >
               0
             const totalGames =
               ls.gamesPlayedEndless +
               ls.gamesPlayedDaily +
-              ls.gamesPlayedCoop
+              ls.gamesPlayedCoop +
+              ls.gamesPlayedPvp
             const avgRunMs =
               totalGames > 0 ? ls.totalActivePlayMs / totalGames : 0
             const formatAverage = (value: number): string =>
@@ -7420,6 +8114,25 @@ function App() {
                 value: String(ls.gamesPlayedCoop),
               },
             ]
+            if (ls.gamesPlayedPvp > 0) {
+              modeStats.push({
+                key: 'pvp',
+                label: 'PvP',
+                value: String(ls.gamesPlayedPvp),
+              })
+              modeStats.push({
+                key: 'pvp-wins',
+                label: 'PvP wins',
+                value: String(ls.pvpWins),
+              })
+              if (ls.pvpShames > 0) {
+                modeStats.push({
+                  key: 'pvp-shames',
+                  label: 'Shames',
+                  value: String(ls.pvpShames),
+                })
+              }
+            }
             if (ls.dailyDaysCleared.length > 0) {
               modeStats.push({
                 key: 'daily-days',
@@ -7674,13 +8387,30 @@ function App() {
               )
               const isToday = dateKey === todayKey
               const isActive = dateKey === game.dailyDateKey
-              // Read best moves either from the dedicated
-              // `cubic-daily-best-…` slot, or fall back to scanning
-              // the runs list for a min. Best slot is always
-              // up-to-date for runs saved through the standard
-              // flow; the fallback covers older saves that pre-date
-              // the per-day-best storage.
+              // Read best moves with a layered lookup so signed-in
+              // accounts see clears from every device:
+              //   1. The synced `dailyBestMovesByDate` map (always
+              //      preferred when present — it merges across
+              //      devices on each stats sync).
+              //   2. The dedicated `cubic-daily-best-<key>`
+              //      localStorage slot for legacy / pre-sync data.
+              //   3. The runs list min, for very old saves that
+              //      predate the per-day-best storage.
+              // Whichever wins, we keep `bestMoves` as the smallest
+              // observed value so a stale local entry can't shadow
+              // a better synced one.
               let bestMoves: number | null = null
+              const consider = (candidate: number | null | undefined) => {
+                if (
+                  typeof candidate === 'number' &&
+                  Number.isFinite(candidate) &&
+                  candidate > 0 &&
+                  (bestMoves === null || candidate < bestMoves)
+                ) {
+                  bestMoves = candidate
+                }
+              }
+              consider(lifetimeStats.dailyBestMovesByDate[dateKey])
               try {
                 if (typeof window !== 'undefined') {
                   const raw = window.localStorage.getItem(
@@ -7688,7 +8418,7 @@ function App() {
                   )
                   const parsed = raw ? Number.parseInt(raw, 10) : NaN
                   if (Number.isFinite(parsed) && parsed > 0) {
-                    bestMoves = parsed
+                    consider(parsed)
                   }
                   if (bestMoves === null) {
                     const runs = loadDailyRunsForDateKey(dateKey)
@@ -7697,12 +8427,12 @@ function App() {
                         (acc, r) => Math.min(acc, r.moves),
                         Infinity,
                       )
-                      if (Number.isFinite(min)) bestMoves = min
+                      if (Number.isFinite(min)) consider(min)
                     }
                   }
                 }
               } catch {
-                bestMoves = null
+                // Keep whatever we already have from the synced map.
               }
               cells.push({
                 kind: 'day',
@@ -7844,10 +8574,6 @@ function App() {
                       )
                     })}
                   </div>
-                  <p className="hexaclear-history-legend">
-                    Past-day puzzles are local-only — they don't post to
-                    the global leaderboard.
-                  </p>
                   <button
                     type="button"
                     className="hexaclear-reset"
@@ -8052,7 +8778,8 @@ function App() {
                   >
                     {tabButton('endless', 'Endless')}
                     {tabButton('daily', 'Daily')}
-                    {tabButton('coop', 'Co-op')}
+                    {tabButton('coop', 'Multi')}
+                    {tabButton('pvp', 'PvP')}
                   </div>
 
                   {effectiveTab === 'endless' && (
@@ -8275,6 +9002,144 @@ function App() {
                       )}
                     </div>
                   )}
+
+                  {effectiveTab === 'pvp' && (() => {
+                    // Global PvP leaderboard. Always global (no
+                    // local store), so we ignore the
+                    // showGlobalLeaderboard toggle for this tab.
+                    // Sort flips the server-side ordering between
+                    // derived rank score (games × win-rate, the
+                    // default) and raw wins. Both columns render
+                    // either way so the player can compare.
+                    const rows = (globalPvpScores ?? []).map((e) => ({
+                      ...e,
+                      // Display-only win rate: wins / (wins +
+                      // losses). 0 when neither side has a value
+                      // yet so a brand-new row renders 0% instead
+                      // of NaN.
+                      winRate:
+                        e.wins + e.losses > 0
+                          ? e.wins / (e.wins + e.losses)
+                          : 0,
+                    }))
+                    const pvpPage = buildPageWindow(rows, 'pvp')
+                    const loadingPvp = globalPvpScores === undefined
+                    const selfId = playerId
+                    return (
+                      <div className="hexaclear-scores-section">
+                        <div className="hexaclear-scores-section-label">
+                          PvP · {pvpSortBy === 'rank' ? 'global rank' : 'most wins'}
+                        </div>
+                        <div
+                          className="hexaclear-pvp-sort-toggle"
+                          role="radiogroup"
+                          aria-label="Sort PvP leaderboard"
+                        >
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={pvpSortBy === 'rank'}
+                            className={[
+                              'hexaclear-pvp-sort-pill',
+                              pvpSortBy === 'rank' ? 'is-active' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            onClick={() => {
+                              if (pvpSortBy !== 'rank') {
+                                playUiClick()
+                                setPvpSortBy('rank')
+                              }
+                            }}
+                          >
+                            Rank
+                          </button>
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={pvpSortBy === 'wins'}
+                            className={[
+                              'hexaclear-pvp-sort-pill',
+                              pvpSortBy === 'wins' ? 'is-active' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            onClick={() => {
+                              if (pvpSortBy !== 'wins') {
+                                playUiClick()
+                                setPvpSortBy('wins')
+                              }
+                            }}
+                          >
+                            Wins
+                          </button>
+                        </div>
+                        {loadingPvp ? (
+                          <p className="hexaclear-scores-empty">
+                            Loading global PvP leaderboard…
+                          </p>
+                        ) : rows.length === 0 ? (
+                          <p className="hexaclear-scores-empty">
+                            No PvP matches yet — be the first.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="hexaclear-pvp-scores-header">
+                              <span className="col-rank">#</span>
+                              <span className="col-name">Player</span>
+                              <span className="col-record">W–L</span>
+                              <span className="col-score">Score</span>
+                            </div>
+                            <ol className="hexaclear-scores-list hexaclear-pvp-scores-list">
+                              {pvpPage.window.map((entry, idx) => {
+                                const rank = pvpPage.pageStart + idx + 1
+                                const isYou = entry.playerId === selfId
+                                return (
+                                  <li
+                                    key={entry.playerId}
+                                    className={[
+                                      'hexaclear-scores-row',
+                                      'hexaclear-pvp-scores-row',
+                                      isYou ? 'recent' : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                  >
+                                    <span
+                                      className={`hexaclear-rank-chip ${rankClass(rank)}`}
+                                      aria-hidden="true"
+                                    >
+                                      {rank}
+                                    </span>
+                                    <span className="hexaclear-scores-name">
+                                      {entry.name}
+                                      {isYou ? ' (you)' : ''}
+                                    </span>
+                                    <span className="hexaclear-pvp-record">
+                                      {entry.wins}–{entry.losses}
+                                      <span className="hexaclear-pvp-record-rate">
+                                        {Math.round(entry.winRate * 100)}%
+                                      </span>
+                                    </span>
+                                    <span className="hexaclear-scores-value hexaclear-pvp-rank-score">
+                                      {entry.rankScore.toFixed(1)}
+                                    </span>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                            <PageControls
+                              tab="pvp"
+                              pageIndex={pvpPage.pageIndex}
+                              pageCount={pvpPage.pageCount}
+                              pageStart={pvpPage.pageStart}
+                              total={rows.length}
+                            />
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Reset hiscores only wipes per-device local
                       lists; it never touches the global tables.

@@ -15,12 +15,29 @@ const nonNegative = (value: number): number =>
 const saneTimestamp = (value: number): number =>
   Number.isFinite(value) && value > 0 ? Math.floor(value) : now()
 
+const sanitizeDailyBestMap = (
+  raw: Record<string, number> | undefined,
+): Record<string, number> => {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof key !== 'string' || key.length === 0) continue
+    if (Number.isFinite(value) && value > 0) {
+      out[key] = Math.floor(value)
+    }
+  }
+  return out
+}
+
 const sanitizeStats = (stats: LifetimeStats): LifetimeStats => ({
   startedTrackingAt: saneTimestamp(stats.startedTrackingAt),
   totalActivePlayMs: nonNegative(stats.totalActivePlayMs),
   gamesPlayedEndless: nonNegative(stats.gamesPlayedEndless),
   gamesPlayedDaily: nonNegative(stats.gamesPlayedDaily),
   gamesPlayedCoop: nonNegative(stats.gamesPlayedCoop),
+  gamesPlayedPvp: nonNegative(stats.gamesPlayedPvp ?? 0),
+  pvpWins: nonNegative(stats.pvpWins ?? 0),
+  pvpShames: nonNegative(stats.pvpShames ?? 0),
   piecesPlaced: nonNegative(stats.piecesPlaced),
   cubesPlaced: nonNegative(stats.cubesPlaced),
   patternsCleared: nonNegative(stats.patternsCleared),
@@ -38,6 +55,7 @@ const sanitizeStats = (stats: LifetimeStats): LifetimeStats => ({
   dailyDaysCleared: uniqueStrings(stats.dailyDaysCleared),
   dailyDaysPlayed: uniqueStrings(stats.dailyDaysPlayed),
   coopPartnerIds: uniqueStrings(stats.coopPartnerIds),
+  dailyBestMovesByDate: sanitizeDailyBestMap(stats.dailyBestMovesByDate),
 })
 
 const mergeStats = (server: LifetimeStats, delta: LifetimeStats): LifetimeStats => {
@@ -54,6 +72,10 @@ const mergeStats = (server: LifetimeStats, delta: LifetimeStats): LifetimeStats 
       cleanServer.gamesPlayedEndless + cleanDelta.gamesPlayedEndless,
     gamesPlayedDaily: cleanServer.gamesPlayedDaily + cleanDelta.gamesPlayedDaily,
     gamesPlayedCoop: cleanServer.gamesPlayedCoop + cleanDelta.gamesPlayedCoop,
+    gamesPlayedPvp:
+      (cleanServer.gamesPlayedPvp ?? 0) + (cleanDelta.gamesPlayedPvp ?? 0),
+    pvpWins: (cleanServer.pvpWins ?? 0) + (cleanDelta.pvpWins ?? 0),
+    pvpShames: (cleanServer.pvpShames ?? 0) + (cleanDelta.pvpShames ?? 0),
     piecesPlaced: cleanServer.piecesPlaced + cleanDelta.piecesPlaced,
     cubesPlaced: cleanServer.cubesPlaced + cleanDelta.cubesPlaced,
     patternsCleared: cleanServer.patternsCleared + cleanDelta.patternsCleared,
@@ -91,6 +113,21 @@ const mergeStats = (server: LifetimeStats, delta: LifetimeStats): LifetimeStats 
       ...cleanServer.coopPartnerIds,
       ...cleanDelta.coopPartnerIds,
     ]),
+    // Per-key min merge so the best run for any given day wins,
+    // regardless of which device recorded it. Unknown-on-one-side
+    // entries pass straight through.
+    dailyBestMovesByDate: (() => {
+      const out: Record<string, number> = {
+        ...(cleanServer.dailyBestMovesByDate ?? {}),
+      }
+      for (const [key, value] of Object.entries(
+        cleanDelta.dailyBestMovesByDate ?? {},
+      )) {
+        const incumbent = out[key]
+        if (incumbent === undefined || value < incumbent) out[key] = value
+      }
+      return out
+    })(),
   }
 }
 
@@ -100,6 +137,9 @@ const emptyStats = (timestamp: number): LifetimeStats => ({
   gamesPlayedEndless: 0,
   gamesPlayedDaily: 0,
   gamesPlayedCoop: 0,
+  gamesPlayedPvp: 0,
+  pvpWins: 0,
+  pvpShames: 0,
   piecesPlaced: 0,
   cubesPlaced: 0,
   patternsCleared: 0,
@@ -116,6 +156,7 @@ const emptyStats = (timestamp: number): LifetimeStats => ({
   dailyDaysCleared: [],
   dailyDaysPlayed: [],
   coopPartnerIds: [],
+  dailyBestMovesByDate: {},
 })
 
 export const getMyStats = query({
