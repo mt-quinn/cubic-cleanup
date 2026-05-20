@@ -1441,6 +1441,14 @@
   letter-spacing: 0 !important;
 }
 
+/* "Your rank" footnote inside the gameover modal renders as plain
+   Win98 body text. */
+[data-theme="win98"] .hexaclear-scores-your-rank {
+  font-family: inherit !important;
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
+}
+
 [data-theme="win98"] .hexaclear-gameover-card.daily-win .title {
   /* Daily win still uses the navy bar — the celebration is in the
      gold flash, not in the modal chrome. */

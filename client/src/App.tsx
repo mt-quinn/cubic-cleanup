@@ -1085,6 +1085,73 @@ const loadDailyRunsForDateKey = (dateKey: string): DailyHighScoreEntry[] => {
   }
 }
 
+// Local co-op leaderboard entry. Keyed by `groupKey` (sorted player
+// ids joined with '|') so each unique co-op partnership has at most
+// one row on this device — repeated runs by the same group only
+// stick if they beat the previous best. `name` is the rendered
+// "Alice & Bob" display string, `playerIds` is kept around so the
+// gameover modal can match the just-finished group against this
+// store and so the global submit gate can compare apples-to-apples
+// against the global leaderboard's per-group rows.
+type CoopHighScoreEntry = {
+  groupKey: string
+  name: string
+  score: number
+  date: number
+  playerIds: string[]
+}
+
+const COOP_HIGH_SCORES_KEY = 'cubic-coop-highscores'
+
+const computeCoopGroupKey = (playerIds: readonly string[]): string =>
+  [...playerIds].sort().join('|')
+
+const loadCoopHighScores = (): CoopHighScoreEntry[] => {
+  try {
+    const raw = window.localStorage.getItem(COOP_HIGH_SCORES_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as CoopHighScoreEntry[]
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (e) =>
+          typeof e.groupKey === 'string' &&
+          typeof e.name === 'string' &&
+          typeof e.score === 'number' &&
+          typeof e.date === 'number' &&
+          Array.isArray(e.playerIds) &&
+          e.playerIds.every((p) => typeof p === 'string'),
+      )
+      .sort((a, b) => b.score - a.score || a.date - b.date)
+  } catch {
+    return []
+  }
+}
+
+// Apply a finished co-op run to the local store. Returns the updated
+// list AND a flag indicating whether the run is the new best for its
+// group — that flag drives the "only submit globally on a new local
+// #1" gate. The returned list is also normalized: at most one row
+// per groupKey (best score wins).
+const applyCoopHighScore = (
+  prev: CoopHighScoreEntry[],
+  next: CoopHighScoreEntry,
+): { list: CoopHighScoreEntry[]; isNewGroupBest: boolean } => {
+  const incumbent = prev.find((e) => e.groupKey === next.groupKey) ?? null
+  const isNewGroupBest =
+    !incumbent ||
+    next.score > incumbent.score ||
+    (next.score === incumbent.score && next.date < incumbent.date)
+  if (!isNewGroupBest) {
+    return { list: prev, isNewGroupBest: false }
+  }
+  const filtered = prev.filter((e) => e.groupKey !== next.groupKey)
+  const list = [...filtered, next].sort(
+    (a, b) => b.score - a.score || a.date - b.date,
+  )
+  return { list, isNewGroupBest: true }
+}
+
 const qualifiesForHighScore = (
   score: number,
   entries: HighScoreEntry[],
@@ -1672,6 +1739,26 @@ function App() {
   const [dailyHighScoreSaved, setDailyHighScoreSaved] = useState(false)
   const [lastSavedDailyHighScoreDate, setLastSavedDailyHighScoreDate] =
     useState<number | null>(null)
+  // Per-device co-op high scores. Each unique playerIds-group has at
+  // most one row (best score wins) so the local view is "all the
+  // co-op partnerships I've ever scored with, deduped to each one's
+  // best run". The just-finished-game submit pipeline writes here
+  // first and only fires the global submit when the new score is
+  // also the new local-#1 for its group, mirroring the endless /
+  // daily gating.
+  const [coopHighScores, setCoopHighScores] = useState<CoopHighScoreEntry[]>(
+    () => (typeof window === 'undefined' ? [] : loadCoopHighScores()),
+  )
+  // Most-recent co-op submission identity, so the gameover screen
+  // can highlight the just-finished run inside whichever leaderboard
+  // (local-group or global) the player is viewing. Cleared when the
+  // player leaves the room or starts a fresh single-player game.
+  const [lastCoopSavedGroupKey, setLastCoopSavedGroupKey] = useState<
+    string | null
+  >(null)
+  const [lastCoopSavedScore, setLastCoopSavedScore] = useState<number | null>(
+    null,
+  )
   // Pre-fill the high-score name field with the last name the
   // player saved under, falling back to a friendly default for
   // first-time players. Combined with the autosave-on-dismiss
@@ -1720,19 +1807,24 @@ function App() {
   // tears down the subscription otherwise. Daily is hard-pinned to
   // today globally (per product call), regardless of which date
   // the local stepper happens to be sitting on.
+  // Live global queries. We subscribe whenever a leaderboard surface
+  // is visible (the High Scores card OR the gameover modal) AND the
+  // global toggle is on — passing 'skip' tears down the subscription
+  // otherwise. Daily is hard-pinned to today globally regardless of
+  // which date the local stepper happens to be sitting on.
+  const wantsGlobalSubscription =
+    showGlobalLeaderboard && (showHighScores || game.gameOver)
   const globalEndlessScores = useQuery(
     api.leaderboard.getTopEndlessScores,
-    showHighScores && showGlobalLeaderboard ? {} : 'skip',
+    wantsGlobalSubscription ? {} : 'skip',
   )
   const globalDailyScores = useQuery(
     api.leaderboard.getTopDailyScoresForDate,
-    showHighScores && showGlobalLeaderboard
-      ? { dateKey: getTodayKey() }
-      : 'skip',
+    wantsGlobalSubscription ? { dateKey: getTodayKey() } : 'skip',
   )
   const globalCoopScores = useQuery(
     api.leaderboard.getTopCoopScores,
-    showHighScores && showGlobalLeaderboard ? {} : 'skip',
+    wantsGlobalSubscription ? {} : 'skip',
   )
   const [goldenPopupCellIds, setGoldenPopupCellIds] = useState<string[]>([])
   const [goldenPopupToken, setGoldenPopupToken] = useState(0)
@@ -2821,6 +2913,24 @@ function App() {
   // (roomCode, finishedAt) check. `lastPlacement.ts` is the actual
   // "this game ended" timestamp and is stable for the lifetime of
   // the finished run.
+  // Co-op gameover submit pipeline. We always upsert the run into the
+  // per-device co-op high-scores store (so the player's "local"
+  // co-op leaderboard tracks every partnership they've been part of,
+  // deduped to one row per group), and only fire the global mutation
+  // when the run is also the new best-ever score for its group. That
+  // gating mirrors the endless / daily flow and keeps the global
+  // table from collecting churn from the same group repeatedly
+  // grinding at the same score.
+  //
+  // CRITICAL: `finishedAt` here is `lastPlacement.ts` — the server-
+  // stamped time of the placement that ended the game — not the
+  // room's `updatedAt`. The two are equal at the moment of gameover,
+  // but `updatedAt` can later be patched by other writes (e.g. an
+  // emote sent into the gameover modal), which would shift the
+  // dedupe key and slip a duplicate row past the server's
+  // (roomCode, finishedAt) check. `lastPlacement.ts` is the actual
+  // "this game ended" timestamp and is stable for the lifetime of
+  // the finished run.
   const coopScoreSubmittedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isMultiplayer) return
@@ -2828,20 +2938,48 @@ function App() {
     if (!mpRoomCode) return
     if (mp.allPlayers.length === 0) return
     if (mp.game === null) return
-    // lastPlacement is set whenever a placement lands, and the only
-    // way to enter gameover is via a placement, so we can rely on it
-    // here. Fall back to updatedAt purely as a defensive shim for
-    // any pre-existing rooms whose lastPlacement somehow drifted.
     const finishedAt = mp.lastPlacement?.ts ?? mp.updatedAt
     if (finishedAt === null) return
     const dedupeKey = `${mpRoomCode}@${finishedAt}`
     if (coopScoreSubmittedRef.current === dedupeKey) return
     coopScoreSubmittedRef.current = dedupeKey
+
+    const sortedBySlot = [...mp.allPlayers].sort((a, b) => a.slot - b.slot)
+    const playerIds = sortedBySlot.map((p) => p.playerId)
+    const groupKey = computeCoopGroupKey(playerIds)
+    const combinedName = sortedBySlot.map((p) => p.name).join(' & ')
+    const score = mp.game.score
+    const newEntry: CoopHighScoreEntry = {
+      groupKey,
+      name: combinedName,
+      score,
+      date: finishedAt,
+      playerIds,
+    }
+    setLastCoopSavedGroupKey(groupKey)
+    setLastCoopSavedScore(score)
+    let isNewGroupBest = false
+    setCoopHighScores((prev) => {
+      const result = applyCoopHighScore(prev, newEntry)
+      isNewGroupBest = result.isNewGroupBest
+      if (
+        result.isNewGroupBest &&
+        typeof window !== 'undefined'
+      ) {
+        window.localStorage.setItem(
+          COOP_HIGH_SCORES_KEY,
+          JSON.stringify(result.list),
+        )
+      }
+      return result.list
+    })
+
+    if (!isNewGroupBest) return
     submitCoopGlobal({
       roomCode: mpRoomCode,
       finishedAt,
-      score: mp.game.score,
-      players: mp.allPlayers.map((p) => ({
+      score,
+      players: sortedBySlot.map((p) => ({
         playerId: p.playerId,
         name: p.name,
         slot: p.slot,
@@ -3710,14 +3848,25 @@ function App() {
     }
     setPendingHighScore(false)
     setHighScoreSaved(true)
-    // Auto-mirror to the global leaderboard. Convex dedupes on
-    // (playerId, savedAt) so duplicate clicks/refreshes are a no-op.
-    submitEndlessGlobal({
-      playerId,
-      name,
-      score: entry.score,
-      savedAt: entry.date,
-    }).catch(() => {})
+    // Only mirror to the global leaderboard when this run is the new
+    // local #1 — i.e. it's the top of `next` after re-sorting. The
+    // server upserts on playerId so re-firing on a non-best run
+    // would be wasteful (and would arguably leak score floor data
+    // we shouldn't push). The first row in `next` is the highest
+    // because we sorted descending by score above.
+    const top = next[0]
+    const isNewLocalBest =
+      top !== undefined &&
+      top.score === entry.score &&
+      top.date === entry.date
+    if (isNewLocalBest) {
+      submitEndlessGlobal({
+        playerId,
+        name,
+        score: entry.score,
+        savedAt: entry.date,
+      }).catch(() => {})
+    }
   }
 
   const handleSaveDailyHighScore = () => {
@@ -3750,16 +3899,31 @@ function App() {
     setDailyRunsToken((t) => t + 1)
     setPendingDailyHighScore(false)
     setDailyHighScoreSaved(true)
-    // Auto-mirror to the global daily board, scoped to today's
-    // calendar key. We don't gate this on the toggle so a player
-    // who saves locally always lands on the global board too.
-    submitDailyGlobal({
-      playerId,
-      name,
-      moves: entry.moves,
-      dateKey: getTodayKey(),
-      savedAt: entry.date,
-    }).catch(() => {})
+    // Only mirror to the global daily leaderboard when this is the
+    // new local #1 for *today* (fewer moves than every other entry
+    // for the same dateKey). Daily ranks ascending by moves, so #1
+    // is the first row in `next` after the sort above — but `next`
+    // can hold cross-date entries when it's a fresh day and the
+    // last week of bests are still in storage, so re-filter to
+    // today's entries before checking.
+    const todayKey = getTodayKey()
+    const todays = next.filter(
+      (e) => getDateKeyFromTimestamp(e.date) === todayKey,
+    )
+    const top = todays[0]
+    const isNewLocalBestToday =
+      top !== undefined &&
+      top.moves === entry.moves &&
+      top.date === entry.date
+    if (isNewLocalBestToday) {
+      submitDailyGlobal({
+        playerId,
+        name,
+        moves: entry.moves,
+        dateKey: todayKey,
+        savedAt: entry.date,
+      }).catch(() => {})
+    }
   }
 
   const handleResetHighScores = () => {
@@ -3771,12 +3935,16 @@ function App() {
       window.localStorage.removeItem('cubic-highscores')
       window.localStorage.removeItem('cubic-daily-highscores')
       window.localStorage.removeItem(`${DAILY_PLAYER_RUNS_PREFIX}${getTodayKey()}`)
+      window.localStorage.removeItem(COOP_HIGH_SCORES_KEY)
     }
     setDailyHighScores([])
     setDailyRunsToken((t) => t + 1)
     setPendingDailyHighScore(false)
     setPendingDailyMoves(null)
     setDailyHighScoreSaved(false)
+    setCoopHighScores([])
+    setLastCoopSavedGroupKey(null)
+    setLastCoopSavedScore(null)
     setShowResetConfirm(false)
   }
 
@@ -5067,53 +5235,161 @@ function App() {
                   </div>
                 )}
 
-                {highScores.length > 0 && (
-                  <div className="hexaclear-gameover-section">
-                    <div className="hexaclear-gameover-section-label">
-                      Top scores
+                {(() => {
+                  // Endless gameover leaderboard. Default-on the
+                  // global view if the player has it toggled in the
+                  // pause-menu high scores panel; the inline checkbox
+                  // here flips back and forth without leaving the
+                  // modal. The "you" highlight tracks the player's
+                  // best entry in whichever view is showing — for
+                  // global that's their playerId row (one-per-player
+                  // by construction), for local it's the just-saved
+                  // run.
+                  const localTop = highScores
+                    .slice()
+                    .sort((a, b) => b.score - a.score || a.date - b.date)
+                  const globalLoading =
+                    showGlobalLeaderboard && globalEndlessScores === undefined
+                  const globalTop = (globalEndlessScores ?? []).slice()
+                  const usingGlobal = showGlobalLeaderboard
+                  const visibleCount = 10
+                  const localVisible = localTop.slice(0, visibleCount)
+                  const globalVisible = globalTop.slice(0, visibleCount)
+                  const playerGlobalIndex = globalTop.findIndex(
+                    (e) => e.playerId === playerId,
+                  )
+                  const playerGlobalRank =
+                    playerGlobalIndex === -1 ? null : playerGlobalIndex + 1
+                  const globalShowsPlayer =
+                    playerGlobalRank !== null &&
+                    playerGlobalRank <= visibleCount
+                  const playerGlobalEntry =
+                    playerGlobalIndex === -1
+                      ? null
+                      : globalTop[playerGlobalIndex]
+                  if (
+                    !usingGlobal &&
+                    localVisible.length === 0 &&
+                    !globalLoading
+                  ) {
+                    return null
+                  }
+                  return (
+                    <div className="hexaclear-gameover-section">
+                      <div className="hexaclear-gameover-section-label">
+                        Top scores{usingGlobal ? ' (global)' : ''}
+                      </div>
+                      <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
+                        <input
+                          type="checkbox"
+                          checked={showGlobalLeaderboard}
+                          onChange={(e) => {
+                            playUiClick()
+                            setShowGlobalLeaderboard(e.target.checked)
+                          }}
+                        />
+                        <span>Show global</span>
+                      </label>
+                      {globalLoading ? (
+                        <p className="hexaclear-scores-empty">
+                          Loading global scores…
+                        </p>
+                      ) : usingGlobal ? (
+                        <>
+                          {globalVisible.length === 0 ? (
+                            <p className="hexaclear-scores-empty">
+                              No global scores yet — be the first.
+                            </p>
+                          ) : (
+                            <ol className="hexaclear-scores-list">
+                              {globalVisible.map((entry, idx) => {
+                                const rank = idx + 1
+                                const isYou = entry.playerId === playerId
+                                const chipClass = [
+                                  'hexaclear-rank-chip',
+                                  rank === 1
+                                    ? 'hexaclear-chip-trophy'
+                                    : rank <= 3
+                                      ? 'hexaclear-chip-gold'
+                                      : 'hexaclear-chip-neutral',
+                                ].join(' ')
+                                return (
+                                  <li
+                                    key={entry.savedAt + entry.playerId + idx}
+                                    className={[
+                                      'hexaclear-scores-row',
+                                      isYou ? 'recent' : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                  >
+                                    <span className={chipClass}>{rank}</span>
+                                    <span className="hexaclear-scores-name">
+                                      {entry.name}
+                                      {isYou ? ' (you)' : ''}
+                                    </span>
+                                    <span className="hexaclear-scores-value">
+                                      {entry.score}
+                                    </span>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                          )}
+                          {playerGlobalRank !== null && !globalShowsPlayer &&
+                            playerGlobalEntry && (
+                              <p className="hexaclear-scores-your-rank">
+                                Your rank: #{playerGlobalRank} ·{' '}
+                                {playerGlobalEntry.score}
+                              </p>
+                            )}
+                          {playerGlobalRank === null && highScoreSaved && (
+                            <p className="hexaclear-scores-your-rank">
+                              Not on the global board yet.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <ol className="hexaclear-scores-list">
+                          {localVisible.map((entry, idx) => {
+                            const isRecent =
+                              highScoreSaved &&
+                              lastSavedHighScoreDate !== null &&
+                              entry.date === lastSavedHighScoreDate
+                            const rank = idx + 1
+                            const chipClass = [
+                              'hexaclear-rank-chip',
+                              rank === 1
+                                ? 'hexaclear-chip-trophy'
+                                : rank <= 3
+                                  ? 'hexaclear-chip-gold'
+                                  : 'hexaclear-chip-neutral',
+                            ].join(' ')
+                            return (
+                              <li
+                                key={entry.date + entry.name + idx}
+                                className={[
+                                  'hexaclear-scores-row',
+                                  isRecent ? 'recent' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                              >
+                                <span className={chipClass}>{rank}</span>
+                                <span className="hexaclear-scores-name">
+                                  {entry.name}
+                                </span>
+                                <span className="hexaclear-scores-value">
+                                  {entry.score}
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      )}
                     </div>
-                    <ol className="hexaclear-scores-list">
-                      {highScores
-                        .slice()
-                        .sort((a, b) => b.score - a.score || a.date - b.date)
-                        .slice(0, 5)
-                        .map((entry, idx) => {
-                          const isRecent =
-                            highScoreSaved &&
-                            lastSavedHighScoreDate !== null &&
-                            entry.date === lastSavedHighScoreDate
-                          const rank = idx + 1
-                          const chipClass = [
-                            'hexaclear-rank-chip',
-                            rank === 1
-                              ? 'hexaclear-chip-trophy'
-                              : rank <= 3
-                                ? 'hexaclear-chip-gold'
-                                : 'hexaclear-chip-neutral',
-                          ].join(' ')
-                          return (
-                            <li
-                              key={entry.date + entry.name + idx}
-                              className={[
-                                'hexaclear-scores-row',
-                                isRecent ? 'recent' : '',
-                              ]
-                                .filter(Boolean)
-                                .join(' ')}
-                            >
-                              <span className={chipClass}>{rank}</span>
-                              <span className="hexaclear-scores-name">
-                                {entry.name}
-                              </span>
-                              <span className="hexaclear-scores-value">
-                                {entry.score}
-                              </span>
-                            </li>
-                          )
-                        })}
-                    </ol>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {undoStack.length > 0 && !highScoreSaved && (
                   <button
@@ -5177,6 +5453,168 @@ function App() {
                     Undo last move
                   </button>
                 )}
+
+                {isMultiplayer && (() => {
+                  // Co-op gameover leaderboard. The local view shows
+                  // every co-op partnership this device has scored
+                  // with, deduped to each one's best run; the global
+                  // view shows every group's best ever co-op run
+                  // across all devices. Highlight the row for the
+                  // group that just finished — by groupKey locally,
+                  // by canonical playerIdsKey globally.
+                  const localTop = coopHighScores
+                    .slice()
+                    .sort((a, b) => b.score - a.score || a.date - b.date)
+                  const globalLoading =
+                    showGlobalLeaderboard && globalCoopScores === undefined
+                  const globalTop = (globalCoopScores ?? []).slice()
+                  const usingGlobal = showGlobalLeaderboard
+                  const visibleCount = 10
+                  const localVisible = localTop.slice(0, visibleCount)
+                  const globalVisible = globalTop.slice(0, visibleCount)
+                  const groupKey = lastCoopSavedGroupKey
+                  const groupGlobalIndex =
+                    groupKey === null
+                      ? -1
+                      : globalTop.findIndex(
+                          (e) => (e.playerIdsKey ?? '') === groupKey,
+                        )
+                  const groupGlobalRank =
+                    groupGlobalIndex === -1 ? null : groupGlobalIndex + 1
+                  const globalShowsGroup =
+                    groupGlobalRank !== null &&
+                    groupGlobalRank <= visibleCount
+                  const groupGlobalEntry =
+                    groupGlobalIndex === -1
+                      ? null
+                      : globalTop[groupGlobalIndex]
+                  const showSection =
+                    usingGlobal ||
+                    localVisible.length > 0 ||
+                    lastCoopSavedScore !== null
+                  if (!showSection) return null
+                  return (
+                    <div className="hexaclear-gameover-section">
+                      <div className="hexaclear-gameover-section-label">
+                        Co-op leaderboard
+                        {usingGlobal ? ' (global)' : ''}
+                      </div>
+                      <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
+                        <input
+                          type="checkbox"
+                          checked={showGlobalLeaderboard}
+                          onChange={(e) => {
+                            playUiClick()
+                            setShowGlobalLeaderboard(e.target.checked)
+                          }}
+                        />
+                        <span>Show global</span>
+                      </label>
+                      {globalLoading ? (
+                        <p className="hexaclear-scores-empty">
+                          Loading global scores…
+                        </p>
+                      ) : usingGlobal ? (
+                        <>
+                          {globalVisible.length === 0 ? (
+                            <p className="hexaclear-scores-empty">
+                              No global co-op scores yet — be the first.
+                            </p>
+                          ) : (
+                            <ol className="hexaclear-scores-list">
+                              {globalVisible.map((entry, idx) => {
+                                const rank = idx + 1
+                                const isYou =
+                                  groupKey !== null &&
+                                  (entry.playerIdsKey ?? '') === groupKey
+                                const chipClass = [
+                                  'hexaclear-rank-chip',
+                                  rank === 1
+                                    ? 'hexaclear-chip-trophy'
+                                    : rank <= 3
+                                      ? 'hexaclear-chip-gold'
+                                      : 'hexaclear-chip-neutral',
+                                ].join(' ')
+                                return (
+                                  <li
+                                    key={entry.finishedAt + entry.name + idx}
+                                    className={[
+                                      'hexaclear-scores-row',
+                                      isYou ? 'recent' : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                  >
+                                    <span className={chipClass}>{rank}</span>
+                                    <span className="hexaclear-scores-name">
+                                      {entry.name}
+                                      {isYou ? ' (you)' : ''}
+                                    </span>
+                                    <span className="hexaclear-scores-value">
+                                      {entry.score}
+                                    </span>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                          )}
+                          {groupGlobalRank !== null &&
+                            !globalShowsGroup &&
+                            groupGlobalEntry && (
+                              <p className="hexaclear-scores-your-rank">
+                                Your group's rank: #{groupGlobalRank} ·{' '}
+                                {groupGlobalEntry.score}
+                              </p>
+                            )}
+                          {groupGlobalRank === null && lastCoopSavedScore !== null && (
+                            <p className="hexaclear-scores-your-rank">
+                              Group not on the global board yet.
+                            </p>
+                          )}
+                        </>
+                      ) : localVisible.length === 0 ? (
+                        <p className="hexaclear-scores-empty">
+                          No co-op runs on this device yet.
+                        </p>
+                      ) : (
+                        <ol className="hexaclear-scores-list">
+                          {localVisible.map((entry, idx) => {
+                            const isRecent =
+                              groupKey !== null && entry.groupKey === groupKey
+                            const rank = idx + 1
+                            const chipClass = [
+                              'hexaclear-rank-chip',
+                              rank === 1
+                                ? 'hexaclear-chip-trophy'
+                                : rank <= 3
+                                  ? 'hexaclear-chip-gold'
+                                  : 'hexaclear-chip-neutral',
+                            ].join(' ')
+                            return (
+                              <li
+                                key={entry.groupKey + entry.date}
+                                className={[
+                                  'hexaclear-scores-row',
+                                  isRecent ? 'recent' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                              >
+                                <span className={chipClass}>{rank}</span>
+                                <span className="hexaclear-scores-name">
+                                  {entry.name}
+                                </span>
+                                <span className="hexaclear-scores-value">
+                                  {entry.score}
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {isMultiplayer ? (
                   <>
@@ -5310,50 +5748,164 @@ function App() {
                   </div>
                 )}
 
-                {todayPlayerDailyRuns.length > 0 && (
-                  <div className="hexaclear-gameover-section">
-                    <div className="hexaclear-gameover-section-label">
-                      Your best today
+                {(() => {
+                  // Daily gameover leaderboard. Defaults to whichever
+                  // view the player last had open (the global toggle
+                  // is shared with the pause-menu high scores
+                  // panel). Daily ranks ascending by moves; we still
+                  // show top 10 here. The "you" highlight tracks the
+                  // player's local best for today (lastSavedDaily…)
+                  // and, in the global view, the row whose playerId
+                  // matches.
+                  const localVisible = todayPlayerDailyRuns.slice(0, 10)
+                  const globalLoading =
+                    showGlobalLeaderboard && globalDailyScores === undefined
+                  const globalTop = (globalDailyScores ?? []).slice()
+                  const usingGlobal = showGlobalLeaderboard
+                  const visibleCount = 10
+                  const globalVisible = globalTop.slice(0, visibleCount)
+                  const playerGlobalIndex = globalTop.findIndex(
+                    (e) => e.playerId === playerId,
+                  )
+                  const playerGlobalRank =
+                    playerGlobalIndex === -1 ? null : playerGlobalIndex + 1
+                  const globalShowsPlayer =
+                    playerGlobalRank !== null &&
+                    playerGlobalRank <= visibleCount
+                  const playerGlobalEntry =
+                    playerGlobalIndex === -1
+                      ? null
+                      : globalTop[playerGlobalIndex]
+                  if (
+                    !usingGlobal &&
+                    localVisible.length === 0 &&
+                    !globalLoading
+                  ) {
+                    return null
+                  }
+                  return (
+                    <div className="hexaclear-gameover-section">
+                      <div className="hexaclear-gameover-section-label">
+                        {usingGlobal
+                          ? 'Today · global · fewest moves'
+                          : 'Your best today'}
+                      </div>
+                      <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
+                        <input
+                          type="checkbox"
+                          checked={showGlobalLeaderboard}
+                          onChange={(e) => {
+                            playUiClick()
+                            setShowGlobalLeaderboard(e.target.checked)
+                          }}
+                        />
+                        <span>Show global</span>
+                      </label>
+                      {globalLoading ? (
+                        <p className="hexaclear-scores-empty">
+                          Loading global scores…
+                        </p>
+                      ) : usingGlobal ? (
+                        <>
+                          {globalVisible.length === 0 ? (
+                            <p className="hexaclear-scores-empty">
+                              No global daily scores yet — be the first.
+                            </p>
+                          ) : (
+                            <ol className="hexaclear-scores-list">
+                              {globalVisible.map((entry, idx) => {
+                                const rank = idx + 1
+                                const isYou = entry.playerId === playerId
+                                const chipClass = [
+                                  'hexaclear-rank-chip',
+                                  rank === 1
+                                    ? 'hexaclear-chip-trophy'
+                                    : rank <= 3
+                                      ? 'hexaclear-chip-gold'
+                                      : 'hexaclear-chip-neutral',
+                                ].join(' ')
+                                return (
+                                  <li
+                                    key={entry.savedAt + entry.playerId + idx}
+                                    className={[
+                                      'hexaclear-scores-row',
+                                      isYou ? 'recent' : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' ')}
+                                  >
+                                    <span className={chipClass}>{rank}</span>
+                                    <span className="hexaclear-scores-name">
+                                      {entry.name}
+                                      {isYou ? ' (you)' : ''}
+                                    </span>
+                                    <span className="hexaclear-scores-value">
+                                      {entry.moves}{' '}
+                                      {entry.moves === 1 ? 'move' : 'moves'}
+                                    </span>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                          )}
+                          {playerGlobalRank !== null && !globalShowsPlayer &&
+                            playerGlobalEntry && (
+                              <p className="hexaclear-scores-your-rank">
+                                Your rank: #{playerGlobalRank} ·{' '}
+                                {playerGlobalEntry.moves}{' '}
+                                {playerGlobalEntry.moves === 1
+                                  ? 'move'
+                                  : 'moves'}
+                              </p>
+                            )}
+                          {playerGlobalRank === null && dailyHighScoreSaved && (
+                            <p className="hexaclear-scores-your-rank">
+                              Not on today's global board yet.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <ol className="hexaclear-scores-list">
+                          {localVisible.map((entry, idx) => {
+                            const isRecent =
+                              dailyHighScoreSaved &&
+                              lastSavedDailyHighScoreDate !== null &&
+                              entry.date === lastSavedDailyHighScoreDate
+                            const rank = idx + 1
+                            const chipClass = [
+                              'hexaclear-rank-chip',
+                              rank === 1
+                                ? 'hexaclear-chip-trophy'
+                                : rank <= 3
+                                  ? 'hexaclear-chip-gold'
+                                  : 'hexaclear-chip-neutral',
+                            ].join(' ')
+                            return (
+                              <li
+                                key={entry.date + entry.name + idx}
+                                className={[
+                                  'hexaclear-scores-row',
+                                  isRecent ? 'recent' : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                              >
+                                <span className={chipClass}>{rank}</span>
+                                <span className="hexaclear-scores-name">
+                                  {entry.name || 'You'}
+                                </span>
+                                <span className="hexaclear-scores-value">
+                                  {entry.moves}{' '}
+                                  {entry.moves === 1 ? 'move' : 'moves'}
+                                </span>
+                              </li>
+                            )
+                          })}
+                        </ol>
+                      )}
                     </div>
-                    <ol className="hexaclear-scores-list">
-                      {todayPlayerDailyRuns.slice(0, 5).map((entry, idx) => {
-                        const isRecent =
-                          dailyHighScoreSaved &&
-                          lastSavedDailyHighScoreDate !== null &&
-                          entry.date === lastSavedDailyHighScoreDate
-                        const rank = idx + 1
-                        const chipClass = [
-                          'hexaclear-rank-chip',
-                          rank === 1
-                            ? 'hexaclear-chip-trophy'
-                            : rank <= 3
-                              ? 'hexaclear-chip-gold'
-                              : 'hexaclear-chip-neutral',
-                        ].join(' ')
-                        return (
-                          <li
-                            key={entry.date + entry.name + idx}
-                            className={[
-                              'hexaclear-scores-row',
-                              isRecent ? 'recent' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                          >
-                            <span className={chipClass}>{rank}</span>
-                            <span className="hexaclear-scores-name">
-                              {entry.name || 'You'}
-                            </span>
-                            <span className="hexaclear-scores-value">
-                              {entry.moves}{' '}
-                              {entry.moves === 1 ? 'move' : 'moves'}
-                            </span>
-                          </li>
-                        )
-                      })}
-                    </ol>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {undoStack.length > 0 && !dailyHighScoreSaved && (
                   <button
@@ -5792,7 +6344,14 @@ function App() {
                   score: e.score,
                   date: e.finishedAt,
                 }))
-              : []
+              : coopHighScores
+                  .slice()
+                  .sort((a, b) => b.score - a.score || a.date - b.date)
+                  .map((e) => ({
+                    name: e.name,
+                    score: e.score,
+                    date: e.date,
+                  }))
             const globalLoading =
               showGlobalLeaderboard &&
               (globalEndlessScores === undefined ||
@@ -5807,15 +6366,12 @@ function App() {
                 : rank <= 3
                   ? 'hexaclear-chip-gold'
                   : 'hexaclear-chip-neutral'
-            // The co-op tab only makes sense when the global toggle
-            // is on (there is no local co-op storage). If the player
-            // flips global off while sitting on the co-op tab, snap
-            // them back to endless on the next render so the modal
-            // doesn't show a stale empty board.
-            const effectiveTab: HighScoreTab =
-              highScoreTab === 'coop' && !showGlobalLeaderboard
-                ? 'endless'
-                : highScoreTab
+            // Co-op now has both a global view (every group's best
+            // score across all devices) and a per-device local view
+            // (every co-op partnership this device has scored with,
+            // deduped to each one's best run), so the tab is
+            // available regardless of toggle state.
+            const effectiveTab: HighScoreTab = highScoreTab
             const tabButton = (id: HighScoreTab, label: string) => (
               <button
                 key={id}
@@ -5943,7 +6499,7 @@ function App() {
                   >
                     {tabButton('endless', 'Endless')}
                     {tabButton('daily', 'Daily')}
-                    {showGlobalLeaderboard && tabButton('coop', 'Co-op')}
+                    {tabButton('coop', 'Co-op')}
                   </div>
 
                   {effectiveTab === 'endless' && (
@@ -6113,10 +6669,11 @@ function App() {
                     </div>
                   )}
 
-                  {effectiveTab === 'coop' && showGlobalLeaderboard && (
+                  {effectiveTab === 'coop' && (
                     <div className="hexaclear-scores-section">
                       <div className="hexaclear-scores-section-label">
-                        Co-op · highest score (global)
+                        Co-op · highest score
+                        {showGlobalLeaderboard ? ' (global)' : ''}
                       </div>
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">
@@ -6124,7 +6681,9 @@ function App() {
                         </p>
                       ) : sortedCoop.length === 0 ? (
                         <p className="hexaclear-scores-empty">
-                          No co-op finishes yet. Grab a friend!
+                          {showGlobalLeaderboard
+                            ? 'No co-op finishes yet. Grab a friend!'
+                            : 'No co-op runs on this device yet. Grab a friend!'}
                         </p>
                       ) : (
                         <>

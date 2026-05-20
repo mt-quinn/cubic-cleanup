@@ -139,20 +139,26 @@ export default defineSchema({
     .index('by_dateKey_moves', ['dateKey', 'moves'])
     .index('by_player_saved', ['playerId', 'savedAt']),
 
-  // Global co-op leaderboard. Scope: a single (room, finishedAt)
-  // partnership produces ONE row, regardless of which client first
-  // submits it (both clients race-fire at gameover). `name` is the
+  // Global co-op leaderboard. ONE row per unique group of players —
+  // dedupe key is `playerIdsKey`, the player ids sorted lexically and
+  // joined with '|'. Each subsequent run by the same group upserts
+  // the row when it beats the previous best score. `name` is the
   // pre-baked "Eli & Thomas" string built from the room's slot order
   // so the rendered name reads identically to both players. We keep
-  // `playerIds` around so we can later attribute / filter by player
-  // without re-parsing the display name.
+  // raw `playerIds` around so we can attribute / filter by player
+  // (e.g. "scores from any group containing this playerId") without
+  // re-parsing the display name. `playerIdsKey` is optional in the
+  // validator only so older rooms validate during the migration
+  // window — every new write fills it in.
   coopScores: defineTable({
     roomCode: v.string(),
     finishedAt: v.number(),
     name: v.string(),
     score: v.number(),
     playerIds: v.array(v.string()),
+    playerIdsKey: v.optional(v.string()),
   })
     .index('by_score', ['score'])
-    .index('by_room_finished', ['roomCode', 'finishedAt']),
+    .index('by_room_finished', ['roomCode', 'finishedAt'])
+    .index('by_group', ['playerIdsKey']),
 })

@@ -3015,6 +3015,28 @@ body {
   text-align: center;
 }
 
+/* "Show global" checkbox docked inside a gameover modal. The base
+   .hexaclear-scores-global-toggle rule lays out the row; this
+   override gives it a tighter top margin so it slots neatly under
+   the section label. */
+.hexaclear-scores-global-toggle.hexaclear-gameover-toggle {
+  margin: 0.15rem 0 0.2rem;
+  align-self: center;
+}
+
+/* "Your rank: #N" line that surfaces the player's leaderboard
+   position when their row would otherwise be off-screen below the
+   visible top-N. Sits underneath the list, slightly muted, so it
+   reads as a footnote not a leaderboard entry. */
+.hexaclear-scores-your-rank {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ffd9a8;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
 .hexaclear-scores-list {
   list-style: none;
   padding: 0;
