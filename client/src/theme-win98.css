@@ -912,10 +912,35 @@
   box-shadow: inset 1px 1px 0 var(--w98-shadow);
 }
 
-/* PvP race bar in Win98: flat surface with the standard sunken
-   bevel, square corners, and no glow. Threshold marker reads as a
-   classic black notch instead of a glowing line. */
-[data-theme="win98"] .hexaclear-pvp-bar {
+/* PvP per-player tracks in Win98: each track gets the standard
+   sunken-bevel chrome, square corners, and a black threshold notch
+   replaces the glowing wood-theme line. Text uses the system font
+   so the HUD reads as native Win98 dialog content. */
+[data-theme="win98"] .hexaclear-pvp-row {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--w98-text);
+  text-shadow: none;
+}
+
+[data-theme="win98"] .hexaclear-pvp-row-name,
+[data-theme="win98"] .hexaclear-pvp-row-pct {
+  color: var(--w98-text);
+}
+
+[data-theme="win98"] .hexaclear-pvp-row.is-self .hexaclear-pvp-row-name,
+[data-theme="win98"] .hexaclear-pvp-row.is-self .hexaclear-pvp-row-pct {
+  color: var(--w98-text);
+  font-weight: 700;
+}
+
+[data-theme="win98"] .hexaclear-pvp-row-swatch {
+  border-radius: 0;
+  border: 1px solid var(--w98-deep-shadow);
+  box-shadow: none;
+}
+
+[data-theme="win98"] .hexaclear-pvp-row-track {
   background: var(--w98-surface);
   border: 2px solid;
   border-color:
@@ -924,31 +949,30 @@
     var(--w98-highlight)
     var(--w98-shadow);
   border-radius: 0;
+  height: 14px;
   box-shadow: none;
-  height: 18px;
 }
 
-[data-theme="win98"] .hexaclear-pvp-bar-seg {
+[data-theme="win98"] .hexaclear-pvp-row-track-fill {
+  border-radius: 0;
   box-shadow:
     inset 1px 1px 0 rgba(255, 255, 255, 0.5),
     inset -1px -1px 0 rgba(0, 0, 0, 0.3);
 }
 
-[data-theme="win98"] .hexaclear-pvp-bar-threshold {
+[data-theme="win98"] .hexaclear-pvp-row-track-threshold {
   background: var(--w98-text);
   box-shadow: none;
-  top: -1px;
-  bottom: -1px;
+  top: -2px;
+  bottom: -2px;
 }
 
-[data-theme="win98"] .hexaclear-pvp-legend {
+[data-theme="win98"] .hexaclear-pvp-win-tag {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--w98-text);
-  text-shadow: none;
-}
-
-[data-theme="win98"] .hexaclear-pvp-legend-swatch {
-  border: 1px solid var(--w98-deep-shadow);
-  box-shadow: none;
 }
 
 /* PvP gameover modal in Win98: flat backgrounds, Tahoma headings,

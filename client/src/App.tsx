@@ -5396,18 +5396,40 @@ function App() {
       )}
 
       <main className="hexaclear-main">
-        {/* PvP territory race bar lives ABOVE the board in its own
-            row so it never overlaps the play surface (the old
-            board-HUD overlay path was centering it vertically over
-            the cubes). The bar shows every seated player's territory
-            share, with a threshold marker for the win line and a
-            small legend strip below. */}
+        {/* PvP territory HUD: one mini-track per seated player, all
+            sharing the same horizontal scale. The threshold marker
+            sits at the same x-position on every row so the "win
+            line" is a continuous vertical line across the stack.
+            That lets a single glance answer two questions that the
+            old single-stacked-bar couldn't answer together:
+              * vs. each other  → which row's fill is longest
+              * vs. victory     → how far is each fill from the line
+            The bar scale is normalized to roughly the threshold
+            (plus a small headroom past it) so the win line sits
+            near the right edge and the race feels meaningful even
+            when nobody is close to 100% of the board. */}
         {isMultiplayer && mp.mode === 'pvp' && (() => {
           const standings = mp.pvpStandings
-          const thresholdPct = Math.min(1, mp.pvpThresholdRatio) * 100
+          const thresholdRatio = Math.min(1, mp.pvpThresholdRatio)
+          const maxRatio = standings.reduce(
+            (m, s) => Math.max(m, s.ratio),
+            0,
+          )
+          // Visual scale headroom: 15% past the threshold for the win
+          // line, 5% past the leading player so a placement that
+          // overshoots the threshold still renders on-track.
+          const scaleMaxRatio = Math.max(
+            thresholdRatio * 1.15,
+            maxRatio * 1.05,
+            0.1,
+          )
+          const thresholdScalePct = (thresholdRatio / scaleMaxRatio) * 100
+          const thresholdAbsPct = Math.round(thresholdRatio * 100)
           const selfId = mp.selfPlayer?.playerId ?? null
           const nameByPlayerId = new Map<string, string>()
-          for (const p of mp.allPlayers) nameByPlayerId.set(p.playerId, p.name)
+          for (const p of mp.allPlayers) {
+            nameByPlayerId.set(p.playerId, p.name)
+          }
           const colorForPlayer = (pid: string): string =>
             tintCubeColor(
               WOOD_CUBE_LEFT_HEX,
@@ -5428,78 +5450,71 @@ function App() {
           return (
             <div
               className="hexaclear-pvp-banner hexaclear-pvp-hud"
-              aria-label={`Territory: ${ariaLabel}. Win threshold ${Math.round(
-                thresholdPct,
-              )}%.`}
+              aria-label={`Territory: ${ariaLabel}. Win at ${thresholdAbsPct}%.`}
             >
               <div
                 className={[
-                  'hexaclear-pvp-bar',
+                  'hexaclear-pvp-tracks',
                   mp.winnerPlayerId ? 'is-won' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
                 role="img"
+                style={{
+                  ['--pvp-threshold-pct' as string]: `${thresholdScalePct}%`,
+                }}
               >
-                {standings.map((s) => {
-                  const w = Math.max(0, s.ratio) * 100
-                  if (w <= 0) return null
-                  const isSelfSeg = s.playerId === selfId
-                  return (
-                    <div
-                      key={s.playerId}
-                      className={[
-                        'hexaclear-pvp-bar-seg',
-                        isSelfSeg ? 'is-self' : '',
-                        mp.winnerPlayerId === s.playerId
-                          ? 'is-winner'
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      style={{
-                        width: `${w}%`,
-                        background: colorForPlayer(s.playerId),
-                      }}
-                    />
-                  )
-                })}
-                <div
-                  className="hexaclear-pvp-bar-threshold"
-                  style={{ left: `${thresholdPct}%` }}
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="hexaclear-pvp-legend">
                 {standings.map((s) => {
                   const name =
                     s.playerId === selfId
                       ? 'You'
                       : nameByPlayerId.get(s.playerId) ?? 'Player'
+                  const color = colorForPlayer(s.playerId)
+                  const fillPct = Math.max(
+                    0,
+                    Math.min(100, (s.ratio / scaleMaxRatio) * 100),
+                  )
+                  const isSelf = s.playerId === selfId
+                  const isWinner = mp.winnerPlayerId === s.playerId
                   return (
-                    <span
+                    <div
                       key={s.playerId}
                       className={[
-                        'hexaclear-pvp-legend-entry',
-                        s.playerId === selfId ? 'is-self' : '',
+                        'hexaclear-pvp-row',
+                        isSelf ? 'is-self' : '',
+                        isWinner ? 'is-winner' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
                     >
                       <span
-                        className="hexaclear-pvp-legend-swatch"
-                        style={{ background: colorForPlayer(s.playerId) }}
+                        className="hexaclear-pvp-row-swatch"
+                        style={{ background: color }}
                         aria-hidden="true"
                       />
-                      <span className="hexaclear-pvp-legend-name">
-                        {name}
-                      </span>
-                      <span className="hexaclear-pvp-legend-pct">
+                      <span className="hexaclear-pvp-row-name">{name}</span>
+                      <div className="hexaclear-pvp-row-track">
+                        <div
+                          className="hexaclear-pvp-row-track-fill"
+                          style={{
+                            width: `${fillPct}%`,
+                            background: color,
+                          }}
+                        />
+                        <div
+                          className="hexaclear-pvp-row-track-threshold"
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <span className="hexaclear-pvp-row-pct">
                         {Math.round(s.ratio * 100)}%
                       </span>
-                    </span>
+                    </div>
                   )
                 })}
+              </div>
+              <div className="hexaclear-pvp-win-tag" aria-hidden="true">
+                Win at {thresholdAbsPct}%
               </div>
             </div>
           )

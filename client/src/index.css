@@ -558,41 +558,91 @@ body {
   font-family: 'Nunito', system-ui, sans-serif;
 }
 
-/* The race bar itself: a flex-row of colored segments, summing
-   to (at most) 100% wide with a neutral track underneath the
-   trailing remainder. Threshold marker is absolutely positioned
-   so it sits on top of whichever segment crosses it. */
-.hexaclear-pvp-bar {
-  position: relative;
+/* Per-player mini-track stack. Each seated player gets their own
+   row; all rows share the exact same horizontal scale so:
+     - bar lengths compare directly between players, and
+     - the threshold marker (drawn at the same x in every row via
+       --pvp-threshold-pct) reads as a single vertical "win line"
+       crossing the whole stack.
+   The scale itself is computed in App.tsx to leave a little
+   headroom past the threshold — keeps the win line visually
+   meaningful (not stuck on the right edge) and prevents an
+   over-threshold winning placement from clipping. */
+.hexaclear-pvp-tracks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
   width: 100%;
-  height: 14px;
+}
+
+.hexaclear-pvp-row {
+  display: grid;
+  grid-template-columns: 10px minmax(2.4rem, 0.32fr) minmax(0, 1fr) 2.4rem;
+  gap: 8px;
+  align-items: center;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 0.78rem;
+  color: #fff7eb;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  min-width: 0;
+}
+
+.hexaclear-pvp-row-swatch {
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
-  background: rgba(28, 14, 6, 0.75);
-  border: 1px solid rgba(255, 205, 143, 0.32);
   box-shadow:
-    inset 0 1px 0 rgba(0, 0, 0, 0.45),
-    0 1px 0 rgba(255, 232, 163, 0.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.hexaclear-pvp-row-name {
+  font-weight: 700;
   overflow: hidden;
-  display: flex;
-  align-items: stretch;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
-.hexaclear-pvp-bar-seg {
-  height: 100%;
+.hexaclear-pvp-row.is-self .hexaclear-pvp-row-name {
+  font-weight: 900;
+  color: #ffe8a3;
+}
+
+.hexaclear-pvp-row-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(28, 14, 6, 0.78);
+  border: 1px solid rgba(255, 205, 143, 0.32);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.hexaclear-pvp-row-track-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
   transition: width 280ms ease-out;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
-/* Self segment gets a slightly stronger inner highlight so the
-   player can find their own bar at a glance even with multiple
-   players sharing close hue ranges. */
-.hexaclear-pvp-bar-seg.is-self {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+.hexaclear-pvp-row-track-threshold {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: var(--pvp-threshold-pct, 0%);
+  width: 2px;
+  background: rgba(255, 245, 220, 0.95);
+  box-shadow: 0 0 5px rgba(255, 245, 220, 0.45);
+  transform: translateX(-1px);
+  pointer-events: none;
 }
 
-.hexaclear-pvp-bar-seg.is-winner {
+.hexaclear-pvp-row.is-winner .hexaclear-pvp-row-track-fill {
   animation: hexaclear-pvp-winner-pulse 1.4s ease-in-out infinite;
 }
 
@@ -606,55 +656,28 @@ body {
   }
 }
 
-.hexaclear-pvp-bar-threshold {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 2px;
-  background: rgba(255, 245, 220, 0.92);
-  box-shadow: 0 0 4px rgba(255, 245, 220, 0.55);
-  transform: translateX(-1px);
-  pointer-events: none;
-}
-
-.hexaclear-pvp-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.7rem;
-  font-size: 0.75rem;
-  color: #fff7eb;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-}
-
-.hexaclear-pvp-legend-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  line-height: 1;
-}
-
-.hexaclear-pvp-legend-entry.is-self {
-  font-weight: 800;
-}
-
-.hexaclear-pvp-legend-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.hexaclear-pvp-legend-name {
-  max-width: 7rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hexaclear-pvp-legend-pct {
+.hexaclear-pvp-row-pct {
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
+  text-align: right;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.hexaclear-pvp-row.is-self .hexaclear-pvp-row-pct {
+  color: #ffe8a3;
+}
+
+/* Tiny "Win at X%" label below the tracks. Tells the player the
+   threshold the win line represents without needing a legend. */
+.hexaclear-pvp-win-tag {
+  margin-top: 2px;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.78);
+  text-align: right;
 }
 
 /* --- PvP game-over modal -------------------------------------------- */
