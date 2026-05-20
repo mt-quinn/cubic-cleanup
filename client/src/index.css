@@ -1463,6 +1463,24 @@ body {
   stroke-opacity: 0.85;
 }
 
+/* Empty cells render a slightly inset "slot dimple" polygon on top
+   of the main hex fill (see SlotGeometry in App.tsx) — its dark
+   #1a0c06 fill would otherwise cover the tinted hex underneath and
+   leave only a colored border ring. When the cell wrapper carries a
+   PvP tint class, swap the dimple to the player's tint color at a
+   lower opacity so the interior reads as "lightened + tinted dark
+   wood" instead of swallowing the territory color. The outer hex
+   ring's stroke + flood stays on top of this for the warm halo. */
+.hexaclear-cell.pvp-tinted-partner .hexaclear-slot-fill {
+  fill: var(--cell-tint-color, #f9a23f);
+  fill-opacity: 0.55;
+}
+
+.hexaclear-cell.pvp-tinted-self .hexaclear-slot-fill {
+  fill: var(--cell-tint-color, #ffeaa3);
+  fill-opacity: 0.4;
+}
+
 /* Conflict ring overlay drawn above the cube when an occupant sits
    on another player's tinted ground. Stroke-only polygon in the
    tinter's color so the cube body stays readable. */

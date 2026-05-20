@@ -5724,9 +5724,18 @@ function App() {
                     className={[
                       'hexaclear-cell',
                       isInvalidDrop ? 'invalid-drop' : '',
+                      // Bubble PvP tint classes up to the cell wrapper
+                      // so the SlotGeometry dimple (a sibling polygon
+                      // that paints the dark interior of empty cells)
+                      // can be tinted via CSS. Without this the dark
+                      // #1a0c06 slot fill covers the empty hex's tint
+                      // and only the cell border ring reads as owned.
+                      isPartnerTinted ? 'pvp-tinted-partner' : '',
+                      isSelfTinted ? 'pvp-tinted-self' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
+                    style={tintOverlayColor ? cellTintStyle : undefined}
                   >
                     <polygon
                       points={points}
