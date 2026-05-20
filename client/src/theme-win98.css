@@ -1654,6 +1654,14 @@
   letter-spacing: 0 !important;
 }
 
+/* Nav-card labels are uppercased + heavyweight in the wood theme;
+   the Win98 theme uses Title Case Tahoma for all dialog buttons,
+   so strip the transform and the 900-weight bump here. */
+[data-theme="win98"] .hexaclear-menu-nav-title {
+  text-transform: none !important;
+  font-weight: 400 !important;
+}
+
 [data-theme="win98"] .hexaclear-account-card {
   min-width: 320px;
   background: var(--w98-surface) !important;

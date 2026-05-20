@@ -6805,7 +6805,7 @@ function App() {
                     }}
                   >
                     <span className="hexaclear-menu-nav-title">
-                      High scores
+                      High Scores
                     </span>
                   </button>
                   <button
