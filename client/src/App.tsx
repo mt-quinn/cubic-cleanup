@@ -6766,6 +6766,33 @@ function App() {
                   )}
                 </div>
 
+                <div className="hexaclear-menu-account">
+                  <div>
+                    <div className="hexaclear-menu-account-label">Stats sync</div>
+                    <div className="hexaclear-menu-account-status">
+                      {authLoading
+                        ? 'Checking account...'
+                        : isAuthenticated
+                        ? accountSyncState === 'syncing'
+                          ? 'Syncing online stats...'
+                          : 'Signed in'
+                        : 'Local stats only'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-account-button"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowAccount(true)
+                    }}
+                  >
+                    {isAuthenticated ? 'Manage' : 'Sign in'}
+                  </button>
+                </div>
+
                 <div className="hexaclear-menu-library">
                   <button
                     type="button"
@@ -6806,33 +6833,6 @@ function App() {
                     <span className="hexaclear-menu-nav-title">
                       How to Play
                     </span>
-                  </button>
-                </div>
-
-                <div className="hexaclear-menu-account">
-                  <div>
-                    <div className="hexaclear-menu-account-label">Stats sync</div>
-                    <div className="hexaclear-menu-account-status">
-                      {authLoading
-                        ? 'Checking account...'
-                        : isAuthenticated
-                        ? accountSyncState === 'syncing'
-                          ? 'Syncing online stats...'
-                          : 'Signed in'
-                        : 'Local stats only'}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-account-button"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowAccount(true)
-                    }}
-                  >
-                    {isAuthenticated ? 'Manage' : 'Sign in'}
                   </button>
                 </div>
 
