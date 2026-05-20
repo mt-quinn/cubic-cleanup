@@ -721,7 +721,14 @@
 
 /* Re-show the slot dimple for tinted cells and paint it with the
    player tint at full opacity, plus a darker outline so the inset
-   plate reads against the surrounding raised gray button face. */
+   plate reads against the surrounding raised gray button face.
+   The dimple geometry is already inset to ~86% of the cell radius
+   in SlotGeometry; we further shrink it with a fill-box scale here
+   so a real grey ring of the empty button face shows around every
+   tinted plate. Without that ring the tinted plate fills nearly
+   the entire cell and looks indistinguishable from a placed cube
+   on the same hex. non-scaling-stroke keeps the dark outline at a
+   consistent on-screen weight regardless of the scale. */
 [data-theme="win98"] .hexaclear-cell.pvp-tinted-partner .hexaclear-slot-fill,
 [data-theme="win98"] .hexaclear-cell.pvp-tinted-self .hexaclear-slot-fill {
   display: block !important;
@@ -730,6 +737,9 @@
   stroke: var(--w98-deep-shadow);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+  transform: scale(0.7);
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* Conflict ring in Win98: a 1.5px dashed outline so it reads as
