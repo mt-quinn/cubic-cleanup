@@ -6707,9 +6707,6 @@ function App() {
             >
               <div className="hexaclear-overlay-card hexaclear-menu-card">
                 <div className="title">Cubekill</div>
-                <div className="hexaclear-menu-hint">
-                  Drag pieces, complete lines and rosettes, keep the board alive.
-                </div>
 
                 <div className="hexaclear-menu-actions">
                   {hasStartedSession || isMultiplayer ? (
@@ -6749,7 +6746,7 @@ function App() {
                             resetGame()
                           }}
                         >
-                          Restart run
+                          Restart
                         </button>
                       )}
                     </>
@@ -6770,20 +6767,6 @@ function App() {
                 </div>
 
                 <div className="hexaclear-menu-library">
-                  <button
-                    type="button"
-                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-play"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowScoring(true)
-                    }}
-                  >
-                    <span className="hexaclear-menu-nav-title">
-                      How to Play
-                    </span>
-                  </button>
                   <button
                     type="button"
                     className="hexaclear-menu-nav-card hexaclear-menu-nav-card-scores"
@@ -6809,6 +6792,20 @@ function App() {
                     }}
                   >
                     <span className="hexaclear-menu-nav-title">Stats</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-play hexaclear-menu-nav-card-wide"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowScoring(true)
+                    }}
+                  >
+                    <span className="hexaclear-menu-nav-title">
+                      How to Play
+                    </span>
                   </button>
                 </div>
 
