@@ -7741,8 +7741,7 @@ function App() {
                 onPointerDown={(e) => {
                   if (e.target !== e.currentTarget) return
                   playUiClick()
-                  setShowHighScores(false)
-                  setShowMenu(true)
+                  setShowDailyHistory(false)
                 }}
               >
                 <div className="hexaclear-overlay-card hexaclear-history-card">
