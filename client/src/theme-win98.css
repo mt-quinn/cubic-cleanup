@@ -1907,3 +1907,137 @@
 [data-theme="win98"] .hexaclear-streak-tier-4 { font-size: 34px !important; }
 [data-theme="win98"] .hexaclear-streak-tier-5 { font-size: 38px !important; }
 [data-theme="win98"] .hexaclear-streak-tier-6 { font-size: 42px !important; }
+
+/* Multi-clear chip in Win98 trades the gradient for a flat raised
+   face with the system's standard bevel — same shape and tier
+   scaling, but rendered as a chrome control instead of a skeuo
+   sticker. */
+[data-theme="win98"] .hexaclear-multi-clear-chip {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-highlight),
+    inset -1px -1px 0 var(--w98-shadow),
+    2px 2px 0 var(--w98-shadow-deep) !important;
+  text-shadow: none !important;
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
+  padding: 2px 8px !important;
+}
+[data-theme="win98"] .hexaclear-multi-clear-tier-2 { font-size: 14px !important; }
+[data-theme="win98"] .hexaclear-multi-clear-tier-3 { font-size: 18px !important; }
+[data-theme="win98"] .hexaclear-multi-clear-tier-4 {
+  font-size: 22px !important;
+  color: #c80000 !important;
+}
+
+/* Run / lifetime stats grid in Win98: bone-grey field with system
+   text — no decorative dashes or fancy weights. Values right-align
+   with tabular-nums so columns of numbers stay tidy. */
+[data-theme="win98"] .hexaclear-runstats-grid li {
+  border-bottom: 1px solid var(--w98-shadow) !important;
+  font-family: inherit !important;
+  color: var(--w98-text) !important;
+}
+[data-theme="win98"] .hexaclear-runstats-label {
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
+}
+[data-theme="win98"] .hexaclear-runstats-value {
+  color: var(--w98-text) !important;
+  font-weight: bold !important;
+}
+
+[data-theme="win98"] .hexaclear-stats-section-label {
+  color: var(--w98-text) !important;
+  letter-spacing: 0.05em !important;
+}
+[data-theme="win98"] .hexaclear-stats-tracking-since {
+  color: var(--w98-text) !important;
+  font-style: normal !important;
+}
+
+/* Daily history button (top bar) — Win98: a regular raised system
+   button with the bevel highlights, swapping to a sunken look on
+   active so it reads like a real chrome control. */
+[data-theme="win98"] .hexaclear-history-button {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-highlight),
+    inset -1px -1px 0 var(--w98-shadow),
+    1px 1px 0 var(--w98-shadow-deep) !important;
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
+  font-weight: bold !important;
+  padding: 2px 12px !important;
+}
+[data-theme="win98"] .hexaclear-history-button:active {
+  box-shadow:
+    inset -1px -1px 0 var(--w98-highlight),
+    inset 1px 1px 0 var(--w98-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-history-button.is-archive {
+  background: var(--w98-surface) !important;
+  color: #c80000 !important;
+}
+
+/* Calendar grid — flat Win98 surface with system bevels. Days are
+   sunken-looking buttons; cleared days get the standard "selected"
+   highlight; today gets a navy outline. */
+[data-theme="win98"] .hexaclear-history-card {
+  font-family: inherit !important;
+}
+[data-theme="win98"] .hexaclear-history-nav-step {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-highlight),
+    inset -1px -1px 0 var(--w98-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-history-weekday {
+  color: var(--w98-text) !important;
+  letter-spacing: 0 !important;
+}
+[data-theme="win98"] .hexaclear-history-cell {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-highlight),
+    inset -1px -1px 0 var(--w98-shadow) !important;
+  font-family: inherit !important;
+}
+[data-theme="win98"] .hexaclear-history-cell:disabled {
+  background: var(--w98-surface) !important;
+  color: var(--w98-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-today {
+  outline: 1px dotted var(--w98-text) !important;
+  outline-offset: -3px !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-cleared {
+  background: #c0d8c0 !important;
+  border-color: var(--w98-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-active {
+  background: var(--w98-blue, #000080) !important;
+  color: #fff !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-active .hexaclear-history-best {
+  color: #fff !important;
+}
+[data-theme="win98"] .hexaclear-history-best {
+  color: var(--w98-text) !important;
+}
+[data-theme="win98"] .hexaclear-history-legend {
+  color: var(--w98-text) !important;
+  font-style: normal !important;
+}

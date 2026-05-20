@@ -36,6 +36,17 @@ import { api } from '../convex/_generated/api'
 import { useMultiplayerGame } from './multiplayer/useMultiplayerGame'
 import { getOrCreatePlayerId } from './multiplayer/playerIdentity'
 import {
+  applyPlacementToRunStats,
+  createEmptyLifetimeStats,
+  createEmptyRunStats,
+  foldRunIntoLifetime,
+  formatDuration,
+  formatFriendlyDate,
+  loadLifetimeStats,
+  saveLifetimeStats,
+} from './stats'
+import type { LifetimeStats, RunStats } from './stats'
+import {
   buildRoomShareUrl,
   readRoomCodeFromUrl,
   setRoomCodeInUrl,
@@ -987,6 +998,11 @@ const getBestPlacementPreview = (
   }
 
   let clearedIds: string[] = []
+  // Number of distinct scoring patterns this placement would clear
+  // simultaneously. Used by the multi-clear hint chip on the hover
+  // ghost — it only surfaces when this is >= 2, since single clears
+  // don't constitute a "combo" worth flagging.
+  let clearedPatternsCount = 0
   if (valid) {
     const previewGame: GameState = {
       ...game,
@@ -997,6 +1013,7 @@ const getBestPlacementPreview = (
     }
     const result = applyPlacement(previewGame, selectedPiece, hoveredCellId)
     if (result && result.clearedPatterns.length > 0) {
+      clearedPatternsCount = result.clearedPatterns.length
       // In daily mode, only highlight cells that will actually disappear
       // (not numbered cubes that still have hits remaining after the clear).
       if (game.mode === 'daily') {
@@ -1011,7 +1028,7 @@ const getBestPlacementPreview = (
     }
   }
 
-  return { targetIds, valid, clearedIds }
+  return { targetIds, valid, clearedIds, clearedPatternsCount }
 }
 
 type HighScoreEntry = {
@@ -1034,7 +1051,13 @@ const DAILY_PLAYER_RUNS_PREFIX = 'cubic-daily-runs-'
 // score has to clear to qualify for a "save score" prompt — any
 // run good enough to land inside the top N is worth recording.
 const LOCAL_ENDLESS_CAP = 30
-const LEADERBOARD_PAGE_SIZE = 10
+// The gameover modal is space-constrained (it stacks the headline,
+// optional save prompt, run-stats card, leaderboard, and action
+// buttons), so we paginate its leaderboards more aggressively than
+// the dedicated pause-menu panel. Five rows per page keeps the
+// modal compact while still letting the player flip through the
+// full local top-30 endless list and any global top-N view.
+const GAMEOVER_LEADERBOARD_PAGE_SIZE = 5
 
 const loadHighScores = (): HighScoreEntry[] => {
   try {
@@ -1184,6 +1207,65 @@ const getTodayKey = (): string => {
   const dd = String(d).padStart(2, '0')
   return `${y}-${mm}-${dd}`
 }
+
+// Daily history launch date. The calendar refuses to navigate past
+// this and never offers cells before it, so players can never start
+// a daily that doesn't exist in our seed history. Pinned to the
+// game's public launch date so every player has the same archive
+// floor regardless of when they joined.
+const DAILY_HISTORY_LAUNCH_DATE_KEY = '2026-03-01'
+
+const FRIENDLY_MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+// Render a `YYYY-MM-DD` key as "March 3, 2026" for headers, history
+// labels, and the archive-day pill on the daily HUD. Defensive
+// against malformed input — anything we can't parse falls back to
+// the raw key so we never crash on display.
+const formatFriendlyDateKey = (dateKey: string): string => {
+  const parts = dateKey.split('-')
+  if (parts.length !== 3) return dateKey
+  const y = Number(parts[0])
+  const m = Number(parts[1])
+  const d = Number(parts[2])
+  if (
+    !Number.isFinite(y) ||
+    !Number.isFinite(m) ||
+    !Number.isFinite(d) ||
+    m < 1 ||
+    m > 12
+  ) {
+    return dateKey
+  }
+  return `${FRIENDLY_MONTH_NAMES[m - 1]} ${d}, ${y}`
+}
+
+// Pad a date key triple back into the canonical `YYYY-MM-DD` storage
+// form. Used by the calendar grid when constructing date keys for
+// each cell.
+const buildDateKey = (year: number, month: number, day: number): string => {
+  const mm = String(month).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  return `${year}-${mm}-${dd}`
+}
+
+// True if `a` represents a calendar day strictly before `b`. Both
+// must be `YYYY-MM-DD`. Comparison is purely lexicographic, which
+// is correct because the format zero-pads month and day.
+const isDateKeyBefore = (a: string, b: string): boolean => a < b
+const isDateKeyAfter = (a: string, b: string): boolean => a > b
 
 const getDateKeyFromTimestamp = (timestamp: number): string => {
   const d = new Date(timestamp)
@@ -1651,6 +1733,39 @@ function App() {
   >([])
   const [showScoring, setShowScoring] = useState(false)
   const [showHighScores, setShowHighScores] = useState(false)
+  // Profile-level stats modal, reachable from the pause menu via a
+  // dedicated "Stats" button. Lives next to highscores / scoring as
+  // a peer surface — same overlay treatment, just rendering the
+  // lifetime totals instead.
+  const [showStats, setShowStats] = useState(false)
+  // Daily-history calendar modal. Toggled from the History button
+  // we slot into the daily-mode top bar, and powers the past-day
+  // replay flow (any cleared / played day on the calendar is
+  // clickable to re-launch that day's seeded puzzle).
+  const [showDailyHistory, setShowDailyHistory] = useState(false)
+  // Currently displayed month in the calendar. Defaults to today's
+  // month on first open and resets on close so the next open
+  // always lands the player back on "now".
+  const [historyMonth, setHistoryMonth] = useState<{
+    year: number
+    month: number
+  }>(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  })
+  // Per-run stats accumulator (this run only). Reset whenever a new
+  // run starts; updated on every placement; folded into the
+  // lifetime profile on gameover.
+  const [runStats, setRunStats] = useState<RunStats>(() =>
+    createEmptyRunStats(),
+  )
+  // Lifetime profile stats. Loaded from localStorage on mount;
+  // overwritten on each gameover via foldRunIntoLifetime.
+  const [lifetimeStats, setLifetimeStats] = useState<LifetimeStats>(() =>
+    typeof window === 'undefined'
+      ? createEmptyLifetimeStats()
+      : loadLifetimeStats(),
+  )
   // Which leaderboard tab the High Scores modal is currently showing.
   // The modal used to stack endless + daily (+ co-op when global was
   // on) end-to-end, which made the page get long. Now we render
@@ -2095,6 +2210,24 @@ function App() {
     if (placement.token === lastSeenMpTokenRef.current) return
     lastSeenMpTokenRef.current = placement.token
 
+    // Per-run stats: only bump when *we* are the player who landed
+    // this placement. In a co-op room your partner's placements
+    // don't count toward your "pieces placed", "rubies cleared",
+    // etc. — the room's shared score is already reflected on the
+    // gameover modal separately.
+    if (placement.byPlayerId === playerId) {
+      setRunStats((prev) =>
+        applyPlacementToRunStats(prev, {
+          piecePlacedCellsCount: placement.placedCellIds.length,
+          patternsClearedCount: placement.clearedPatternIds.length,
+          rubiesCleared: placement.rubiesCleared,
+          boardCleared: placement.boardCleared,
+          pointsGained: placement.pointsGained,
+          streakAfter: placement.streakAfter,
+        }),
+      )
+    }
+
     const placedSet = new Set(placement.placedCellIds)
     const clearedSet =
       placement.clearedCellIds.length > 0
@@ -2470,6 +2603,21 @@ function App() {
         newStreak = 0
       }
 
+      // Per-run stats bump for this placement. Single-player only —
+      // the multiplayer side counts placements via the lastPlacement
+      // effect, gated on byPlayerId === self so partner placements
+      // don't double-count into our run totals.
+      setRunStats((prev) =>
+        applyPlacementToRunStats(prev, {
+          piecePlacedCellsCount: piece.shape.cells.length,
+          patternsClearedCount: result.clearedPatterns.length,
+          rubiesCleared: result.rubiesCleared,
+          boardCleared: result.boardCleared,
+          pointsGained: result.pointsGained,
+          streakAfter: newStreak,
+        }),
+      )
+
       let newHand = remainingHand
       let gameOver = false
 
@@ -2840,7 +2988,11 @@ function App() {
     lastScheduledScoreParticleActionIdRef.current = null
     setScoreParticles([])
     if (game.mode === 'daily') {
-      const next = createDailyGameState()
+      // Preserve the active daily date key when resetting — if the
+      // player is replaying an archive day from history, "Reset"
+      // should restart that same archive day, not jump them back to
+      // today.
+      const next = createDailyGameState(game.dailyDateKey)
       setGame(next)
       setSavedDailyGame(next)
       setDailyHighScoreSaved(false)
@@ -2864,6 +3016,38 @@ function App() {
     setClearingGoldenCellIds([])
     setPendingGoldenSpawnCellIds([])
     setScorePopup(null)
+  }
+
+  // Start (or replay) the daily puzzle for a specific calendar
+  // day, dispatched from the history calendar modal. Past-day
+  // puzzles share the same seeded layout as the day they
+  // originally ran on, but they're treated as local-only — see
+  // `handleSaveDailyHighScore` for the global-submission gate.
+  // We piggy-back on the existing daily slot (`savedDailyGame`)
+  // so that switching back to "Daily" via the mode toggle
+  // resumes whatever puzzle the player was last on, archive or
+  // not.
+  const handleStartDailyForDateKey = (dateKey: string) => {
+    scoreParticleGenerationRef.current += 1
+    lastScheduledScoreParticleActionIdRef.current = null
+    setScoreParticles([])
+    const next = createDailyGameState(dateKey)
+    setGame(next)
+    setSavedDailyGame(next)
+    setDailyHighScoreSaved(false)
+    setPendingDailyHighScore(false)
+    setPendingDailyMoves(null)
+    setSelectedPieceId(null)
+    setHover(null)
+    setUndoStack([])
+    setUndoAnimation(null)
+    setPendingUndoRestoreSlotIndex(null)
+    setGoldenPopupCellIds([])
+    setClearingCells([])
+    setClearingGoldenCellIds([])
+    setPendingGoldenSpawnCellIds([])
+    setScorePopup(null)
+    setShowDailyHistory(false)
   }
 
   // ---- Multiplayer handlers -----------------------------------------
@@ -3018,6 +3202,95 @@ function App() {
     if (!mpRoomCode) coopScoreSubmittedRef.current = null
   }, [mpRoomCode])
 
+  // Per-run stats lifecycle.
+  //
+  // 1) RESET on a new run: detected by `game.moves` falling back to
+  //    0 from a non-zero value. Initial mount uses the useState
+  //    initializer so we don't need to handle it here.
+  // 2) FOLD on gameover: detected by `game.gameOver` flipping true.
+  //    We read the latest runStats off a ref so the effect doesn't
+  //    have to subscribe to runStats and re-fire on every placement.
+  // 3) TICK active-play time: a 500ms interval that only runs while
+  //    no modal/menu is open and the run isn't over. Per-tick delta
+  //    is capped at 2s so a backgrounded tab doesn't suddenly add
+  //    minutes to the count when it wakes back up.
+  const runStatsRef = useRef<RunStats>(runStats)
+  useEffect(() => {
+    runStatsRef.current = runStats
+  }, [runStats])
+
+  const prevMovesRef = useRef<number>(game.moves)
+  useEffect(() => {
+    if (game.moves === 0 && prevMovesRef.current > 0) {
+      setRunStats(createEmptyRunStats())
+    }
+    prevMovesRef.current = game.moves
+  }, [game.moves])
+
+  const prevGameOverRef = useRef<boolean>(game.gameOver)
+  useEffect(() => {
+    if (!prevGameOverRef.current && game.gameOver) {
+      const finishedRun = runStatsRef.current
+      // Co-op partners list = everyone in the room *except* us.
+      // (mp.allPlayers includes self; partner ids skip our own id.)
+      const partnerIds = isMultiplayer
+        ? mp.allPlayers
+            .map((p) => p.playerId)
+            .filter((pid) => pid !== playerId)
+        : []
+      const dateKey = game.mode === 'daily' ? getTodayKey() : null
+      setLifetimeStats((prev) => {
+        const next = foldRunIntoLifetime(prev, finishedRun, {
+          mode: game.mode as 'endless' | 'daily' | 'big',
+          isMultiplayer,
+          finalScore: game.score,
+          finalMoves: game.moves,
+          dailyCleared: game.dailyCompleted,
+          dailyDateKey: dateKey,
+          coopPartnerIds: partnerIds,
+        })
+        saveLifetimeStats(next)
+        return next
+      })
+    }
+    prevGameOverRef.current = game.gameOver
+    // We intentionally exclude runStats / mp.allPlayers from deps to
+    // avoid re-firing the fold on every placement. The transition
+    // edge gating + ref-read pattern keeps it correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    game.gameOver,
+    game.mode,
+    game.score,
+    game.moves,
+    game.dailyCompleted,
+    isMultiplayer,
+  ])
+
+  const isActivelyPlaying =
+    !game.gameOver &&
+    !showMenu &&
+    !showHighScores &&
+    !showStats &&
+    !showScoring &&
+    !showDailyHistory
+  useEffect(() => {
+    if (!isActivelyPlaying) return
+    let lastTick = Date.now()
+    const interval = window.setInterval(() => {
+      const now = Date.now()
+      const delta = now - lastTick
+      lastTick = now
+      if (delta > 0 && delta < 2000) {
+        setRunStats((prev) => ({
+          ...prev,
+          activePlayMs: prev.activePlayMs + delta,
+        }))
+      }
+    }, 500)
+    return () => window.clearInterval(interval)
+  }, [isActivelyPlaying])
+
   // Snap the gameover endless leaderboard to whichever page contains
   // the player's just-saved row, so the modal opens framed on their
   // entry instead of always landing on the top of the list. We
@@ -3036,7 +3309,9 @@ function App() {
       )
       const idx = sorted.findIndex((e) => e.date === lastSavedHighScoreDate)
       if (idx >= 0) {
-        setGameoverEndlessPage(Math.floor(idx / LEADERBOARD_PAGE_SIZE))
+        setGameoverEndlessPage(
+          Math.floor(idx / GAMEOVER_LEADERBOARD_PAGE_SIZE),
+        )
         return
       }
     }
@@ -3785,23 +4060,36 @@ function App() {
     if (game.mode === 'daily' && game.dailyCompleted) {
       const moves = game.moves
       setPendingDailyMoves(moves)
-      // For daily mode, always allow the player to log today's result.
+      // For daily mode, always allow the player to log the result.
       setPendingDailyHighScore(!dailyHighScoreSaved)
 
-      // Track the best (lowest) move count for today's daily puzzle,
-      // independent of the global daily high score table.
+      // Track the best (lowest) move count for the puzzle the run
+      // belongs to. Today's runs update `cubic-daily-best-<today>`
+      // and bump the in-memory `todayDailyBestMoves` (which the
+      // header banner reads); past-day replays only update the
+      // archived day's `cubic-daily-best-<dateKey>` entry so the
+      // calendar's stored bests stay accurate but today's banner
+      // doesn't get clobbered by an unrelated archive run.
       if (typeof window !== 'undefined') {
         const todayKey = getTodayKey()
-        setTodayDailyBestMoves((prev) => {
-          if (prev === null || moves < prev) {
-            window.localStorage.setItem(
-              `cubic-daily-best-${todayKey}`,
-              String(moves),
-            )
-            return moves
-          }
-          return prev
-        })
+        const runDateKey = game.dailyDateKey ?? todayKey
+        const isArchiveRun = runDateKey !== todayKey
+        const prevRaw = window.localStorage.getItem(
+          `cubic-daily-best-${runDateKey}`,
+        )
+        const prevNum = prevRaw ? Number.parseInt(prevRaw, 10) : NaN
+        const prev = Number.isFinite(prevNum) ? prevNum : null
+        if (prev === null || moves < prev) {
+          window.localStorage.setItem(
+            `cubic-daily-best-${runDateKey}`,
+            String(moves),
+          )
+        }
+        if (!isArchiveRun) {
+          setTodayDailyBestMoves((existing) =>
+            existing === null || moves < existing ? moves : existing,
+          )
+        }
       }
     } else if (game.mode === 'endless') {
       const score = game.score
@@ -3829,6 +4117,23 @@ function App() {
       setDailyScoresDateKey(getTodayKey())
     }
   }, [showHighScores])
+
+  // Snap the calendar back to the player's current daily month
+  // every time the history modal opens. Without this, paging back
+  // through past months and then closing would cause the next open
+  // to start on whatever month the player happened to have left it
+  // on — feels broken when "today" isn't visible.
+  useEffect(() => {
+    if (showDailyHistory) {
+      const focus = game.dailyDateKey ?? getTodayKey()
+      const parts = focus.split('-')
+      const y = Number(parts[0])
+      const m = Number(parts[1])
+      if (Number.isFinite(y) && Number.isFinite(m)) {
+        setHistoryMonth({ year: y, month: m })
+      }
+    }
+  }, [showDailyHistory, game.dailyDateKey])
 
   // Snap every leaderboard tab back to page 0 whenever the
   // underlying entry list identity changes — re-opening the modal,
@@ -3915,6 +4220,15 @@ function App() {
   const handleSaveDailyHighScore = () => {
     if (pendingDailyMoves === null) return
     const name = playerName.trim() || 'Player'
+    // Route this save to whichever calendar day this run is for.
+    // Today's runs hit `cubic-daily-runs-<today>`; an archive replay
+    // (history-calendar pick) hits the day it was started on, even
+    // if the run wraps over midnight on the player's clock. The
+    // archive flag also gates global submission below — past-day
+    // replays are local-only by design.
+    const runDateKey = game.dailyDateKey ?? getTodayKey()
+    const todayKey = getTodayKey()
+    const isArchiveRun = runDateKey !== todayKey
     const entry: DailyHighScoreEntry = {
       name,
       moves: pendingDailyMoves,
@@ -3930,11 +4244,10 @@ function App() {
         'cubic-daily-highscores',
         JSON.stringify(next),
       )
-      const todayKey = getTodayKey()
-      const existingRuns = loadDailyRunsForDateKey(todayKey)
+      const existingRuns = loadDailyRunsForDateKey(runDateKey)
       const nextRuns = [...existingRuns, entry].slice(-50)
       window.localStorage.setItem(
-        `${DAILY_PLAYER_RUNS_PREFIX}${todayKey}`,
+        `${DAILY_PLAYER_RUNS_PREFIX}${runDateKey}`,
         JSON.stringify(nextRuns),
       )
       window.localStorage.setItem('cubic-player-name', name)
@@ -3944,12 +4257,11 @@ function App() {
     setDailyHighScoreSaved(true)
     // Only mirror to the global daily leaderboard when this is the
     // new local #1 for *today* (fewer moves than every other entry
-    // for the same dateKey). Daily ranks ascending by moves, so #1
-    // is the first row in `next` after the sort above — but `next`
-    // can hold cross-date entries when it's a fresh day and the
-    // last week of bests are still in storage, so re-filter to
-    // today's entries before checking.
-    const todayKey = getTodayKey()
+    // for the same dateKey) AND the run is an actual today run.
+    // Past-day replays are explicitly excluded so the global
+    // leaderboard for a given date stays the historical snapshot
+    // it already is.
+    if (isArchiveRun) return
     const todays = next.filter(
       (e) => getDateKeyFromTimestamp(e.date) === todayKey,
     )
@@ -4195,6 +4507,91 @@ function App() {
     }
   }, [scale, hover])
 
+  // Per-run summary card. Rendered on every gameover modal under
+  // the score/save section. Hidden when the run has zero placements
+  // (e.g. instant abandon) since "0 pieces / 0s" is just noise. We
+  // gate each row by a "has happened" check so an unlucky run
+  // doesn't surface a wall of zeros — players see only the things
+  // that actually occurred.
+  const renderRunStatsSection = () => {
+    if (runStats.piecesPlaced === 0) return null
+    return (
+      <div className="hexaclear-gameover-section">
+        <div className="hexaclear-gameover-section-label">This run</div>
+        <ul className="hexaclear-runstats-grid">
+          <li>
+            <span className="hexaclear-runstats-label">Time</span>
+            <span className="hexaclear-runstats-value">
+              {formatDuration(runStats.activePlayMs)}
+            </span>
+          </li>
+          <li>
+            <span className="hexaclear-runstats-label">Pieces placed</span>
+            <span className="hexaclear-runstats-value">
+              {runStats.piecesPlaced}
+            </span>
+          </li>
+          <li>
+            <span className="hexaclear-runstats-label">Cubes placed</span>
+            <span className="hexaclear-runstats-value">
+              {runStats.cubesPlaced}
+            </span>
+          </li>
+          <li>
+            <span className="hexaclear-runstats-label">
+              Patterns cleared
+            </span>
+            <span className="hexaclear-runstats-value">
+              {runStats.patternsCleared}
+            </span>
+          </li>
+          {runStats.rubiesCleared > 0 && (
+            <li>
+              <span className="hexaclear-runstats-label">
+                Rubies cleared
+              </span>
+              <span className="hexaclear-runstats-value">
+                {runStats.rubiesCleared}
+              </span>
+            </li>
+          )}
+          {runStats.boardClears > 0 && (
+            <li>
+              <span className="hexaclear-runstats-label">Board clears</span>
+              <span className="hexaclear-runstats-value">
+                {runStats.boardClears}
+              </span>
+            </li>
+          )}
+          {runStats.bestCombo >= 2 && (
+            <li>
+              <span className="hexaclear-runstats-label">Best combo</span>
+              <span className="hexaclear-runstats-value">
+                ×{runStats.bestCombo}
+              </span>
+            </li>
+          )}
+          {runStats.bestStreak > 0 && (
+            <li>
+              <span className="hexaclear-runstats-label">Best streak</span>
+              <span className="hexaclear-runstats-value">
+                {runStats.bestStreak}
+              </span>
+            </li>
+          )}
+          {runStats.topPlacementPoints > 0 && (
+            <li>
+              <span className="hexaclear-runstats-label">Top placement</span>
+              <span className="hexaclear-runstats-value">
+                +{runStats.topPlacementPoints}
+              </span>
+            </li>
+          )}
+        </ul>
+      </div>
+    )
+  }
+
   return (
     <div
       className={[
@@ -4362,6 +4759,38 @@ function App() {
                   </button>
                 </div>
               )}
+              {/* Daily-mode "History" button. Lives in the same
+                  controls-row slot the smiley row uses for co-op so
+                  each mode has its own unique top-bar element. Tap
+                  to open the calendar of past dailies (back to the
+                  March 2026 launch date). The button also surfaces
+                  the friendly date when the player is replaying an
+                  archived puzzle, so it doubles as the "you are
+                  playing this day" affordance. */}
+              {!isMultiplayer && game.mode === 'daily' && (() => {
+                const archive =
+                  game.dailyDateKey !== undefined &&
+                  game.dailyDateKey !== getTodayKey()
+                return (
+                  <button
+                    type="button"
+                    className={[
+                      'hexaclear-history-button',
+                      archive ? 'is-archive' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      playUiClick()
+                      setShowDailyHistory(true)
+                    }}
+                  >
+                    {archive && game.dailyDateKey
+                      ? formatFriendlyDateKey(game.dailyDateKey)
+                      : 'History'}
+                  </button>
+                )
+              })()}
               {/* Wood theme renders the smiley row here in the
                   controls row. The Win98 theme renders a sibling
                   copy of the same SmileyRow inside the LCD row below
@@ -5201,6 +5630,30 @@ function App() {
               }}
             >
               <PiecePreview shape={ghost.piece.shape} mode="board" />
+              {/* Multi-clear hint: when the current hover position
+                  would clear 2+ scoring patterns at once, surface a
+                  small "×N" chip pinned to the floating ghost. The
+                  chip's tier (×2/×3/×4+) drives a CSS modifier so
+                  bigger combos render larger and more emphatic.
+                  Hidden for single clears so normal play stays
+                  uncluttered. */}
+              {preview &&
+                preview.valid &&
+                preview.clearedPatternsCount >= 2 && (
+                  <span
+                    key={preview.clearedPatternsCount}
+                    className={[
+                      'hexaclear-multi-clear-chip',
+                      `hexaclear-multi-clear-tier-${Math.min(
+                        4,
+                        preview.clearedPatternsCount,
+                      )}`,
+                    ].join(' ')}
+                    aria-hidden="true"
+                  >
+                    ×{preview.clearedPatternsCount}
+                  </span>
+                )}
             </div>
           )}
           {undoAnimation && (
@@ -5302,6 +5755,8 @@ function App() {
                   </div>
                 )}
 
+                {renderRunStatsSection()}
+
                 {(() => {
                   // Endless gameover leaderboard. Default-on the
                   // global view if the player has it toggled in the
@@ -5313,11 +5768,12 @@ function App() {
                   // by construction), for local it's the just-saved
                   // run.
                   //
-                  // Local list paginates 10 rows per page (up to the
-                  // top-30 cap) and defaults to whichever page
-                  // contains the just-saved row. Global stays at top
-                  // 10 with a "Your rank" footnote when the player's
-                  // row is below it.
+                  // Local list paginates `GAMEOVER_LEADERBOARD_PAGE_SIZE`
+                  // rows per page (up to the top-30 cap) and defaults
+                  // to whichever page contains the just-saved row.
+                  // Global stays at the same per-page count with a
+                  // "Your rank" footnote when the player's row falls
+                  // below it.
                   const localTop = highScores
                     .slice()
                     .sort((a, b) => b.score - a.score || a.date - b.date)
@@ -5325,7 +5781,7 @@ function App() {
                     showGlobalLeaderboard && globalEndlessScores === undefined
                   const globalTop = (globalEndlessScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
-                  const visibleCount = 10
+                  const visibleCount = GAMEOVER_LEADERBOARD_PAGE_SIZE
                   const globalVisible = globalTop.slice(0, visibleCount)
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
@@ -5347,16 +5803,19 @@ function App() {
                   // were sitting on.
                   const localPageCount = Math.max(
                     1,
-                    Math.ceil(localTop.length / LEADERBOARD_PAGE_SIZE),
+                    Math.ceil(
+                      localTop.length / GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                    ),
                   )
                   const localPageIndex = Math.min(
                     Math.max(0, gameoverEndlessPage),
                     localPageCount - 1,
                   )
-                  const localPageStart = localPageIndex * LEADERBOARD_PAGE_SIZE
+                  const localPageStart =
+                    localPageIndex * GAMEOVER_LEADERBOARD_PAGE_SIZE
                   const localWindow = localTop.slice(
                     localPageStart,
-                    localPageStart + LEADERBOARD_PAGE_SIZE,
+                    localPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE,
                   )
                   if (
                     !usingGlobal &&
@@ -5497,7 +5956,8 @@ function App() {
                               <span className="hexaclear-scores-page-label">
                                 {localPageStart + 1}–
                                 {Math.min(
-                                  localPageStart + LEADERBOARD_PAGE_SIZE,
+                                  localPageStart +
+                                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
                                   localTop.length,
                                 )}{' '}
                                 of {localTop.length}
@@ -5589,6 +6049,8 @@ function App() {
                   </button>
                 )}
 
+                {renderRunStatsSection()}
+
                 {isMultiplayer && (() => {
                   // Co-op gameover leaderboard. The local view shows
                   // every co-op partnership this device has scored
@@ -5604,7 +6066,7 @@ function App() {
                     showGlobalLeaderboard && globalCoopScores === undefined
                   const globalTop = (globalCoopScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
-                  const visibleCount = 10
+                  const visibleCount = GAMEOVER_LEADERBOARD_PAGE_SIZE
                   const localVisible = localTop.slice(0, visibleCount)
                   const globalVisible = globalTop.slice(0, visibleCount)
                   const groupKey = lastCoopSavedGroupKey
@@ -5883,21 +6345,27 @@ function App() {
                   </div>
                 )}
 
+                {renderRunStatsSection()}
+
                 {(() => {
                   // Daily gameover leaderboard. Defaults to whichever
                   // view the player last had open (the global toggle
                   // is shared with the pause-menu high scores
-                  // panel). Daily ranks ascending by moves; we still
-                  // show top 10 here. The "you" highlight tracks the
-                  // player's local best for today (lastSavedDaily…)
-                  // and, in the global view, the row whose playerId
-                  // matches.
-                  const localVisible = todayPlayerDailyRuns.slice(0, 10)
+                  // panel). Daily ranks ascending by moves; we show
+                  // `GAMEOVER_LEADERBOARD_PAGE_SIZE` rows here to
+                  // keep the modal compact. The "you" highlight
+                  // tracks the player's local best for today
+                  // (lastSavedDaily…) and, in the global view, the
+                  // row whose playerId matches.
+                  const localVisible = todayPlayerDailyRuns.slice(
+                    0,
+                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                  )
                   const globalLoading =
                     showGlobalLeaderboard && globalDailyScores === undefined
                   const globalTop = (globalDailyScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
-                  const visibleCount = 10
+                  const visibleCount = GAMEOVER_LEADERBOARD_PAGE_SIZE
                   const globalVisible = globalTop.slice(0, visibleCount)
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
@@ -6067,7 +6535,11 @@ function App() {
                     if (pendingDailyHighScore) {
                       handleSaveDailyHighScore()
                     }
-                    const next = createDailyGameState()
+                    // Retry whichever day this run was for. Today's
+                    // run replays today; an archive-day run replays
+                    // that same archived day so the player can keep
+                    // chipping at their best.
+                    const next = createDailyGameState(game.dailyDateKey)
                     setGame(next)
                     setSavedDailyGame(next)
                     setDailyHighScoreSaved(false)
@@ -6075,7 +6547,10 @@ function App() {
                     setHover(null)
                   }}
                 >
-                  Retry today&apos;s puzzle
+                  {game.dailyDateKey &&
+                  game.dailyDateKey !== getTodayKey()
+                    ? 'Retry this puzzle'
+                    : "Retry today's puzzle"}
                 </button>
               </div>
             </div>
@@ -6214,6 +6689,21 @@ function App() {
                     }}
                   >
                     High scores
+                  </button>
+                  <span className="hexaclear-menu-link-sep" aria-hidden="true">
+                    •
+                  </span>
+                  <button
+                    type="button"
+                    className="hexaclear-menu-link"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowStats(true)
+                    }}
+                  >
+                    Stats
                   </button>
                 </div>
 
@@ -6444,6 +6934,485 @@ function App() {
               </div>
             </div>
           )}
+          {showStats && (() => {
+            // Profile stats modal. Pulls all values from the cached
+            // `lifetimeStats` (which is itself the localStorage
+            // record). Sections are gated on "has any data" so a
+            // brand-new profile only shows what's been earned —
+            // e.g. the daily section is hidden until the player has
+            // played at least one daily, the records list hides
+            // unset records, etc.
+            const ls = lifetimeStats
+            const hasAnyGame =
+              ls.gamesPlayedEndless +
+                ls.gamesPlayedDaily +
+                ls.gamesPlayedCoop >
+              0
+            const totalGames =
+              ls.gamesPlayedEndless +
+              ls.gamesPlayedDaily +
+              ls.gamesPlayedCoop
+            const avgRunMs =
+              totalGames > 0 ? ls.totalActivePlayMs / totalGames : 0
+            const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
+            return (
+              <div className="hexaclear-overlay">
+                <div className="hexaclear-overlay-card hexaclear-scoring-card">
+                  <div className="title">Stats</div>
+                  {!hasAnyGame ? (
+                    <p className="hexaclear-scores-empty">
+                      Finish a run and your stats will start filling in here.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          Lifetime
+                        </div>
+                        <ul className="hexaclear-runstats-grid">
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Games played
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {totalGames}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Active play
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {formatDuration(ls.totalActivePlayMs)}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Avg. per game
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {formatDuration(avgRunMs)}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Pieces placed
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {ls.piecesPlaced}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Cubes placed
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {ls.cubesPlaced}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Patterns cleared
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {ls.patternsCleared}
+                            </span>
+                          </li>
+                          {ls.rubiesCleared > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Rubies cleared
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.rubiesCleared}
+                              </span>
+                            </li>
+                          )}
+                          {ls.boardClears > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Board clears
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.boardClears}
+                              </span>
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          By mode
+                        </div>
+                        <ul className="hexaclear-runstats-grid">
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Endless
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {ls.gamesPlayedEndless}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Daily
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {ls.gamesPlayedDaily}
+                            </span>
+                          </li>
+                          <li>
+                            <span className="hexaclear-runstats-label">
+                              Co-op
+                            </span>
+                            <span className="hexaclear-runstats-value">
+                              {ls.gamesPlayedCoop}
+                            </span>
+                          </li>
+                          {ls.dailyDaysCleared.length > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Daily days cleared
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.dailyDaysCleared.length}
+                              </span>
+                            </li>
+                          )}
+                          {ls.coopPartnerIds.length > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Co-op partners
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.coopPartnerIds.length}
+                              </span>
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          Records
+                        </div>
+                        <ul className="hexaclear-runstats-grid">
+                          {ls.bestEndlessScore > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Best endless score
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.bestEndlessScore}
+                              </span>
+                            </li>
+                          )}
+                          {ls.bestDailyMoves !== null && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Best daily moves
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.bestDailyMoves}
+                              </span>
+                            </li>
+                          )}
+                          {ls.bestCombo >= 2 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Best combo
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                ×{ls.bestCombo}
+                              </span>
+                            </li>
+                          )}
+                          {ls.bestStreak > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Best streak
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {ls.bestStreak}
+                              </span>
+                            </li>
+                          )}
+                          {ls.bestSinglePlacement > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Top placement
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                +{ls.bestSinglePlacement}
+                              </span>
+                            </li>
+                          )}
+                          {ls.longestRunMs > 0 && (
+                            <li>
+                              <span className="hexaclear-runstats-label">
+                                Longest run
+                              </span>
+                              <span className="hexaclear-runstats-value">
+                                {formatDuration(ls.longestRunMs)}
+                              </span>
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+
+                      <p className="hexaclear-stats-tracking-since">
+                        Tracking since {trackingSince}
+                      </p>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="hexaclear-reset"
+                    onClick={() => {
+                      playUiClick()
+                      setShowStats(false)
+                      setShowMenu(true)
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+          {showDailyHistory && (() => {
+            // Daily-history calendar. Renders one month at a time
+            // (Sun–Sat header) with prev/next chevrons clamped to
+            // the launch month on the low end and today's month on
+            // the high end. Each cell is a button when its day is
+            // playable (between launch and today inclusive) and
+            // shows the best move count locally recorded for that
+            // day, if any. Clicking a playable cell starts (or
+            // replays) that day's seeded puzzle via
+            // `handleStartDailyForDateKey`.
+            const todayKey = getTodayKey()
+            const todayParts = todayKey.split('-').map(Number)
+            const todayY = todayParts[0]
+            const todayM = todayParts[1]
+            const launchParts = DAILY_HISTORY_LAUNCH_DATE_KEY.split('-')
+              .map(Number)
+            const launchY = launchParts[0]
+            const launchM = launchParts[1]
+            const { year, month } = historyMonth
+            const monthLabel = `${FRIENDLY_MONTH_NAMES[month - 1]} ${year}`
+            const firstOfMonth = new Date(year, month - 1, 1)
+            const firstWeekday = firstOfMonth.getDay()
+            const daysInMonth = new Date(year, month, 0).getDate()
+            // 6 weeks * 7 days = 42 cells, enough to cover every
+            // possible month layout without re-laying-out per month.
+            const cells: Array<
+              | { kind: 'blank'; key: string }
+              | {
+                  kind: 'day'
+                  key: string
+                  day: number
+                  dateKey: string
+                  bestMoves: number | null
+                  isFuture: boolean
+                  isPreLaunch: boolean
+                  isToday: boolean
+                  isActive: boolean
+                }
+            > = []
+            for (let i = 0; i < firstWeekday; i++) {
+              cells.push({ kind: 'blank', key: `b-${i}` })
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+              const dateKey = buildDateKey(year, month, day)
+              const isFuture = isDateKeyAfter(dateKey, todayKey)
+              const isPreLaunch = isDateKeyBefore(
+                dateKey,
+                DAILY_HISTORY_LAUNCH_DATE_KEY,
+              )
+              const isToday = dateKey === todayKey
+              const isActive = dateKey === game.dailyDateKey
+              // Read best moves either from the dedicated
+              // `cubic-daily-best-…` slot, or fall back to scanning
+              // the runs list for a min. Best slot is always
+              // up-to-date for runs saved through the standard
+              // flow; the fallback covers older saves that pre-date
+              // the per-day-best storage.
+              let bestMoves: number | null = null
+              try {
+                if (typeof window !== 'undefined') {
+                  const raw = window.localStorage.getItem(
+                    `cubic-daily-best-${dateKey}`,
+                  )
+                  const parsed = raw ? Number.parseInt(raw, 10) : NaN
+                  if (Number.isFinite(parsed) && parsed > 0) {
+                    bestMoves = parsed
+                  }
+                  if (bestMoves === null) {
+                    const runs = loadDailyRunsForDateKey(dateKey)
+                    if (runs.length > 0) {
+                      const min = runs.reduce(
+                        (acc, r) => Math.min(acc, r.moves),
+                        Infinity,
+                      )
+                      if (Number.isFinite(min)) bestMoves = min
+                    }
+                  }
+                }
+              } catch {
+                bestMoves = null
+              }
+              cells.push({
+                kind: 'day',
+                key: dateKey,
+                day,
+                dateKey,
+                bestMoves,
+                isFuture,
+                isPreLaunch,
+                isToday,
+                isActive,
+              })
+            }
+            // Pad out to a full 6-week grid so the modal height
+            // doesn't jump as the player flips between short and
+            // long months.
+            while (cells.length < 42) {
+              cells.push({ kind: 'blank', key: `b-${cells.length}` })
+            }
+            const canGoPrev =
+              year > launchY || (year === launchY && month > launchM)
+            const canGoNext =
+              year < todayY || (year === todayY && month < todayM)
+            const stepMonth = (delta: number) => {
+              setHistoryMonth(({ year: y, month: m }) => {
+                const date = new Date(y, m - 1 + delta, 1)
+                return {
+                  year: date.getFullYear(),
+                  month: date.getMonth() + 1,
+                }
+              })
+            }
+            return (
+              <div className="hexaclear-overlay">
+                <div className="hexaclear-overlay-card hexaclear-history-card">
+                  <div className="title">Daily History</div>
+                  <div className="hexaclear-history-nav">
+                    <button
+                      type="button"
+                      className="hexaclear-history-nav-step"
+                      aria-label="Previous month"
+                      onClick={() => {
+                        playUiClick()
+                        stepMonth(-1)
+                      }}
+                      disabled={!canGoPrev}
+                    >
+                      ‹
+                    </button>
+                    <span className="hexaclear-history-nav-label">
+                      {monthLabel}
+                    </span>
+                    <button
+                      type="button"
+                      className="hexaclear-history-nav-step"
+                      aria-label="Next month"
+                      onClick={() => {
+                        playUiClick()
+                        stepMonth(1)
+                      }}
+                      disabled={!canGoNext}
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <div
+                    className="hexaclear-history-grid"
+                    role="grid"
+                    aria-label={`Daily puzzles for ${monthLabel}`}
+                  >
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(
+                      (label) => (
+                        <div
+                          key={`hd-${label}`}
+                          className="hexaclear-history-weekday"
+                          aria-hidden="true"
+                        >
+                          {label}
+                        </div>
+                      ),
+                    )}
+                    {cells.map((cell) => {
+                      if (cell.kind === 'blank') {
+                        return (
+                          <div
+                            key={cell.key}
+                            className="hexaclear-history-cell hexaclear-history-cell-blank"
+                            aria-hidden="true"
+                          />
+                        )
+                      }
+                      const playable = !cell.isFuture && !cell.isPreLaunch
+                      const className = [
+                        'hexaclear-history-cell',
+                        cell.isToday ? 'is-today' : '',
+                        cell.isActive ? 'is-active' : '',
+                        cell.bestMoves !== null ? 'is-cleared' : '',
+                        cell.isFuture ? 'is-future' : '',
+                        cell.isPreLaunch ? 'is-pre-launch' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                      const ariaLabel = playable
+                        ? `${formatFriendlyDateKey(cell.dateKey)}${
+                            cell.bestMoves !== null
+                              ? `, cleared in ${cell.bestMoves} moves`
+                              : ''
+                          }`
+                        : `${formatFriendlyDateKey(cell.dateKey)} (unavailable)`
+                      return (
+                        <button
+                          key={cell.key}
+                          type="button"
+                          className={className}
+                          aria-label={ariaLabel}
+                          disabled={!playable}
+                          onClick={() => {
+                            if (!playable) return
+                            playUiClick()
+                            handleStartDailyForDateKey(cell.dateKey)
+                          }}
+                        >
+                          <span className="hexaclear-history-day">
+                            {cell.day}
+                          </span>
+                          {cell.bestMoves !== null && (
+                            <span className="hexaclear-history-best">
+                              {cell.bestMoves}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="hexaclear-history-legend">
+                    Past-day puzzles are local-only — they don't post to
+                    the global leaderboard.
+                  </p>
+                  <button
+                    type="button"
+                    className="hexaclear-reset"
+                    onClick={() => {
+                      playUiClick()
+                      setShowDailyHistory(false)
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
           {showHighScores && (() => {
             const todayKey = getTodayKey()
             // When the global toggle is on, we render directly off

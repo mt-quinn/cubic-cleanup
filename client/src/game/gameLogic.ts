@@ -111,6 +111,14 @@ export type GameState = {
   dailySeed?: number
   // Daily-mode hand deal count for deterministic sequencing. Only set in daily mode.
   dailyHandDealCount?: number
+  // Calendar date this daily run is for, in `YYYY-M-D` form (no
+  // zero padding) so the seed input matches the legacy hash. Only
+  // set in daily mode. Today's run uses today's key; past-day
+  // replays from the history calendar use the archived day's key,
+  // which lets the App detect "this is an archive run" via
+  // `dailyDateKey !== getTodayDateKey()` and gate off global
+  // submission accordingly.
+  dailyDateKey?: string
   // Live ruby positions. Endless = 0 or 1, big = up to 3, daily = always 0.
   goldenCellIds: CellId[]
 }
@@ -151,21 +159,52 @@ const makeSeededRandom = (seed: number): RNG => {
   }
 }
 
-const getTodaySeed = (): number => {
-  const now = new Date()
-  // Use the client’s local calendar day so that daily puzzles reset at
-  // local midnight rather than a single global UTC boundary.
-  const y = now.getFullYear()
-  const m = now.getMonth() + 1
-  const d = now.getDate()
-  const key = `${y}-${m}-${d}`
-  // Simple string hash to int
+// Hash a YYYY-M-D string into a 32-bit int. Pulled out so today's
+// seed and past-day-replay seeds share the exact same hash, which
+// guarantees a calendar day always maps to the same puzzle.
+const hashDateKey = (key: string): number => {
   let hash = 0
   for (let i = 0; i < key.length; i++) {
     hash = (hash * 31 + key.charCodeAt(i)) | 0
   }
   return hash
 }
+
+// Normalize any incoming date key into the unpadded `YYYY-M-D`
+// format the legacy seed used. Padded inputs (e.g. `2026-05-20`)
+// are silently re-hashed under the unpadded form so they collide
+// with the value the original `getTodaySeed()` produced — meaning
+// existing players' "today" puzzles don't drift when this code
+// path turns on.
+const normalizeDateKeyForSeed = (dateKey: string): string => {
+  const parts = dateKey.split('-')
+  if (parts.length !== 3) return dateKey
+  const y = Number(parts[0])
+  const m = Number(parts[1])
+  const d = Number(parts[2])
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return dateKey
+  }
+  return `${y}-${m}-${d}`
+}
+
+// Today's calendar date in zero-padded `YYYY-MM-DD` form, matching
+// the `cubic-daily-runs-…` localStorage convention on the App side.
+// `normalizeDateKeyForSeed` strips the padding before hashing so the
+// resulting seed still matches the legacy unpadded form, which means
+// existing players' "today" puzzle is unchanged.
+export const getTodayDateKey = (): string => {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const d = now.getDate()
+  const mm = String(m).padStart(2, '0')
+  const dd = String(d).padStart(2, '0')
+  return `${y}-${mm}-${dd}`
+}
+
+export const getDailySeedForDateKey = (dateKey: string): number =>
+  hashDateKey(normalizeDateKeyForSeed(dateKey))
 
 export const findClears = (
   board: BoardState,
@@ -636,13 +675,22 @@ export const createBigGameState = (): GameState => {
   }
 }
 
-// Create the daily puzzle board for the current UTC day. The layout of
-// numbered hexes is deterministic per day, but the dealt pieces still
-// use the regular RNG.
-export const createDailyGameState = (): GameState => {
+// Create the daily puzzle board for the given calendar day, or for
+// today if `dateKey` is omitted. The layout of numbered hexes is
+// deterministic per day, dealt pieces are drawn off the same
+// per-day seed, so the same dateKey always produces the exact same
+// puzzle (which is what powers past-day replays from the history
+// calendar). The seed input is intentionally formatted as the
+// legacy `YYYY-M-D` (no zero padding) so existing today seeds keep
+// resolving to the puzzle players already have.
+export const createDailyGameState = (dateKey?: string): GameState => {
   const board = createEmptyBoard('daily')
 
-  const seed = getTodaySeed()
+  const resolvedDateKey =
+    dateKey !== undefined && dateKey !== null && dateKey !== ''
+      ? dateKey
+      : getTodayDateKey()
+  const seed = hashDateKey(normalizeDateKeyForSeed(resolvedDateKey))
   const random = makeSeededRandom(seed)
 
   const dailyHits: Record<CellId, number> = {}
@@ -731,6 +779,7 @@ export const createDailyGameState = (): GameState => {
     dailyCompleted: false,
     dailySeed: seed,
     dailyHandDealCount: 0,
+    dailyDateKey: resolvedDateKey,
     goldenCellIds: [],
   }
 }

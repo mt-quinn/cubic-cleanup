@@ -1910,6 +1910,295 @@ body {
     drop-shadow(0 4px 5px rgba(0, 0, 0, 0.45));
 }
 
+/* Multi-clear hint chip pinned to the ghost. Pops above the floating
+   piece preview to call out 2+ simultaneous pattern clears. Tiers
+   scale type size and warmth so a ×4 reads as bigger and brighter
+   than a ×2. The keyed remount on every count change replays the
+   pop-in animation so the chip "lands" each time it changes value
+   instead of silently morphing. */
+.hexaclear-multi-clear-chip {
+  position: absolute;
+  top: -0.6rem;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #2a1101;
+  background: linear-gradient(180deg, #ffe89a 0%, #ffb84a 100%);
+  border: 1px solid rgba(255, 232, 154, 0.95);
+  box-shadow:
+    0 6px 14px rgba(255, 184, 74, 0.45),
+    0 2px 4px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: hexaclear-multi-clear-pop 240ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.hexaclear-multi-clear-tier-2 {
+  font-size: 0.95rem;
+}
+
+.hexaclear-multi-clear-tier-3 {
+  font-size: 1.15rem;
+  background: linear-gradient(180deg, #ffd17a 0%, #ff8a2c 100%);
+  box-shadow:
+    0 8px 18px rgba(255, 138, 44, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.hexaclear-multi-clear-tier-4 {
+  font-size: 1.4rem;
+  color: #fff7e0;
+  background: linear-gradient(180deg, #ff8a47 0%, #ff3838 100%);
+  border-color: rgba(255, 220, 140, 0.95);
+  box-shadow:
+    0 0 20px rgba(255, 80, 60, 0.7),
+    0 8px 22px rgba(255, 80, 60, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+@keyframes hexaclear-multi-clear-pop {
+  0% {
+    transform: translate(-50%, -100%) scale(0.5);
+    opacity: 0;
+  }
+  55% {
+    transform: translate(-50%, -100%) scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -100%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Run / lifetime stats list. Two-column grid where each li is a
+   label/value pair. Used both on the gameover "This run" card and
+   the profile-stats modal. Numbers right-align and play nicely with
+   the modal's existing label/value rhythm. */
+.hexaclear-runstats-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1.4rem;
+  row-gap: 0.35rem;
+}
+.hexaclear-runstats-grid li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  padding: 0.18rem 0;
+}
+.hexaclear-runstats-label {
+  color: rgba(255, 255, 255, 0.72);
+  letter-spacing: 0.02em;
+}
+.hexaclear-runstats-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #fff;
+}
+@media (max-width: 540px) {
+  .hexaclear-runstats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Profile stats modal: section headers and tracking-since note. */
+.hexaclear-stats-section {
+  margin-bottom: 1.1rem;
+}
+.hexaclear-stats-section-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 0.45rem;
+}
+.hexaclear-stats-tracking-since {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  text-align: center;
+}
+
+/* Daily-mode History button (top bar). Sits in the controls row
+   slot the smiley row uses for co-op so each mode has its own
+   distinctive top-bar element. The `is-archive` modifier flips the
+   button to a date-pill look (e.g. "March 3, 2026") when the
+   player is on a past-day replay, so the chrome doubles as a "you
+   are playing this day" banner. */
+.hexaclear-history-button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  color: var(--hexaclear-text, #f3eee0);
+  border-radius: 999px;
+  padding: 0.32rem 0.85rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    transform 80ms ease;
+}
+.hexaclear-history-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.hexaclear-history-button:active {
+  transform: translateY(1px);
+}
+.hexaclear-history-button.is-archive {
+  background: linear-gradient(180deg, #ffd17a 0%, #ff8a2c 100%);
+  color: #2a1101;
+  border-color: rgba(255, 220, 140, 0.95);
+  font-weight: 800;
+}
+
+/* Daily-history calendar modal. Big card sized just enough to fit
+   a 6-week grid plus chrome, with chunky touch-friendly day
+   buttons. */
+.hexaclear-history-card {
+  max-width: 22rem;
+}
+.hexaclear-history-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0.4rem 0 0.8rem;
+}
+.hexaclear-history-nav-label {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.hexaclear-history-nav-step {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--hexaclear-text, #f3eee0);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.hexaclear-history-nav-step:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.hexaclear-history-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.hexaclear-history-weekday {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  padding: 0.25rem 0;
+}
+.hexaclear-history-cell {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--hexaclear-text, #f3eee0);
+  border-radius: 0.4rem;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Nunito', system-ui, sans-serif;
+  cursor: pointer;
+  transition: background-color 100ms ease, border-color 100ms ease,
+    transform 80ms ease;
+  padding: 0.1rem;
+}
+.hexaclear-history-cell:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.hexaclear-history-cell:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.hexaclear-history-cell:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+.hexaclear-history-cell-blank {
+  background: transparent;
+  border-color: transparent;
+  pointer-events: none;
+}
+.hexaclear-history-cell.is-today {
+  border-color: rgba(255, 184, 74, 0.95);
+  box-shadow: 0 0 0 1px rgba(255, 184, 74, 0.4) inset;
+}
+.hexaclear-history-cell.is-active {
+  background: linear-gradient(180deg, #ffd17a 0%, #ff8a2c 100%);
+  color: #2a1101;
+  border-color: rgba(255, 220, 140, 0.95);
+}
+.hexaclear-history-cell.is-cleared {
+  background: rgba(122, 200, 122, 0.18);
+  border-color: rgba(122, 200, 122, 0.45);
+}
+.hexaclear-history-cell.is-cleared.is-active {
+  background: linear-gradient(180deg, #ffd17a 0%, #ff8a2c 100%);
+}
+.hexaclear-history-day {
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1;
+}
+.hexaclear-history-best {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.hexaclear-history-cell.is-active .hexaclear-history-best {
+  color: rgba(42, 17, 1, 0.85);
+}
+.hexaclear-history-cell.is-cleared .hexaclear-history-best {
+  color: #c0f0c0;
+}
+.hexaclear-history-legend {
+  margin-top: 0.8rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+  text-align: center;
+}
+
 .hexaclear-undo-animation {
   position: absolute;
   pointer-events: none;
