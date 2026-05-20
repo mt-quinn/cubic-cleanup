@@ -5265,7 +5265,21 @@ function App() {
                 {pendingHighScore && (
                   <div className="hexaclear-gameover-section">
                     <div className="hexaclear-gameover-section-label">
-                      New high score
+                      {(() => {
+                        // We only submit to the global board when the
+                        // run also dethrones the device's local #1
+                        // (per the gating in handleSaveHighScore). So
+                        // a top-30-but-not-top-1 run is "local only"
+                        // — surface that explicitly so the player
+                        // knows they're not displacing anything on
+                        // the global board with this save.
+                        const currentTop = highScores[0]?.score ?? -Infinity
+                        const wouldBeNewBest =
+                          pendingScore !== null && pendingScore > currentTop
+                        return wouldBeNewBest
+                          ? 'New high score'
+                          : 'New local high score'
+                      })()}
                     </div>
                     <div className="hexaclear-gameover-input-row">
                       <input
