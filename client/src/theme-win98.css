@@ -1605,8 +1605,12 @@
    black ring is painted around the standard grey bevel to mark this
    as the Enter-key / primary action, and the label is bolded for
    extra emphasis. The press state keeps the ring while the bevel
-   flips to its sunken form. */
-[data-theme="win98"] .hexaclear-menu-resume {
+   flips to its sunken form.
+
+   Selector chain mirrors the global Win98 overlay-button rule
+   (`.hexaclear-overlay-card button:not(.title-control)`) so this
+   override actually wins on specificity rather than just tying it. */
+[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-resume {
   box-shadow:
     inset -1px -1px 0 var(--w98-shadow),
     inset 1px 1px 0 var(--w98-surface),
@@ -1614,7 +1618,7 @@
   font-weight: 700 !important;
 }
 
-[data-theme="win98"] .hexaclear-menu-resume:active {
+[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-resume:active {
   box-shadow:
     inset 1px 1px 0 var(--w98-shadow),
     inset -1px -1px 0 var(--w98-surface),
