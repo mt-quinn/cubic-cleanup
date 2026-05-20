@@ -6723,52 +6723,58 @@ function App() {
                     </div>
                   )}
 
-                  {!showResetConfirm ? (
-                    <button
-                      type="button"
-                      className="hexaclear-menu-restart-link"
-                      onClick={() => {
-                        playUiClick()
-                        setShowResetConfirm(true)
-                      }}
-                    >
-                      Reset hiscores
-                    </button>
-                  ) : (
-                    <div className="hexaclear-scores-confirm">
-                      <p className="hexaclear-scores-confirm-text">
-                        Reset all local hiscores? This cannot be undone.
-                      </p>
-                      <div className="hexaclear-scores-confirm-actions">
-                        <button
-                          type="button"
-                          className="hexaclear-menu-restart-link"
-                          onClick={() => {
-                            playUiClick()
-                            handleResetHighScores()
-                          }}
-                        >
-                          Yes, reset
-                        </button>
-                        <span
-                          className="hexaclear-menu-link-sep"
-                          aria-hidden="true"
-                        >
-                          •
-                        </span>
-                        <button
-                          type="button"
-                          className="hexaclear-menu-link"
-                          onClick={() => {
-                            playUiClick()
-                            setShowResetConfirm(false)
-                          }}
-                        >
-                          Cancel
-                        </button>
+                  {/* Reset hiscores only wipes per-device local
+                      lists; it never touches the global tables.
+                      Hiding it while the global toggle is on keeps
+                      the affordance from misleading players into
+                      thinking they can reset the global board. */}
+                  {!showGlobalLeaderboard &&
+                    (!showResetConfirm ? (
+                      <button
+                        type="button"
+                        className="hexaclear-menu-restart-link"
+                        onClick={() => {
+                          playUiClick()
+                          setShowResetConfirm(true)
+                        }}
+                      >
+                        Reset hiscores
+                      </button>
+                    ) : (
+                      <div className="hexaclear-scores-confirm">
+                        <p className="hexaclear-scores-confirm-text">
+                          Reset all local hiscores? This cannot be undone.
+                        </p>
+                        <div className="hexaclear-scores-confirm-actions">
+                          <button
+                            type="button"
+                            className="hexaclear-menu-restart-link"
+                            onClick={() => {
+                              playUiClick()
+                              handleResetHighScores()
+                            }}
+                          >
+                            Yes, reset
+                          </button>
+                          <span
+                            className="hexaclear-menu-link-sep"
+                            aria-hidden="true"
+                          >
+                            •
+                          </span>
+                          <button
+                            type="button"
+                            className="hexaclear-menu-link"
+                            onClick={() => {
+                              playUiClick()
+                              setShowResetConfirm(false)
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
 
                   <button
                     type="button"
