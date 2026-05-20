@@ -4507,101 +4507,97 @@ function App() {
     }
   }, [scale, hover])
 
-  type StatsTileTone = 'quiet' | 'analysis' | 'earned' | 'record'
-  type StatsTile = {
+  type StatDatum = {
     key: string
     label: string
     value: string
-    tone?: StatsTileTone
   }
-  const getStatsTileClassName = (tone?: StatsTileTone) =>
-    [
-      'hexaclear-stats-tile',
-      tone ? `hexaclear-stats-tile-${tone}` : '',
-    ]
-      .filter(Boolean)
-      .join(' ')
 
   // Per-run summary card. Rendered on every gameover modal under
   // the score/save section. Hidden when the run has zero placements
   // (e.g. instant abandon) since "0 pieces / 0s" is just noise.
-  // Renders as a 4-up grid of compact tiles instead of stacked
-  // label/value rows so the modal stays short on mobile. Tiles for
-  // optional stats (rubies, board clears, combo, streak, top hit)
-  // only mount when those stats actually fired in this run, so a
-  // quiet game shows a tidy 4-tile row and a fireworks game grows
-  // to 5 / 6 / 7 tiles as it earns them.
+  // Renders as a tight recap strip (baseline stats) plus a short
+  // achievement ribbon (moments worth celebrating). This keeps the
+  // modal compact while making actual accomplishments feel authored
+  // instead of just another box in a grid.
   const renderRunStatsSection = () => {
     if (runStats.piecesPlaced === 0) return null
-    const tiles: StatsTile[] = [
+    const baselineStats: StatDatum[] = [
       {
         key: 'time',
         label: 'Time',
         value: formatDuration(runStats.activePlayMs),
-        tone: 'quiet',
       },
       {
         key: 'pieces',
         label: 'Pieces',
         value: String(runStats.piecesPlaced),
-        tone: 'quiet',
       },
       {
         key: 'clears',
         label: 'Clears',
         value: String(runStats.patternsCleared),
-        tone: runStats.patternsCleared > 0 ? 'earned' : 'quiet',
       },
       {
         key: 'rubies',
         label: 'Rubies',
         value: String(runStats.rubiesCleared),
-        tone: runStats.rubiesCleared > 0 ? 'earned' : 'quiet',
       },
     ]
+    const moments: StatDatum[] = []
     if (runStats.boardClears > 0) {
-      tiles.push({
+      moments.push({
         key: 'boards',
-        label: 'Boards',
+        label: 'Board clears',
         value: String(runStats.boardClears),
-        tone: 'earned',
       })
     }
     if (runStats.bestCombo >= 2) {
-      tiles.push({
+      moments.push({
         key: 'combo',
         label: 'Combo',
         value: `×${runStats.bestCombo}`,
-        tone: 'record',
       })
     }
     if (runStats.bestStreak > 0) {
-      tiles.push({
+      moments.push({
         key: 'streak',
         label: 'Streak',
         value: String(runStats.bestStreak),
-        tone: runStats.bestStreak >= 2 ? 'earned' : 'quiet',
       })
     }
     if (runStats.topPlacementPoints > 0) {
-      tiles.push({
+      moments.push({
         key: 'top',
         label: 'Top hit',
         value: `+${runStats.topPlacementPoints}`,
-        tone: 'record',
       })
     }
     return (
-      <div className="hexaclear-gameover-section hexaclear-stats-section-compact">
+      <div className="hexaclear-gameover-section hexaclear-run-recap">
         <div className="hexaclear-gameover-section-label">This run</div>
-        <div className="hexaclear-stats-tiles">
-          {tiles.map((t) => (
-            <div key={t.key} className={getStatsTileClassName(t.tone)}>
-              <span className="hexaclear-stats-tile-value">{t.value}</span>
-              <span className="hexaclear-stats-tile-label">{t.label}</span>
+        <div className="hexaclear-run-strip">
+          {baselineStats.map((stat) => (
+            <div key={stat.key} className="hexaclear-run-stat">
+              <span className="hexaclear-run-stat-value">{stat.value}</span>
+              <span className="hexaclear-run-stat-label">{stat.label}</span>
             </div>
           ))}
         </div>
+        {moments.length > 0 && (
+          <div className="hexaclear-run-moments" aria-label="Run highlights">
+            {moments.map((moment) => (
+              <span key={moment.key} className="hexaclear-run-moment">
+                <span className="hexaclear-run-moment-value">
+                  {moment.value}
+                </span>
+                <span className="hexaclear-run-moment-label">
+                  {moment.label}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -6984,175 +6980,193 @@ function App() {
                 : 0
             const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
 
-            const lifetimeTiles: StatsTile[] = [
+            const summaryStats: StatDatum[] = [
+              { key: 'time', label: 'Time', value: formatDuration(ls.totalActivePlayMs) },
+              { key: 'time-game', label: 'Time/game', value: formatDuration(avgRunMs) },
+              { key: 'pieces', label: 'Pieces', value: String(ls.piecesPlaced) },
+            ]
+            const performanceStats: StatDatum[] = [
               {
-                key: 'games',
-                label: 'Games',
-                value: String(totalGames),
-                tone: 'quiet',
-              },
-              {
-                key: 'active',
-                label: 'Time',
-                value: formatDuration(ls.totalActivePlayMs),
-                tone: 'quiet',
-              },
-              {
-                key: 'avg',
-                label: 'Time/game',
-                value: formatDuration(avgRunMs),
-                tone: 'analysis',
-              },
-              {
-                key: 'clears-per-game',
-                label: 'Clears/game',
-                value: formatAverage(avgClearsPerGame),
-                tone: 'analysis',
-              },
-              {
-                key: 'score-per-game',
+                key: 'score-game',
                 label: 'Score/game',
                 value: formatAverage(avgScorePerGame),
-                tone: 'analysis',
               },
               {
-                key: 'pieces',
-                label: 'Pieces',
-                value: String(ls.piecesPlaced),
-                tone: 'quiet',
+                key: 'clears-game',
+                label: 'Clears/game',
+                value: formatAverage(avgClearsPerGame),
               },
-              {
-                key: 'clears',
-                label: 'Clears',
-                value: String(ls.patternsCleared),
-                tone: ls.patternsCleared > 0 ? 'earned' : 'quiet',
-              },
-              {
-                key: 'rubies',
-                label: 'Rubies',
-                value: String(ls.rubiesCleared),
-                tone: ls.rubiesCleared > 0 ? 'earned' : 'quiet',
-              },
+              { key: 'clears', label: 'Clears', value: String(ls.patternsCleared) },
+              { key: 'rubies', label: 'Rubies', value: String(ls.rubiesCleared) },
             ]
             if (ls.boardClears > 0) {
-              lifetimeTiles.push({
+              performanceStats.push({
                 key: 'boards',
-                label: 'Boards',
+                label: 'Board clears',
                 value: String(ls.boardClears),
-                tone: 'earned',
               })
             }
 
-            const byModeTiles: StatsTile[] = [
+            const modeStats: StatDatum[] = [
               {
                 key: 'endless',
                 label: 'Endless',
                 value: String(ls.gamesPlayedEndless),
-                tone: ls.gamesPlayedEndless > 0 ? 'earned' : 'quiet',
               },
               {
                 key: 'daily',
                 label: 'Daily',
                 value: String(ls.gamesPlayedDaily),
-                tone: ls.gamesPlayedDaily > 0 ? 'earned' : 'quiet',
               },
               {
                 key: 'coop',
                 label: 'Co-op',
                 value: String(ls.gamesPlayedCoop),
-                tone: ls.gamesPlayedCoop > 0 ? 'earned' : 'quiet',
               },
             ]
             if (ls.dailyDaysCleared.length > 0) {
-              byModeTiles.push({
+              modeStats.push({
                 key: 'daily-days',
                 label: 'Days cleared',
                 value: String(ls.dailyDaysCleared.length),
-                tone: 'record',
               })
             }
             if (ls.coopPartnerIds.length > 0) {
-              byModeTiles.push({
+              modeStats.push({
                 key: 'partners',
                 label: 'Partners',
                 value: String(ls.coopPartnerIds.length),
-                tone: 'earned',
               })
             }
 
-            const recordsTiles: StatsTile[] = []
+            const records: StatDatum[] = []
             if (ls.bestEndlessScore > 0) {
-              recordsTiles.push({
+              records.push({
                 key: 'best-score',
                 label: 'Best score',
                 value: String(ls.bestEndlessScore),
-                tone: 'record',
               })
             }
             if (ls.bestDailyMoves !== null) {
-              recordsTiles.push({
+              records.push({
                 key: 'best-daily',
                 label: 'Best daily',
                 value: String(ls.bestDailyMoves),
-                tone: 'record',
               })
             }
             if (ls.bestCombo >= 2) {
-              recordsTiles.push({
+              records.push({
                 key: 'best-combo',
                 label: 'Best combo',
                 value: `×${ls.bestCombo}`,
-                tone: 'record',
               })
             }
             if (ls.bestStreak > 0) {
-              recordsTiles.push({
+              records.push({
                 key: 'best-streak',
                 label: 'Best streak',
                 value: String(ls.bestStreak),
-                tone: ls.bestStreak >= 2 ? 'record' : 'earned',
               })
             }
             if (ls.bestSinglePlacement > 0) {
-              recordsTiles.push({
+              records.push({
                 key: 'best-hit',
                 label: 'Top hit',
                 value: `+${ls.bestSinglePlacement}`,
-                tone: 'record',
               })
             }
             if (ls.longestRunMs > 0) {
-              recordsTiles.push({
+              records.push({
                 key: 'longest',
                 label: 'Longest',
                 value: formatDuration(ls.longestRunMs),
-                tone: 'earned',
               })
             }
 
-            const renderTileSection = (label: string, tiles: StatsTile[]) => {
-              if (tiles.length === 0) return null
+            const renderStatLine = (stat: StatDatum) => (
+              <div key={stat.key} className="hexaclear-statline">
+                <span className="hexaclear-statline-label">{stat.label}</span>
+                <span className="hexaclear-statline-value">{stat.value}</span>
+              </div>
+            )
+
+            const renderRecordRows = (items: StatDatum[]) => {
+              if (items.length === 0) return null
               return (
-                <div className="hexaclear-stats-section">
-                  <div className="hexaclear-stats-section-label">{label}</div>
-                  <div className="hexaclear-stats-tiles">
-                    {tiles.map((t) => (
-                      <div
-                        key={t.key}
-                        className={getStatsTileClassName(t.tone)}
-                      >
-                        <span className="hexaclear-stats-tile-value">
-                          {t.value}
-                        </span>
-                        <span className="hexaclear-stats-tile-label">
-                          {t.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="hexaclear-record-book">
+                  {items.map((record, idx) => (
+                    <div key={record.key} className="hexaclear-record-row">
+                      <span className="hexaclear-record-index">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <span className="hexaclear-record-label">
+                        {record.label}
+                      </span>
+                      <span className="hexaclear-record-value">
+                        {record.value}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )
             }
+
+            const renderModeSplit = () => (
+              <div className="hexaclear-mode-ledger">
+                {modeStats.map((mode) => (
+                  <div key={mode.key} className="hexaclear-mode-ledger-item">
+                    <span className="hexaclear-mode-ledger-value">
+                      {mode.value}
+                    </span>
+                    <span className="hexaclear-mode-ledger-label">
+                      {mode.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+
+            const renderPerformancePanel = () => (
+              <div className="hexaclear-performance-panel">
+                <div className="hexaclear-performance-feature">
+                  <span className="hexaclear-performance-feature-value">
+                    {formatAverage(avgScorePerGame)}
+                  </span>
+                  <span className="hexaclear-performance-feature-label">
+                    Score/game
+                  </span>
+                </div>
+                <div className="hexaclear-performance-list">
+                  {performanceStats
+                    .filter((stat) => stat.key !== 'score-game')
+                    .map(renderStatLine)}
+                </div>
+              </div>
+            )
+
+            const renderSummary = () => (
+              <div className="hexaclear-profile-summary">
+                <div className="hexaclear-profile-summary-main">
+                  <span className="hexaclear-profile-summary-value">
+                    {totalGames}
+                  </span>
+                  <span className="hexaclear-profile-summary-label">
+                    {totalGames === 1 ? 'Game played' : 'Games played'}
+                  </span>
+                </div>
+                <div className="hexaclear-profile-summary-lines">
+                  {summaryStats.map((stat) => (
+                    <div
+                      key={stat.key}
+                      className="hexaclear-profile-summary-line"
+                    >
+                      <span>{stat.label}</span>
+                      <strong>{stat.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
 
             return (
               <div className="hexaclear-overlay">
@@ -7164,9 +7178,25 @@ function App() {
                     </p>
                   ) : (
                     <>
-                      {renderTileSection('Lifetime', lifetimeTiles)}
-                      {renderTileSection('By mode', byModeTiles)}
-                      {renderTileSection('Records', recordsTiles)}
+                      {renderSummary()}
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          Performance
+                        </div>
+                        {renderPerformancePanel()}
+                      </div>
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          By mode
+                        </div>
+                        {renderModeSplit()}
+                      </div>
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          Records
+                        </div>
+                        {renderRecordRows(records)}
+                      </div>
                       <p className="hexaclear-stats-tracking-since">
                         Tracking since {trackingSince}
                       </p>

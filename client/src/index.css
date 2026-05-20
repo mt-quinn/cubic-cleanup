@@ -1975,188 +1975,98 @@ body {
   }
 }
 
-/* Run / lifetime stats — compact tile grid. Used by the gameover
-   "This run" card and every section of the profile stats modal.
-   Each tile is a self-contained badge with the value as the hero
-   and a tiny uppercase label underneath, so a row of stats reads
-   left-to-right at a glance instead of as a vertical wall of
-   label/value pairs. Tiles auto-fit so 4–6 of them lay out cleanly
-   on every reasonable card width. */
-.hexaclear-stats-tiles {
+/* Run recap: a compact scoreboard strip plus a ribbon of actual
+   highlights. Baseline stats stay readable and restrained; combos,
+   top hits, and board clears get a warmer "earned" treatment without
+   occupying more vertical space than the old tile grid. */
+.hexaclear-run-recap {
+  gap: 0.32rem;
+}
+.hexaclear-run-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.4rem;
-}
-.hexaclear-stats-tile {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.1rem;
-  padding: 0.45rem 0.3rem 0.4rem;
-  border: 1px solid rgba(255, 205, 143, 0.16);
+  border-block: 1px solid rgba(255, 205, 143, 0.16);
   background:
     linear-gradient(
-      180deg,
-      rgba(255, 205, 143, 0.075) 0%,
-      rgba(255, 205, 143, 0.028) 100%
+      90deg,
+      rgba(255, 205, 143, 0.02),
+      rgba(255, 205, 143, 0.09),
+      rgba(255, 205, 143, 0.02)
     );
-  border-radius: 0.5rem;
+}
+.hexaclear-run-stat {
   min-width: 0;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 163, 0.08),
-    0 1px 0 rgba(0, 0, 0, 0.28);
+  padding: 0.42rem 0.22rem 0.36rem;
+  text-align: center;
 }
-.hexaclear-stats-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  opacity: 0.55;
-  background: rgba(255, 205, 143, 0.32);
+.hexaclear-run-stat + .hexaclear-run-stat {
+  border-left: 1px solid rgba(255, 205, 143, 0.12);
 }
-.hexaclear-stats-tile-quiet {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 205, 143, 0.052) 0%,
-      rgba(255, 205, 143, 0.018) 100%
-    );
-}
-.hexaclear-stats-tile-quiet::before {
-  opacity: 0.22;
-}
-.hexaclear-stats-tile-analysis {
-  border-color: rgba(255, 232, 180, 0.22);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 232, 180, 0.095) 0%,
-      rgba(255, 205, 143, 0.03) 100%
-    );
-}
-.hexaclear-stats-tile-analysis::before {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 232, 180, 0.12),
-    rgba(255, 232, 180, 0.58),
-    rgba(255, 232, 180, 0.12)
-  );
-}
-.hexaclear-stats-tile-earned {
-  border-color: rgba(255, 184, 74, 0.36);
-  background:
-    radial-gradient(
-      circle at 50% 0%,
-      rgba(255, 184, 74, 0.22),
-      transparent 58%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 184, 74, 0.11) 0%,
-      rgba(255, 205, 143, 0.035) 100%
-    );
-}
-.hexaclear-stats-tile-earned::before {
-  opacity: 0.8;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 184, 74, 0.14),
-    rgba(255, 184, 74, 0.76),
-    rgba(255, 184, 74, 0.14)
-  );
-}
-.hexaclear-stats-tile-record {
-  border-color: rgba(255, 141, 79, 0.48);
-  background:
-    radial-gradient(
-      circle at 50% -10%,
-      rgba(255, 141, 79, 0.34),
-      transparent 58%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 141, 79, 0.16) 0%,
-      rgba(255, 205, 143, 0.045) 100%
-    );
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 163, 0.16),
-    0 0 16px rgba(255, 141, 79, 0.12),
-    0 1px 0 rgba(0, 0, 0, 0.35);
-}
-.hexaclear-stats-tile-record::before {
-  opacity: 1;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 77, 77, 0.14),
-    rgba(255, 141, 79, 0.9),
-    rgba(255, 207, 115, 0.32)
-  );
-}
-.hexaclear-stats-tile-value {
+.hexaclear-run-stat-value {
+  display: block;
   font-family: 'Nunito', system-ui, sans-serif;
-  font-weight: 800;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
-  font-size: 1.2rem;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  font-size: 1.24rem;
+  line-height: 1;
   color: #ffe8a3;
-  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
-.hexaclear-stats-tile-analysis .hexaclear-stats-tile-value {
-  color: #fff0bd;
-}
-.hexaclear-stats-tile-earned .hexaclear-stats-tile-value {
-  color: #ffd57a;
-  text-shadow: 0 0 10px rgba(255, 184, 74, 0.25);
-}
-.hexaclear-stats-tile-record .hexaclear-stats-tile-value {
-  color: #ffcf73;
-  text-shadow:
-    0 0 14px rgba(255, 141, 79, 0.42),
-    0 1px 2px rgba(0, 0, 0, 0.6);
-}
-.hexaclear-stats-tile-label {
-  font-size: 0.62rem;
-  font-weight: 700;
+.hexaclear-run-stat-label {
+  display: block;
+  margin-top: 0.18rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255, 232, 163, 0.72);
+  color: rgba(255, 232, 163, 0.66);
 }
-.hexaclear-stats-tile-analysis .hexaclear-stats-tile-label {
-  color: rgba(255, 240, 189, 0.78);
+.hexaclear-run-moments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
 }
-.hexaclear-stats-tile-record .hexaclear-stats-tile-label,
-.hexaclear-stats-tile-earned .hexaclear-stats-tile-label {
-  color: rgba(255, 213, 122, 0.86);
+.hexaclear-run-moment {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28rem;
+  padding: 0.22rem 0.48rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 141, 79, 0.34);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 207, 115, 0.22), transparent 60%),
+    rgba(255, 141, 79, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 163, 0.12);
+}
+.hexaclear-run-moment-value {
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #ffcf73;
+}
+.hexaclear-run-moment-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.78);
 }
 
-/* Narrow phones: 3-up keeps tile widths from getting too cramped
-   when 7+ tiles cause the grid to wrap. The grid stays balanced
-   because the tile count for run stats peaks at 9 (3 rows × 3). */
-@media (max-width: 380px) {
-  .hexaclear-stats-tiles {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* Profile stats modal layout. Sections use tighter spacing than
-   their gameover counterpart since they don't compete with the
-   surrounding score/save/leaderboard chrome. */
+/* Profile stats modal layout. The profile screen is a record book,
+   not a wall of cards: a summary masthead, a performance panel, a
+   mode ledger, and record rows. Different patterns give the page
+   energy without increasing its vertical footprint. */
 .hexaclear-stats-card {
   text-align: left;
   min-width: 18rem;
   max-width: min(22rem, calc(100vw - 2rem));
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.62rem;
 }
 .hexaclear-stats-section {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.32rem;
 }
 .hexaclear-stats-section-label {
   font-size: 0.7rem;
@@ -2166,18 +2076,174 @@ body {
   color: #f0d4a8;
   opacity: 0.78;
 }
+.hexaclear-profile-summary {
+  display: grid;
+  grid-template-columns: minmax(5.3rem, 0.74fr) 1fr;
+  border: 1px solid rgba(255, 205, 143, 0.18);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 207, 115, 0.17), transparent 48%),
+    linear-gradient(135deg, rgba(255, 205, 143, 0.09), rgba(255, 205, 143, 0.025));
+}
+.hexaclear-profile-summary-main {
+  padding: 0.66rem 0.65rem;
+  border-right: 1px solid rgba(255, 205, 143, 0.16);
+}
+.hexaclear-profile-summary-value {
+  display: block;
+  font-size: 2.15rem;
+  line-height: 0.95;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #ffcf73;
+  text-shadow:
+    0 0 12px rgba(255, 141, 79, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.58);
+}
+.hexaclear-profile-summary-label {
+  display: block;
+  margin-top: 0.26rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.74);
+}
+.hexaclear-profile-summary-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.42rem 0.66rem;
+}
+.hexaclear-profile-summary-line,
+.hexaclear-statline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid rgba(255, 205, 143, 0.08);
+}
+.hexaclear-profile-summary-line:last-child,
+.hexaclear-statline:last-child {
+  border-bottom: 0;
+}
+.hexaclear-profile-summary-line span,
+.hexaclear-statline-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.62);
+}
+.hexaclear-profile-summary-line strong,
+.hexaclear-statline-value {
+  font-size: 1rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #ffe8a3;
+}
+.hexaclear-performance-panel {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.85fr) 1fr;
+  border-block: 1px solid rgba(255, 205, 143, 0.16);
+  background: rgba(255, 205, 143, 0.035);
+}
+.hexaclear-performance-feature {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.52rem 0.6rem;
+  border-right: 1px solid rgba(255, 205, 143, 0.14);
+}
+.hexaclear-performance-feature-value {
+  font-size: 1.85rem;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #ffd57a;
+}
+.hexaclear-performance-feature-label {
+  margin-top: 0.22rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.72);
+}
+.hexaclear-performance-list {
+  padding: 0.26rem 0.62rem;
+}
+.hexaclear-mode-ledger {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.hexaclear-mode-ledger-item {
+  padding: 0.42rem 0.28rem 0.36rem;
+  text-align: center;
+  border: 1px solid rgba(255, 205, 143, 0.14);
+  background: rgba(255, 205, 143, 0.026);
+}
+.hexaclear-mode-ledger-value {
+  display: block;
+  font-size: 1.38rem;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #ffe8a3;
+}
+.hexaclear-mode-ledger-label {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.66);
+}
+.hexaclear-record-book {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.24rem 0.55rem;
+}
+.hexaclear-record-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0.34rem;
+  min-width: 0;
+  padding: 0.26rem 0;
+  border-bottom: 1px solid rgba(255, 205, 143, 0.1);
+}
+.hexaclear-record-index {
+  font-size: 0.55rem;
+  font-weight: 900;
+  color: rgba(255, 141, 79, 0.74);
+}
+.hexaclear-record-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.72);
+}
+.hexaclear-record-value {
+  font-size: 1.04rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #ffcf73;
+  text-shadow: 0 0 10px rgba(255, 141, 79, 0.22);
+}
 .hexaclear-stats-tracking-since {
   margin: 0.4rem 0 0;
   font-size: 0.78rem;
   color: rgba(255, 232, 163, 0.6);
   font-style: italic;
   text-align: center;
-}
-
-/* Compact run-stats inside the gameover modal: shrink the section
-   header and trim the gap to match the surrounding modal rhythm. */
-.hexaclear-stats-section-compact .hexaclear-gameover-section-label {
-  margin-bottom: 0.05rem;
 }
 
 /* Daily-mode History button (top bar). Sits in the controls row
