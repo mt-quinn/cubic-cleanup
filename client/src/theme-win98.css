@@ -1933,21 +1933,28 @@
   color: #c80000 !important;
 }
 
-/* Run / lifetime stats grid in Win98: bone-grey field with system
-   text — no decorative dashes or fancy weights. Values right-align
-   with tabular-nums so columns of numbers stay tidy. */
-[data-theme="win98"] .hexaclear-runstats-grid li {
-  border-bottom: 1px solid var(--w98-shadow) !important;
-  font-family: inherit !important;
-  color: var(--w98-text) !important;
+/* Run / lifetime stat tiles in Win98: each tile is a sunken inset
+   well, mirroring the rest of the theme's chrome (LCDs, list
+   panels). Values use the system text color, label sits below in
+   the same family — no decorative gradients. */
+[data-theme="win98"] .hexaclear-stats-tile {
+  background: var(--w98-surface) !important;
+  border: 1px solid var(--w98-shadow) !important;
+  border-radius: 0 !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow),
+    inset -1px -1px 0 var(--w98-highlight) !important;
+  padding: 6px 4px !important;
 }
-[data-theme="win98"] .hexaclear-runstats-label {
+[data-theme="win98"] .hexaclear-stats-tile-value {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+[data-theme="win98"] .hexaclear-stats-tile-label {
   color: var(--w98-text) !important;
   letter-spacing: 0 !important;
-}
-[data-theme="win98"] .hexaclear-runstats-value {
-  color: var(--w98-text) !important;
-  font-weight: bold !important;
 }
 
 [data-theme="win98"] .hexaclear-stats-section-label {

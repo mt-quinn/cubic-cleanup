@@ -1609,8 +1609,13 @@ body {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
+  /* `safe center` keeps short cards centered but pins overflowing
+     cards to the top so the player can scroll them — without
+     `safe`, a too-tall card overflows above the viewport and is
+     unreachable. */
+  align-items: safe center;
   justify-content: center;
+  padding: 1rem;
   background: radial-gradient(circle, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.95));
   /* Tall modal cards (e.g. high scores with many entries) can overflow
      the board wrapper and visually extend down over the hand area.
@@ -1619,6 +1624,11 @@ body {
      intercepted by hand-piece slots. Lift the overlay above all
      in-game UI so the modal always wins. */
   z-index: 50;
+  /* Allow the modal card to scroll inside the overlay when it
+     genuinely is too tall for the viewport (a 9-tile run on a
+     short phone, big leaderboard, etc.) — without this the card
+     just got clipped against the chrome above and below it. */
+  overflow-y: auto;
 }
 
 .hexaclear-overlay-card {
@@ -1980,60 +1990,93 @@ body {
   }
 }
 
-/* Run / lifetime stats list. Two-column grid where each li is a
-   label/value pair. Used both on the gameover "This run" card and
-   the profile-stats modal. Numbers right-align and play nicely with
-   the modal's existing label/value rhythm. */
-.hexaclear-runstats-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* Run / lifetime stats — compact tile grid. Used by the gameover
+   "This run" card and every section of the profile stats modal.
+   Each tile is a self-contained badge with the value as the hero
+   and a tiny uppercase label underneath, so a row of stats reads
+   left-to-right at a glance instead of as a vertical wall of
+   label/value pairs. Tiles auto-fit so 4–6 of them lay out cleanly
+   on every reasonable card width. */
+.hexaclear-stats-tiles {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: 1.4rem;
-  row-gap: 0.35rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
 }
-.hexaclear-runstats-grid li {
+.hexaclear-stats-tile {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6rem;
-  font-size: 0.95rem;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
-  padding: 0.18rem 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.45rem 0.3rem 0.4rem;
+  border: 1px solid rgba(255, 205, 143, 0.18);
+  background: rgba(255, 205, 143, 0.05);
+  border-radius: 0.5rem;
+  min-width: 0;
 }
-.hexaclear-runstats-label {
-  color: rgba(255, 255, 255, 0.72);
-  letter-spacing: 0.02em;
-}
-.hexaclear-runstats-value {
+.hexaclear-stats-tile-value {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: #fff;
+  font-size: 1.2rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: #ffe8a3;
+  white-space: nowrap;
 }
-@media (max-width: 540px) {
-  .hexaclear-runstats-grid {
-    grid-template-columns: 1fr;
+.hexaclear-stats-tile-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 232, 163, 0.72);
+}
+
+/* Narrow phones: 3-up keeps tile widths from getting too cramped
+   when 7+ tiles cause the grid to wrap. The grid stays balanced
+   because the tile count for run stats peaks at 9 (3 rows × 3). */
+@media (max-width: 380px) {
+  .hexaclear-stats-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-/* Profile stats modal: section headers and tracking-since note. */
+/* Profile stats modal layout. Sections use tighter spacing than
+   their gameover counterpart since they don't compete with the
+   surrounding score/save/leaderboard chrome. */
+.hexaclear-stats-card {
+  text-align: left;
+  min-width: 18rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
 .hexaclear-stats-section {
-  margin-bottom: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 .hexaclear-stats-section-label {
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 0.45rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #f0d4a8;
+  opacity: 0.78;
 }
 .hexaclear-stats-tracking-since {
-  margin-top: 1rem;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.5);
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: rgba(255, 232, 163, 0.6);
   font-style: italic;
   text-align: center;
+}
+
+/* Compact run-stats inside the gameover modal: shrink the section
+   header and trim the gap to match the surrounding modal rhythm. */
+.hexaclear-stats-section-compact .hexaclear-gameover-section-label {
+  margin-bottom: 0.05rem;
 }
 
 /* Daily-mode History button (top bar). Sits in the controls row
@@ -3520,10 +3563,10 @@ body {
   text-align: left;
   min-width: 18rem;
   max-width: min(22rem, calc(100vw - 2rem));
-  padding: 1.4rem 1.4rem 1.2rem;
+  padding: 1.1rem 1.2rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.55rem;
 }
 
 .hexaclear-gameover-card .title {
@@ -3531,11 +3574,11 @@ body {
   font-family: 'Monoton', system-ui, sans-serif;
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.68rem;
+  font-size: 1.5rem;
   letter-spacing: 0.06em;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
-  margin: 0 0 0.2rem;
+  margin: 0;
 }
 
 .hexaclear-gameover-card.daily-win .title {
@@ -3550,14 +3593,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.1rem 0 0.2rem;
+  gap: 0.1rem;
+  padding: 0;
 }
 
 .hexaclear-gameover-headline-label {
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   color: #f0d4a8;
   opacity: 0.78;
@@ -3566,7 +3609,7 @@ body {
 .hexaclear-gameover-headline-value {
   font-family: 'Nunito', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 2.6rem;
+  font-size: 2.2rem;
   font-variant-numeric: tabular-nums;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
@@ -3594,41 +3637,51 @@ body {
 .hexaclear-gameover-section {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.35rem;
 }
 
 .hexaclear-gameover-section + .hexaclear-gameover-section {
   border-top: 1px solid rgba(255, 205, 143, 0.14);
-  padding-top: 0.7rem;
+  padding-top: 0.5rem;
 }
 
 .hexaclear-gameover-section-label {
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 700;
   color: #f0d4a8;
   opacity: 0.78;
 }
 
-/* New-hiscore input row — input on its own line, button centered. */
+/* New-hiscore input row — input + Save side by side so the prompt
+   stays a single line on every viewport. The input flexes to fill
+   the leftover width while the button sticks to its label. */
 .hexaclear-gameover-input-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+  flex-direction: row;
+  gap: 0.4rem;
+  align-items: stretch;
 }
 
 .hexaclear-gameover-input-row .hexaclear-input {
   font-size: 16px; /* prevents iOS focus zoom */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-/* Save score / Save daily result — secondary confirmation pill, sized
-   between a chip and the primary CTA. The overlay-card global button
-   rule still hits this so we don't need duplicate gradient styling;
-   we just nudge sizing and self-alignment. */
+/* Save score / Save daily result — secondary confirmation pill,
+   inlined with the input so the prompt is a tight one-row band.
+   Override the global overlay-card button styling so the button
+   doesn't try to center itself or grow to a min-width that would
+   push the input out of the row. */
 .hexaclear-overlay-card button.hexaclear-gameover-save-button {
-  align-self: center;
-  min-width: 8.5rem;
+  align-self: stretch;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.95rem;
+  white-space: nowrap;
 }
 
 /* Primary CTA at the bottom — same gold gradient as the menu's

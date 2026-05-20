@@ -4509,85 +4509,83 @@ function App() {
 
   // Per-run summary card. Rendered on every gameover modal under
   // the score/save section. Hidden when the run has zero placements
-  // (e.g. instant abandon) since "0 pieces / 0s" is just noise. We
-  // gate each row by a "has happened" check so an unlucky run
-  // doesn't surface a wall of zeros — players see only the things
-  // that actually occurred.
+  // (e.g. instant abandon) since "0 pieces / 0s" is just noise.
+  // Renders as a 4-up grid of compact tiles instead of stacked
+  // label/value rows so the modal stays short on mobile. Tiles for
+  // optional stats (rubies, board clears, combo, streak, top hit)
+  // only mount when those stats actually fired in this run, so a
+  // quiet game shows a tidy 4-tile row and a fireworks game grows
+  // to 5 / 6 / 7 tiles as it earns them.
   const renderRunStatsSection = () => {
     if (runStats.piecesPlaced === 0) return null
+    const tiles: Array<{ key: string; label: string; value: string }> = [
+      {
+        key: 'time',
+        label: 'Time',
+        value: formatDuration(runStats.activePlayMs),
+      },
+      {
+        key: 'pieces',
+        label: 'Pieces',
+        value: String(runStats.piecesPlaced),
+      },
+      {
+        key: 'cubes',
+        label: 'Cubes',
+        value: String(runStats.cubesPlaced),
+      },
+      {
+        key: 'clears',
+        label: 'Clears',
+        value: String(runStats.patternsCleared),
+      },
+    ]
+    if (runStats.rubiesCleared > 0) {
+      tiles.push({
+        key: 'rubies',
+        label: 'Rubies',
+        value: String(runStats.rubiesCleared),
+      })
+    }
+    if (runStats.boardClears > 0) {
+      tiles.push({
+        key: 'boards',
+        label: 'Boards',
+        value: String(runStats.boardClears),
+      })
+    }
+    if (runStats.bestCombo >= 2) {
+      tiles.push({
+        key: 'combo',
+        label: 'Combo',
+        value: `×${runStats.bestCombo}`,
+      })
+    }
+    if (runStats.bestStreak > 0) {
+      tiles.push({
+        key: 'streak',
+        label: 'Streak',
+        value: String(runStats.bestStreak),
+      })
+    }
+    if (runStats.topPlacementPoints > 0) {
+      tiles.push({
+        key: 'top',
+        label: 'Top hit',
+        value: `+${runStats.topPlacementPoints}`,
+      })
+    }
     return (
-      <div className="hexaclear-gameover-section">
+      <div className="hexaclear-gameover-section hexaclear-stats-section-compact">
         <div className="hexaclear-gameover-section-label">This run</div>
-        <ul className="hexaclear-runstats-grid">
-          <li>
-            <span className="hexaclear-runstats-label">Time</span>
-            <span className="hexaclear-runstats-value">
-              {formatDuration(runStats.activePlayMs)}
-            </span>
-          </li>
-          <li>
-            <span className="hexaclear-runstats-label">Pieces placed</span>
-            <span className="hexaclear-runstats-value">
-              {runStats.piecesPlaced}
-            </span>
-          </li>
-          <li>
-            <span className="hexaclear-runstats-label">Cubes placed</span>
-            <span className="hexaclear-runstats-value">
-              {runStats.cubesPlaced}
-            </span>
-          </li>
-          <li>
-            <span className="hexaclear-runstats-label">
-              Patterns cleared
-            </span>
-            <span className="hexaclear-runstats-value">
-              {runStats.patternsCleared}
-            </span>
-          </li>
-          {runStats.rubiesCleared > 0 && (
-            <li>
-              <span className="hexaclear-runstats-label">
-                Rubies cleared
-              </span>
-              <span className="hexaclear-runstats-value">
-                {runStats.rubiesCleared}
-              </span>
-            </li>
-          )}
-          {runStats.boardClears > 0 && (
-            <li>
-              <span className="hexaclear-runstats-label">Board clears</span>
-              <span className="hexaclear-runstats-value">
-                {runStats.boardClears}
-              </span>
-            </li>
-          )}
-          {runStats.bestCombo >= 2 && (
-            <li>
-              <span className="hexaclear-runstats-label">Best combo</span>
-              <span className="hexaclear-runstats-value">
-                ×{runStats.bestCombo}
-              </span>
-            </li>
-          )}
-          {runStats.bestStreak > 0 && (
-            <li>
-              <span className="hexaclear-runstats-label">Best streak</span>
-              <span className="hexaclear-runstats-value">
-                {runStats.bestStreak}
-              </span>
-            </li>
-          )}
-          {runStats.topPlacementPoints > 0 && (
-            <li>
-              <span className="hexaclear-runstats-label">Top placement</span>
-              <span className="hexaclear-runstats-value">
-                +{runStats.topPlacementPoints}
-              </span>
-            </li>
-          )}
-        </ul>
+        <div className="hexaclear-stats-tiles">
+          {tiles.map((t) => (
+            <div key={t.key} className="hexaclear-stats-tile">
+              <span className="hexaclear-stats-tile-value">{t.value}</span>
+              <span className="hexaclear-stats-tile-label">{t.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -6937,11 +6935,13 @@ function App() {
           {showStats && (() => {
             // Profile stats modal. Pulls all values from the cached
             // `lifetimeStats` (which is itself the localStorage
-            // record). Sections are gated on "has any data" so a
-            // brand-new profile only shows what's been earned —
-            // e.g. the daily section is hidden until the player has
-            // played at least one daily, the records list hides
-            // unset records, etc.
+            // record). Same compact tile grid as the gameover
+            // run-stats card so the surfaces feel like one family
+            // — three sections (Lifetime / By mode / Records) each
+            // built from a list of optional tiles. Records hide
+            // tiles for unset records so a brand-new profile shows
+            // a minimal "you haven't earned this yet" state instead
+            // of a wall of dashes.
             const ls = lifetimeStats
             const hasAnyGame =
               ls.gamesPlayedEndless +
@@ -6955,9 +6955,151 @@ function App() {
             const avgRunMs =
               totalGames > 0 ? ls.totalActivePlayMs / totalGames : 0
             const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
+
+            type Tile = { key: string; label: string; value: string }
+            const lifetimeTiles: Tile[] = [
+              { key: 'games', label: 'Games', value: String(totalGames) },
+              {
+                key: 'active',
+                label: 'Active',
+                value: formatDuration(ls.totalActivePlayMs),
+              },
+              {
+                key: 'avg',
+                label: 'Avg/game',
+                value: formatDuration(avgRunMs),
+              },
+              {
+                key: 'pieces',
+                label: 'Pieces',
+                value: String(ls.piecesPlaced),
+              },
+              {
+                key: 'cubes',
+                label: 'Cubes',
+                value: String(ls.cubesPlaced),
+              },
+              {
+                key: 'clears',
+                label: 'Clears',
+                value: String(ls.patternsCleared),
+              },
+            ]
+            if (ls.rubiesCleared > 0) {
+              lifetimeTiles.push({
+                key: 'rubies',
+                label: 'Rubies',
+                value: String(ls.rubiesCleared),
+              })
+            }
+            if (ls.boardClears > 0) {
+              lifetimeTiles.push({
+                key: 'boards',
+                label: 'Boards',
+                value: String(ls.boardClears),
+              })
+            }
+
+            const byModeTiles: Tile[] = [
+              {
+                key: 'endless',
+                label: 'Endless',
+                value: String(ls.gamesPlayedEndless),
+              },
+              {
+                key: 'daily',
+                label: 'Daily',
+                value: String(ls.gamesPlayedDaily),
+              },
+              {
+                key: 'coop',
+                label: 'Co-op',
+                value: String(ls.gamesPlayedCoop),
+              },
+            ]
+            if (ls.dailyDaysCleared.length > 0) {
+              byModeTiles.push({
+                key: 'daily-days',
+                label: 'Days cleared',
+                value: String(ls.dailyDaysCleared.length),
+              })
+            }
+            if (ls.coopPartnerIds.length > 0) {
+              byModeTiles.push({
+                key: 'partners',
+                label: 'Partners',
+                value: String(ls.coopPartnerIds.length),
+              })
+            }
+
+            const recordsTiles: Tile[] = []
+            if (ls.bestEndlessScore > 0) {
+              recordsTiles.push({
+                key: 'best-score',
+                label: 'Best score',
+                value: String(ls.bestEndlessScore),
+              })
+            }
+            if (ls.bestDailyMoves !== null) {
+              recordsTiles.push({
+                key: 'best-daily',
+                label: 'Best daily',
+                value: String(ls.bestDailyMoves),
+              })
+            }
+            if (ls.bestCombo >= 2) {
+              recordsTiles.push({
+                key: 'best-combo',
+                label: 'Best combo',
+                value: `×${ls.bestCombo}`,
+              })
+            }
+            if (ls.bestStreak > 0) {
+              recordsTiles.push({
+                key: 'best-streak',
+                label: 'Best streak',
+                value: String(ls.bestStreak),
+              })
+            }
+            if (ls.bestSinglePlacement > 0) {
+              recordsTiles.push({
+                key: 'best-hit',
+                label: 'Top hit',
+                value: `+${ls.bestSinglePlacement}`,
+              })
+            }
+            if (ls.longestRunMs > 0) {
+              recordsTiles.push({
+                key: 'longest',
+                label: 'Longest',
+                value: formatDuration(ls.longestRunMs),
+              })
+            }
+
+            const renderTileSection = (label: string, tiles: Tile[]) => {
+              if (tiles.length === 0) return null
+              return (
+                <div className="hexaclear-stats-section">
+                  <div className="hexaclear-stats-section-label">{label}</div>
+                  <div className="hexaclear-stats-tiles">
+                    {tiles.map((t) => (
+                      <div key={t.key} className="hexaclear-stats-tile">
+                        <span className="hexaclear-stats-tile-value">
+                          {t.value}
+                        </span>
+                        <span className="hexaclear-stats-tile-label">
+                          {t.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <div className="hexaclear-overlay">
-                <div className="hexaclear-overlay-card hexaclear-scoring-card">
+                <div className="hexaclear-overlay-card hexaclear-stats-card">
                   <div className="title">Stats</div>
                   {!hasAnyGame ? (
                     <p className="hexaclear-scores-empty">
@@ -6965,202 +7107,9 @@ function App() {
                     </p>
                   ) : (
                     <>
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          Lifetime
-                        </div>
-                        <ul className="hexaclear-runstats-grid">
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Games played
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {totalGames}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Active play
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {formatDuration(ls.totalActivePlayMs)}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Avg. per game
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {formatDuration(avgRunMs)}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Pieces placed
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {ls.piecesPlaced}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Cubes placed
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {ls.cubesPlaced}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Patterns cleared
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {ls.patternsCleared}
-                            </span>
-                          </li>
-                          {ls.rubiesCleared > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Rubies cleared
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.rubiesCleared}
-                              </span>
-                            </li>
-                          )}
-                          {ls.boardClears > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Board clears
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.boardClears}
-                              </span>
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          By mode
-                        </div>
-                        <ul className="hexaclear-runstats-grid">
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Endless
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {ls.gamesPlayedEndless}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Daily
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {ls.gamesPlayedDaily}
-                            </span>
-                          </li>
-                          <li>
-                            <span className="hexaclear-runstats-label">
-                              Co-op
-                            </span>
-                            <span className="hexaclear-runstats-value">
-                              {ls.gamesPlayedCoop}
-                            </span>
-                          </li>
-                          {ls.dailyDaysCleared.length > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Daily days cleared
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.dailyDaysCleared.length}
-                              </span>
-                            </li>
-                          )}
-                          {ls.coopPartnerIds.length > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Co-op partners
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.coopPartnerIds.length}
-                              </span>
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          Records
-                        </div>
-                        <ul className="hexaclear-runstats-grid">
-                          {ls.bestEndlessScore > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Best endless score
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.bestEndlessScore}
-                              </span>
-                            </li>
-                          )}
-                          {ls.bestDailyMoves !== null && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Best daily moves
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.bestDailyMoves}
-                              </span>
-                            </li>
-                          )}
-                          {ls.bestCombo >= 2 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Best combo
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                ×{ls.bestCombo}
-                              </span>
-                            </li>
-                          )}
-                          {ls.bestStreak > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Best streak
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {ls.bestStreak}
-                              </span>
-                            </li>
-                          )}
-                          {ls.bestSinglePlacement > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Top placement
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                +{ls.bestSinglePlacement}
-                              </span>
-                            </li>
-                          )}
-                          {ls.longestRunMs > 0 && (
-                            <li>
-                              <span className="hexaclear-runstats-label">
-                                Longest run
-                              </span>
-                              <span className="hexaclear-runstats-value">
-                                {formatDuration(ls.longestRunMs)}
-                              </span>
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-
+                      {renderTileSection('Lifetime', lifetimeTiles)}
+                      {renderTileSection('By mode', byModeTiles)}
+                      {renderTileSection('Records', recordsTiles)}
                       <p className="hexaclear-stats-tracking-since">
                         Tracking since {trackingSince}
                       </p>
