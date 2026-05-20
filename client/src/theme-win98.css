@@ -1908,28 +1908,33 @@
 [data-theme="win98"] .hexaclear-streak-tier-5 { font-size: 38px !important; }
 [data-theme="win98"] .hexaclear-streak-tier-6 { font-size: 42px !important; }
 
-/* Multi-clear chip in Win98 trades the gradient for a flat raised
-   face with the system's standard bevel — same shape and tier
-   scaling, but rendered as a chrome control instead of a skeuo
-   sticker. */
+/* Multi-clear hint in Win98: matches the streak-value treatment
+   above — bare text in the system font with a 1px highlight halo
+   so it stays readable over busy boards. Tiers escalate type size
+   and (at ×4+) flip to the classic Minesweeper red used for the
+   live mine counter. No pill, no bevel — this is a score event,
+   not a button. */
 [data-theme="win98"] .hexaclear-multi-clear-chip {
-  background: var(--w98-surface) !important;
-  color: var(--w98-text) !important;
+  background: transparent !important;
+  border: none !important;
   border-radius: 0 !important;
-  border: 1px solid var(--w98-shadow) !important;
-  box-shadow:
-    inset 1px 1px 0 var(--w98-highlight),
-    inset -1px -1px 0 var(--w98-shadow),
-    2px 2px 0 var(--w98-shadow-deep) !important;
-  text-shadow: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: var(--w98-text) !important;
   font-family: inherit !important;
+  font-style: normal !important;
+  font-weight: 700 !important;
   letter-spacing: 0 !important;
-  padding: 2px 8px !important;
+  text-shadow:
+    1px 1px 0 var(--w98-highlight),
+    -1px -1px 0 var(--w98-highlight),
+    1px -1px 0 var(--w98-highlight),
+    -1px 1px 0 var(--w98-highlight) !important;
 }
-[data-theme="win98"] .hexaclear-multi-clear-tier-2 { font-size: 14px !important; }
-[data-theme="win98"] .hexaclear-multi-clear-tier-3 { font-size: 18px !important; }
+[data-theme="win98"] .hexaclear-multi-clear-tier-2 { font-size: 22px !important; }
+[data-theme="win98"] .hexaclear-multi-clear-tier-3 { font-size: 28px !important; }
 [data-theme="win98"] .hexaclear-multi-clear-tier-4 {
-  font-size: 22px !important;
+  font-size: 34px !important;
   color: #c80000 !important;
 }
 
