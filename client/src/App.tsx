@@ -5072,10 +5072,20 @@ function App() {
           <div className="hexaclear-board-hud">
             {game.mode === 'daily' ? (
               <div className="board-hud-block left">
-                {game.moves === 0 && (
+                {game.moves === 0 ? (
                   <span className="value small">
                     Clear all numbered cubes to win!
                   </span>
+                ) : (
+                  // Daily ranks ascending by moves, so the live
+                  // moves count is the player's running "score".
+                  // We park it in the same top-left slot endless
+                  // uses for the streak readout so each mode keeps
+                  // its primary live metric in the same place.
+                  <>
+                    <span className="label">Moves</span>
+                    <span className="value">{game.moves}</span>
+                  </>
                 )}
               </div>
             ) : (
