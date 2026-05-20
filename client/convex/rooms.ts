@@ -776,16 +776,16 @@ export const restartRoom = mutation({
 })
 
 // Wipe a PvP room's board so the host can re-share the link from a
-// clean state. The lobby's "Copy Link" button fires this whenever
-// the host re-copies the URL while pieces are still recoverable,
-// matching the rule "copying the link to start a PvP game should
-// always clear the current board state in case any pieces were
-// pre-placed by the host". Any spectators currently attached (e.g.
-// a friend who clicked the link after the host fiddled with their
-// hand) are promoted back into seats in join order, since the
-// match they were locked out of has just been undone. No-op if
-// the room is co-op (co-op rooms intentionally preserve the host's
-// in-progress board across shares) or if there's nothing to clear.
+// clean state. The lobby's "Copy Link" button fires this when the
+// host is still alone in the room and may have placed a piece or
+// two before realizing they wanted to invite someone; in that case
+// we erase their pre-placed cubes / tints so the link they're
+// putting on the clipboard lands on a fresh match. The moment
+// anyone else has attached (seated OR spectating) the session is
+// considered formed and this mutation is a no-op — wiping mid-game
+// would yank everyone's progress out from under them. Co-op rooms
+// also no-op (their in-progress big board is the host's invite to
+// help, not a head-start to undo).
 export const prepareRoomForShare = mutation({
   args: { code: v.string(), playerId: v.string() },
   handler: async (ctx, { code, playerId }) => {
@@ -799,12 +799,16 @@ export const prepareRoomForShare = mutation({
     }
     const roomMode: 'coop' | 'pvp' = room.mode ?? 'coop'
     if (roomMode !== 'pvp') return null
-    const specs = [...(room.spectators ?? [])].sort(
-      (a, b) => a.joinedAt - b.joinedAt,
-    )
+
+    // "Host is alone" guard: only the host's own pre-placed pieces
+    // are recoverable. Once a partner or spectator is present the
+    // host has implicitly committed to this match.
+    const hostIsAlone =
+      room.players.length <= 1 && (room.spectators?.length ?? 0) === 0
+    if (!hostIsAlone) return null
+
     const noWork =
       room.moves === 0 &&
-      specs.length === 0 &&
       (room.cellOwners == null ||
         Object.keys(room.cellOwners).length === 0) &&
       (room.cellTints == null ||
@@ -814,33 +818,14 @@ export const prepareRoomForShare = mutation({
     const now = Date.now()
     const board = createEmptyBoard(MODE)
     const goldenCellIds = spawnInitialRubies(board, MODE, 3)
-
-    const seatedExisting = room.players.map((p, i) => ({
-      ...p,
-      slot: i,
-      lastSeen: now,
-    }))
-    const promoteCount = Math.max(
-      0,
-      Math.min(specs.length, MAX_PLAYERS - seatedExisting.length),
-    )
-    const promoted = specs.slice(0, promoteCount).map((s, i) => ({
-      playerId: s.playerId,
-      name: s.name,
-      slot: seatedExisting.length + i,
-      hand: [] as ActivePiece[],
-      handSlots: [] as (string | null)[],
-      joinedAt: s.joinedAt,
-      lastSeen: now,
-    }))
-    const remainingSpectators = specs.slice(promoteCount)
-    const allSeated = [...seatedExisting, ...promoted]
-    const players = allSeated.map((p) => {
+    const players = room.players.map((p, i) => {
       const hand = dealPlayableHand(board, 30, Math.random, MODE)
       return {
         ...p,
+        slot: i,
         hand,
         handSlots: hand.map((piece) => piece.id),
+        lastSeen: now,
       }
     })
 
@@ -851,7 +836,6 @@ export const prepareRoomForShare = mutation({
       streak: 0,
       moves: 0,
       players,
-      spectators: remainingSpectators,
       lastPlacement: null,
       cellOwners: {},
       cellTints: {},

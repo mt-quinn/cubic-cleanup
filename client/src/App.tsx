@@ -3917,15 +3917,19 @@ function App() {
         joinAttemptRef.current = { code, attempted: true }
       } else {
         // Re-copying the link for an existing PvP room: wipe the
-        // board first so the link the host just put on the clipboard
-        // is guaranteed to land on a fresh match, even if pieces had
-        // been pre-placed while the host was waiting. Co-op rooms
-        // intentionally keep their in-progress board so a host can
-        // legitimately seed a partner with a head-start. Any
-        // spectators attached to the PvP room get promoted back into
-        // seats by the same mutation since the match they were
-        // locked out of has just been undone.
-        if (mp.mode === 'pvp') {
+        // board first ONLY if the host is still alone (nobody else
+        // has joined as a player or spectator yet). That covers the
+        // case where the host placed a piece or two while looking
+        // for the link button and would otherwise hand their friend
+        // a pre-stacked board. Once anyone else is attached, the
+        // session is considered formed and Copy Link just re-shares
+        // the URL pointed at the live match — wiping mid-game would
+        // erase everyone's progress. Co-op never wipes (an in-
+        // progress big board is the host's invite to help, not a
+        // head-start on PvP territory).
+        const hostIsAlone =
+          mp.allPlayers.length <= 1 && (mp.spectatorCount ?? 0) === 0
+        if (mp.mode === 'pvp' && hostIsAlone) {
           try {
             await prepareRoomForShareMutation({ code, playerId })
           } catch {
