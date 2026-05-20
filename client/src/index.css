@@ -3645,6 +3645,19 @@ body {
   padding-top: 0.5rem;
 }
 
+/* Save-score field sits directly above the leaderboard it's saving
+   into, so we drop the divider between the two and tighten the gap
+   so they read as one banded group instead of two adjacent
+   sections. The save section itself also pulls in a touch from
+   above for the same reason. */
+.hexaclear-gameover-save-section + .hexaclear-gameover-section {
+  border-top: none;
+  padding-top: 0.15rem;
+}
+.hexaclear-gameover-save-section .hexaclear-gameover-section-label {
+  margin-bottom: 0.05rem;
+}
+
 .hexaclear-gameover-section-label {
   text-transform: uppercase;
   letter-spacing: 0.08em;

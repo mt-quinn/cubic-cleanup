@@ -5713,8 +5713,10 @@ function App() {
                   </div>
                 </div>
 
+                {renderRunStatsSection()}
+
                 {pendingHighScore && (
-                  <div className="hexaclear-gameover-section">
+                  <div className="hexaclear-gameover-section hexaclear-gameover-save-section">
                     <div className="hexaclear-gameover-section-label">
                       {(() => {
                         // We only submit to the global board when the
@@ -5752,8 +5754,6 @@ function App() {
                     </div>
                   </div>
                 )}
-
-                {renderRunStatsSection()}
 
                 {(() => {
                   // Endless gameover leaderboard. Default-on the
@@ -6315,8 +6315,10 @@ function App() {
                   </div>
                 )}
 
+                {renderRunStatsSection()}
+
                 {pendingDailyHighScore && (
-                  <div className="hexaclear-gameover-section">
+                  <div className="hexaclear-gameover-section hexaclear-gameover-save-section">
                     <div className="hexaclear-gameover-section-label">
                       {game.dailyCompleted
                         ? 'New daily best'
@@ -6342,8 +6344,6 @@ function App() {
                     </div>
                   </div>
                 )}
-
-                {renderRunStatsSection()}
 
                 {(() => {
                   // Daily gameover leaderboard. Defaults to whichever
