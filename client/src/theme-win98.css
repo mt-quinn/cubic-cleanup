@@ -703,32 +703,24 @@
   fill: var(--w98-partner-fill-tint, var(--w98-cube-fill-partner));
 }
 
-/* PvP territory tints in Win98. The wood theme floods the full
-   empty hex; Win98 instead paints an INSET tinted plate inside the
-   raised button face so "empty + owned" reads clearly distinct from
-   "filled cube" (the cube would cover the whole face edge-to-edge).
-   The outer hex polygon keeps the standard sunken stroke + no fill
-   so the button face still frames the tint. The slot-fill polygon
-   (normally hidden in Win98 — see below) is re-shown and painted
-   with the player's actual cube color, which the JS sets via
-   --cell-tint-color from the Win98 cube palette. */
+/* PvP territory tints in Win98. Same "outlined region + center
+   chip" idiom the wood theme uses, scoped to the Win98 palette:
+     1. The empty cell's button face stays gray but its outline is
+        swapped from the default deep-shadow to the player color,
+        bumped slightly thicker so groups of owned cells read as a
+        single bounded region.
+     2. The slot-fill polygon (hidden by default in Win98) is
+        re-shown as a small player-color chip in the cell center.
+   Together these make "empty + owned" obviously different from a
+   filled teal cube, which still paints across the whole face. */
 [data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-partner,
 [data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-self {
-  fill: transparent;
-  stroke: var(--w98-deep-shadow);
+  fill: var(--w98-surface);
+  stroke: var(--cell-tint-color, var(--w98-cube-fill-partner));
   stroke-opacity: 1;
+  stroke-width: 2;
 }
 
-/* Re-show the slot dimple for tinted cells and paint it with the
-   player tint at full opacity, plus a darker outline so the inset
-   plate reads against the surrounding raised gray button face.
-   The dimple geometry is already inset to ~86% of the cell radius
-   in SlotGeometry; we further shrink it with a fill-box scale here
-   so a real grey ring of the empty button face shows around every
-   tinted plate. Without that ring the tinted plate fills nearly
-   the entire cell and looks indistinguishable from a placed cube
-   on the same hex. non-scaling-stroke keeps the dark outline at a
-   consistent on-screen weight regardless of the scale. */
 [data-theme="win98"] .hexaclear-cell.pvp-tinted-partner .hexaclear-slot-fill,
 [data-theme="win98"] .hexaclear-cell.pvp-tinted-self .hexaclear-slot-fill {
   display: block !important;
@@ -737,7 +729,7 @@
   stroke: var(--w98-deep-shadow);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
-  transform: scale(0.7);
+  transform: scale(0.34);
   transform-box: fill-box;
   transform-origin: center;
 }

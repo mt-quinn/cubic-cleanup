@@ -1438,47 +1438,50 @@ body {
 }
 
 /* PvP territory tints. Each cleared cell remembers the player who
-   placed the cube that just got swept (cellTints on the server); we
-   paint a translucent flood inside the cell so empty ground still
-   reads as "owned" without pretending to be filled. Partner-owned
-   territory uses a hue-rotated warm gold; self-owned territory uses
-   a warm cream so the player still recognizes their own ground at
-   a glance. Wood textures swallow low-opacity fills, so we lean on
-   relatively high alphas plus a colored stroke to make the tint
-   actually visible on the dark board. Filled cells visually occlude
-   the flood, which is the desired behavior — the conflict ring
-   (below) covers the "filled cell on another player's territory"
-   case. */
+   placed the cube that just got swept (cellTints on the server).
+   We deliberately avoid flood-filling the cell — a flood reads too
+   much like a placed cube once the board fills up. Instead each
+   owned cell wears two cheap glyphs that read unambiguously as
+   "empty ground that belongs to player X":
+     1. A bold colored ring just inside the cell edge (the polygon
+        stroke). Adjacent owned cells visually merge into outlined
+        territory groups.
+     2. A small player-color chip in the center (the existing
+        slot-fill polygon, transformed down to ~30% of its slot
+        radius). See `.hexaclear-cell.pvp-tinted-* .hexaclear-slot-fill`
+        below for the chip styling. */
 .hexaclear-hex.empty.pvp-tinted-partner {
-  fill: var(--cell-tint-color, #f9a23f);
-  fill-opacity: 0.31;
+  fill: transparent;
   stroke: var(--cell-tint-color, #f9a23f);
-  stroke-opacity: 0.9;
+  stroke-opacity: 1;
+  stroke-width: 3.4;
 }
 
 .hexaclear-hex.empty.pvp-tinted-self {
-  fill: var(--cell-tint-color, #ffeaa3);
-  fill-opacity: 0.24;
+  fill: transparent;
   stroke: var(--cell-tint-color, #ffeaa3);
-  stroke-opacity: 0.85;
+  stroke-opacity: 1;
+  stroke-width: 3.4;
 }
 
-/* Empty cells render a slightly inset "slot dimple" polygon on top
-   of the main hex fill (see SlotGeometry in App.tsx) — its dark
-   #1a0c06 fill would otherwise cover the tinted hex underneath and
-   leave only a colored border ring. When the cell wrapper carries a
-   PvP tint class, swap the dimple to the player's tint color at a
-   lower opacity so the interior reads as "lightened + tinted dark
-   wood" instead of swallowing the territory color. The outer hex
-   ring's stroke + flood stays on top of this for the warm halo. */
-.hexaclear-cell.pvp-tinted-partner .hexaclear-slot-fill {
-  fill: var(--cell-tint-color, #f9a23f);
-  fill-opacity: 0.27;
-}
-
+/* Center "flag chip" on PvP-tinted empty cells. The slot polygon
+   (SlotGeometry, ~86% of the cell radius) gets transformed down to
+   a small hex chip in the cell center, painted with the owner's
+   color. Combined with the colored ring on the outer hex above,
+   this makes empty owned cells unmistakably distinct from a placed
+   cube (which still paints across the whole face). A thin dark
+   outline gives the chip enough contrast against the dark wood
+   board; non-scaling-stroke keeps it crisp under the transform. */
+.hexaclear-cell.pvp-tinted-partner .hexaclear-slot-fill,
 .hexaclear-cell.pvp-tinted-self .hexaclear-slot-fill {
-  fill: var(--cell-tint-color, #ffeaa3);
-  fill-opacity: 0.2;
+  fill: var(--cell-tint-color, #f9a23f);
+  fill-opacity: 1;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  transform: scale(0.32);
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 /* Conflict ring overlay drawn above the cube when an occupant sits
