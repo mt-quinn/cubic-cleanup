@@ -549,6 +549,47 @@ body {
   box-sizing: border-box;
 }
 
+/* "You are spectating" banner. Compact pill that sits where the PvP
+   HUD would be when the viewer is a read-only participant. The
+   warm amber tint matches our existing "informational, no action
+   required" callouts (e.g. the hand-status pill) so it reads at a
+   glance without screaming for attention. The board / PvP HUD
+   continue to render below it so the spectator can still follow
+   the match. */
+.hexaclear-spectator-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: center;
+  margin: 0 auto 0.4rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 197, 138, 0.16);
+  border: 1px solid rgba(255, 197, 138, 0.55);
+  color: #ffd9a8;
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 6px 14px rgba(0, 0, 0, 0.4);
+}
+
+.hexaclear-spectator-banner-eye {
+  font-size: 0.95rem;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.35));
+}
+
+.hexaclear-spectator-banner-label {
+  font-weight: 800;
+}
+
+.hexaclear-spectator-banner-count {
+  font-weight: 600;
+  opacity: 0.78;
+}
+
 .hexaclear-pvp-hud {
   pointer-events: auto;
   min-width: 0;

@@ -824,9 +824,13 @@ const SmileyRow = ({
     window.addEventListener('pointerdown', onPointerDown)
     return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [show, setShow])
-  if (!selfPlayer) return null
+  // Spectators arrive with selfPlayer=null and we still want them
+  // to see partner smileys + active reactions, just without a self
+  // tile to send from. Only collapse the row entirely when nobody
+  // (seated or partner) is around to render.
+  if (!selfPlayer && otherPlayers.length === 0) return null
   const tiles: { player: SmileyRowPlayer; isSelf: boolean }[] = [
-    { player: selfPlayer, isSelf: true },
+    ...(selfPlayer ? [{ player: selfPlayer, isSelf: true }] : []),
     ...otherPlayers.map((p) => ({ player: p, isSelf: false })),
   ]
   return (
@@ -1719,6 +1723,9 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const createRoomMutation = useMutation(api.rooms.createRoom)
+  const prepareRoomForShareMutation = useMutation(
+    api.rooms.prepareRoomForShare,
+  )
   const joinRoomMutation = useMutation(api.rooms.joinRoom)
   // Global leaderboard mutations + queries. The mutations get fired
   // alongside every local save (and during a one-time backfill of the
@@ -2539,7 +2546,12 @@ function App() {
       setMpError('Room not found')
       return
     }
+    // Already attached (seated OR spectating) — no further joinRoom
+    // calls. Spectators specifically: if we re-fired the mutation
+    // every render the late-PvP gate would just keep re-stamping
+    // their spectator row and bumping updatedAt.
     if (mp.selfPlayer) return
+    if (mp.isSpectator) return
     if (joinAttemptRef.current.code === mpRoomCode && joinAttemptRef.current.attempted) {
       return
     }
@@ -2553,7 +2565,15 @@ function App() {
       const msg = err instanceof Error ? err.message : 'Could not join room'
       setMpError(msg)
     })
-  }, [mpRoomCode, mp.status, mp.selfPlayer, joinRoomMutation, playerId, mpPlayerName])
+  }, [
+    mpRoomCode,
+    mp.status,
+    mp.selfPlayer,
+    mp.isSpectator,
+    joinRoomMutation,
+    playerId,
+    mpPlayerName,
+  ])
 
   // Mirror the live room snapshot into the local game state so the
   // existing render tree (board, hand, score, etc.) shows the shared
@@ -3516,6 +3536,9 @@ function App() {
     if (!mpRoomCode) return
     if (mp.allPlayers.length === 0) return
     if (mp.game === null) return
+    // Spectators are read-only watchers of the match — they shouldn't
+    // co-claim the seated players' co-op leaderboard run.
+    if (mp.isSpectator) return
     const finishedAt = mp.lastPlacement?.ts ?? mp.updatedAt
     if (finishedAt === null) return
     const dedupeKey = `${mpRoomCode}@${finishedAt}`
@@ -3607,6 +3630,16 @@ function App() {
   const prevGameOverRef = useRef<boolean>(game.gameOver)
   useEffect(() => {
     if (!prevGameOverRef.current && game.gameOver) {
+      // Spectators don't fold a gameover into their own lifetime
+      // stats or post to the PvP / co-op leaderboards — the match
+      // they're watching isn't theirs to claim a result for. We
+      // still flip the ref below so a later "really our run"
+      // gameover (if they leave + start their own game) is treated
+      // as the rising edge.
+      if (isMultiplayer && mp.isSpectator) {
+        prevGameOverRef.current = game.gameOver
+        return
+      }
       const finishedRun = runStatsRef.current
       // Co-op partners list = everyone in the room *except* us.
       // (mp.allPlayers includes self; partner ids skip our own id.)
@@ -3882,12 +3915,31 @@ function App() {
         url = buildRoomShareUrl(code, createMode === 'pvp' ? 'pvp' : null)
         setMpShareUrl(url)
         joinAttemptRef.current = { code, attempted: true }
-      } else if (!url) {
-        url = buildRoomShareUrl(
-          code,
-          mp.mode === 'pvp' ? 'pvp' : null,
-        )
-        setMpShareUrl(url)
+      } else {
+        // Re-copying the link for an existing PvP room: wipe the
+        // board first so the link the host just put on the clipboard
+        // is guaranteed to land on a fresh match, even if pieces had
+        // been pre-placed while the host was waiting. Co-op rooms
+        // intentionally keep their in-progress board so a host can
+        // legitimately seed a partner with a head-start. Any
+        // spectators attached to the PvP room get promoted back into
+        // seats by the same mutation since the match they were
+        // locked out of has just been undone.
+        if (mp.mode === 'pvp') {
+          try {
+            await prepareRoomForShareMutation({ code, playerId })
+          } catch {
+            // Best-effort — if the wipe fails (rare) we still want
+            // to hand the player their URL rather than blocking.
+          }
+        }
+        if (!url) {
+          url = buildRoomShareUrl(
+            code,
+            mp.mode === 'pvp' ? 'pvp' : null,
+          )
+          setMpShareUrl(url)
+        }
       }
       if (!url) throw new Error('No share URL available')
       return url
@@ -5463,6 +5515,34 @@ function App() {
       )}
 
       <main className="hexaclear-main">
+        {/* "You are spectating" banner. Surfaces when the viewer
+            joined a PvP room after the first move and got parked on
+            the spectator list. Sits just below the menu bar / above
+            the PvP HUD so it's visible without competing for vertical
+            space with the board itself. Co-op never produces
+            spectators so this only ever appears in PvP. */}
+        {isMultiplayer && mp.isSpectator && (
+          <div
+            className="hexaclear-spectator-banner"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="hexaclear-spectator-banner-eye" aria-hidden="true">
+              👁
+            </span>
+            <span className="hexaclear-spectator-banner-label">
+              Spectating
+            </span>
+            {mp.spectatorCount > 1 && (
+              <span
+                className="hexaclear-spectator-banner-count"
+                aria-label={`${mp.spectatorCount} watchers including you`}
+              >
+                · {mp.spectatorCount} watching
+              </span>
+            )}
+          </div>
+        )}
         {/* PvP territory HUD: one mini-track per seated player, all
             sharing the same horizontal scale. The threshold marker
             sits at the same x-position on every row so the "win
@@ -7024,16 +7104,18 @@ function App() {
                       </ol>
                     </div>
 
-                    <button
-                      type="button"
-                      className="hexaclear-gameover-cta"
-                      onClick={() => {
-                        playUiClick()
-                        handleRestartCoop()
-                      }}
-                    >
-                      New match
-                    </button>
+                    {!mp.isSpectator && (
+                      <button
+                        type="button"
+                        className="hexaclear-gameover-cta"
+                        onClick={() => {
+                          playUiClick()
+                          handleRestartCoop()
+                        }}
+                      >
+                        New match
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="hexaclear-menu-link"
@@ -7311,17 +7393,21 @@ function App() {
                   <>
                     {/* Keep the same room/partner — just rerack and
                         play again. Either player can fire it; the
-                        server reset propagates to both clients. */}
-                    <button
-                      type="button"
-                      className="hexaclear-gameover-cta"
-                      onClick={() => {
-                        playUiClick()
-                        handleRestartCoop()
-                      }}
-                    >
-                      New game
-                    </button>
+                        server reset propagates to both clients.
+                        Spectators don't get a restart button — the
+                        match isn't theirs to restart. */}
+                    {!mp.isSpectator && (
+                      <button
+                        type="button"
+                        className="hexaclear-gameover-cta"
+                        onClick={() => {
+                          playUiClick()
+                          handleRestartCoop()
+                        }}
+                      >
+                        New game
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="hexaclear-menu-link"
@@ -9567,6 +9653,12 @@ function App() {
           })()}
         </div>
 
+        {/* Spectators don't get a hand at all — the piece tray is the
+            primary "you can play" surface and we want the absence of
+            it to read at a glance. The compact spectator banner that
+            replaces it lives just below the menu bar (see
+            .hexaclear-spectator-banner above the board). */}
+        {!mp.isSpectator && (
         <section
           className={[
             'hexaclear-hand',
@@ -9702,6 +9794,7 @@ function App() {
             )
           })}
         </section>
+        )}
       </main>
 
       </div>

@@ -39,6 +39,19 @@ const playerValidator = v.object({
   lastSeen: v.number(),
 })
 
+// Spectators are read-only viewers of a PvP room. Once the first move
+// has been placed in a PvP match, any new arrival via the share link
+// becomes a spectator instead of taking a seat — they can watch the
+// board and standings, but get no hand, don't show up in the player
+// bar, and don't post win/loss stats. Co-op rooms ignore this list
+// (everyone joining a co-op room takes a seat as before).
+const spectatorValidator = v.object({
+  playerId: v.string(),
+  name: v.string(),
+  joinedAt: v.number(),
+  lastSeen: v.number(),
+})
+
 // Snapshot of the most recent placement so all clients can replay the
 // animation pipeline (clears, ripple, ruby pop, etc.) by diffing tokens.
 const lastPlacementValidator = v.object({
@@ -155,6 +168,10 @@ export default defineSchema({
     // Set the moment a PvP player crosses the win threshold so all
     // clients can render the win modal. Null in co-op or in PvP SHAME.
     winnerPlayerId: v.optional(v.union(v.string(), v.null())),
+    // Read-only viewers attached to the room after the first PvP move.
+    // Optional / empty for older rooms and for co-op (where everyone
+    // continues to take a seat regardless of moves played).
+    spectators: v.optional(v.array(spectatorValidator)),
     lastEmotes: v.optional(v.array(emoteValidator)),
     hovers: v.optional(v.array(hoverValidator)),
     createdAt: v.number(),

@@ -104,6 +104,14 @@ export type UseMultiplayerGameResult = {
   // or when a PvP match ends in SHAME. Drives the win modal vs SHAME
   // branching at game over.
   winnerPlayerId: string | null
+  // True when this viewer is attached to the room as a read-only
+  // spectator (not seated, no hand). Lobby UI uses this to hide the
+  // hand strip and surface a "Spectating" badge.
+  isSpectator: boolean
+  // Total number of spectators currently watching the room (includes
+  // self if isSpectator). Used by the spectator HUD strip to call out
+  // "+N watching" when more than one observer is attached.
+  spectatorCount: number
   // Latest emote per playerId (room.lastEmotes flattened to a map).
   // Clients enforce the 10s display window themselves so a stale ts
   // simply renders as "no emote" without needing a server cleanup.
@@ -286,14 +294,38 @@ export const useMultiplayerGame = ({
     return out
   }, [selfPlayer, otherPlayers, mode])
 
+  // Spectator detection. A viewer is a spectator when the room exists,
+  // self isn't seated, AND self appears in the room's spectator
+  // list. (Self being absent from both lists during the brief join
+  // window doesn't count — that's just "joining", and the existing
+  // selfPlayer=null branches handle it.)
+  const isSpectator = useMemo<boolean>(() => {
+    if (!room || selfPlayer) return false
+    return (room.spectators ?? []).some((s) => s.playerId === playerId)
+  }, [room, selfPlayer, playerId])
+
+  const spectatorCount = useMemo<number>(() => {
+    return room?.spectators?.length ?? 0
+  }, [room])
+
+  // Game-state synth. Spectators still get a game object so the
+  // board + score + gameover state render off the live room — we
+  // just hand them an empty hand so no piece tray appears. Seated
+  // players take their own hand as before.
   const game = useMemo<GameState | null>(() => {
-    if (!room || !selfPlayer) return null
-    return buildGameStateFromRoom(
-      room,
-      selfPlayer.hand,
-      selfPlayer.handSlots,
-    )
-  }, [room, selfPlayer])
+    if (!room) return null
+    if (selfPlayer) {
+      return buildGameStateFromRoom(
+        room,
+        selfPlayer.hand,
+        selfPlayer.handSlots,
+      )
+    }
+    if (isSpectator) {
+      return buildGameStateFromRoom(room, [], [])
+    }
+    return null
+  }, [room, selfPlayer, isSpectator])
 
   const status: MultiplayerStatus = useMemo(() => {
     if (!code) return 'connecting'
@@ -478,6 +510,8 @@ export const useMultiplayerGame = ({
     pvpTotalCells,
     pvpThresholdRatio,
     winnerPlayerId,
+    isSpectator,
+    spectatorCount,
     emoteByPlayerId,
     hoverByPlayerId,
     hueShiftByPlayerId,

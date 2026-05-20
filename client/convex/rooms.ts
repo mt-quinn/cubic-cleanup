@@ -203,13 +203,15 @@ export const joinRoom = mutation({
     }
 
     const now = Date.now()
+    const roomMode: 'coop' | 'pvp' = room.mode ?? 'coop'
+    const sanitized = sanitizeName(name)
 
     // Reconnect: same playerId is already in the room. Just bump lastSeen.
     const existing = room.players.find((p) => p.playerId === playerId)
     if (existing) {
       const players = room.players.map((p) =>
         p.playerId === playerId
-          ? { ...p, lastSeen: now, name: sanitizeName(name) }
+          ? { ...p, lastSeen: now, name: sanitized }
           : p,
       )
       // With N-seat rooms the "waiting" gate is purely "no one is
@@ -221,7 +223,59 @@ export const joinRoom = mutation({
         state: nextState,
         updatedAt: now,
       })
-      return { code, joinedAsSlot: existing.slot, reconnect: true }
+      return {
+        code,
+        joinedAsSlot: existing.slot,
+        reconnect: true,
+        asSpectator: false,
+      }
+    }
+
+    // Spectator reconnect: already attached as a viewer, bump lastSeen.
+    const existingSpec = (room.spectators ?? []).find(
+      (s) => s.playerId === playerId,
+    )
+    if (existingSpec) {
+      const spectators = (room.spectators ?? []).map((s) =>
+        s.playerId === playerId
+          ? { ...s, lastSeen: now, name: sanitized }
+          : s,
+      )
+      await ctx.db.patch(room._id, { spectators, updatedAt: now })
+      return {
+        code,
+        joinedAsSlot: -1,
+        reconnect: true,
+        asSpectator: true,
+      }
+    }
+
+    // PvP "first move locks the lobby" rule: once anyone has placed,
+    // late arrivals via the share link can only watch. This also
+    // skips the stale-seat eviction path below for PvP — a stranger
+    // landing on a mid-match link should never take over an absent
+    // opponent's color and territory; they just spectate. Co-op
+    // continues to use the old "any open / stale seat is fair game"
+    // behavior so a friend who refreshed mid-game still reclaims
+    // their seat.
+    const lateForPvp = roomMode === 'pvp' && room.moves > 0
+    if (lateForPvp) {
+      const spectators = [
+        ...(room.spectators ?? []),
+        {
+          playerId,
+          name: sanitized,
+          joinedAt: now,
+          lastSeen: now,
+        },
+      ]
+      await ctx.db.patch(room._id, { spectators, updatedAt: now })
+      return {
+        code,
+        joinedAsSlot: -1,
+        reconnect: false,
+        asSpectator: true,
+      }
     }
 
     // Open seat? Just append.
@@ -232,7 +286,7 @@ export const joinRoom = mutation({
         ...room.players,
         {
           playerId,
-          name: sanitizeName(name),
+          name: sanitized,
           slot,
           hand,
           handSlots: hand.map((p) => p.id),
@@ -245,25 +299,50 @@ export const joinRoom = mutation({
         state: players.length >= 1 ? 'playing' : 'waiting',
         updatedAt: now,
       })
-      return { code, joinedAsSlot: slot, reconnect: false }
+      return {
+        code,
+        joinedAsSlot: slot,
+        reconnect: false,
+        asSpectator: false,
+      }
     }
 
     // Room is at MAX_PLAYERS — but is anyone stale? If yes, the new
     // joiner evicts the stalest seat and inherits its slot. Stale
     // player's cellOwners entries get re-tagged to the new player so
     // their cubes don't render as orphan / partner-tinted forever.
+    // (Pre-first-move PvP is also allowed to use this path; the
+    // lateForPvp branch above already excluded mid-match PvP.)
     const stalest = [...room.players]
       .filter((p) => now - p.lastSeen >= STALE_PLAYER_MS)
       .sort((a, b) => a.lastSeen - b.lastSeen)[0]
     if (!stalest) {
-      throw new Error('Room is full')
+      // No room to seat, no stale eviction. Final fallback: park
+      // them as a spectator so the link still works rather than
+      // throwing a hard "room is full" error in their face.
+      const spectators = [
+        ...(room.spectators ?? []),
+        {
+          playerId,
+          name: sanitized,
+          joinedAt: now,
+          lastSeen: now,
+        },
+      ]
+      await ctx.db.patch(room._id, { spectators, updatedAt: now })
+      return {
+        code,
+        joinedAsSlot: -1,
+        reconnect: false,
+        asSpectator: true,
+      }
     }
     const hand = dealPlayableHand(room.board, 30, Math.random, MODE)
     const players = room.players.map((p) =>
       p.playerId === stalest.playerId
         ? {
             playerId,
-            name: sanitizeName(name),
+            name: sanitized,
             slot: stalest.slot,
             hand,
             handSlots: hand.map((p2) => p2.id),
@@ -296,7 +375,12 @@ export const joinRoom = mutation({
       state: 'playing',
       updatedAt: now,
     })
-    return { code, joinedAsSlot: stalest.slot, reconnect: false }
+    return {
+      code,
+      joinedAsSlot: stalest.slot,
+      reconnect: false,
+      asSpectator: false,
+    }
   },
 })
 
@@ -319,10 +403,28 @@ export const heartbeat = mutation({
     // *different* key, leaking duplicate rows onto the board.
     if (room.state === 'gameover') return null
     const now = Date.now()
-    const players = room.players.map((p) =>
-      p.playerId === playerId ? { ...p, lastSeen: now } : p,
-    )
-    await ctx.db.patch(room._id, { players, updatedAt: now })
+    // Bump whichever bucket the caller belongs to: seated player OR
+    // spectator. The latter is needed so reconnect logic can tell a
+    // fresh spectator from a long-stale one, and so a future
+    // stale-spectator cleanup pass has something to read off.
+    let touched = false
+    const players = room.players.map((p) => {
+      if (p.playerId !== playerId) return p
+      touched = true
+      return { ...p, lastSeen: now }
+    })
+    if (touched) {
+      await ctx.db.patch(room._id, { players, updatedAt: now })
+      return null
+    }
+    const spectators = (room.spectators ?? []).map((s) => {
+      if (s.playerId !== playerId) return s
+      touched = true
+      return { ...s, lastSeen: now }
+    })
+    if (touched) {
+      await ctx.db.patch(room._id, { spectators, updatedAt: now })
+    }
     return null
   },
 })
@@ -673,6 +775,96 @@ export const restartRoom = mutation({
   },
 })
 
+// Wipe a PvP room's board so the host can re-share the link from a
+// clean state. The lobby's "Copy Link" button fires this whenever
+// the host re-copies the URL while pieces are still recoverable,
+// matching the rule "copying the link to start a PvP game should
+// always clear the current board state in case any pieces were
+// pre-placed by the host". Any spectators currently attached (e.g.
+// a friend who clicked the link after the host fiddled with their
+// hand) are promoted back into seats in join order, since the
+// match they were locked out of has just been undone. No-op if
+// the room is co-op (co-op rooms intentionally preserve the host's
+// in-progress board across shares) or if there's nothing to clear.
+export const prepareRoomForShare = mutation({
+  args: { code: v.string(), playerId: v.string() },
+  handler: async (ctx, { code, playerId }) => {
+    const room = await ctx.db
+      .query('rooms')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .unique()
+    if (!room) throw new Error('Room not found')
+    if (!room.players.some((p) => p.playerId === playerId)) {
+      throw new Error('You are not in this room')
+    }
+    const roomMode: 'coop' | 'pvp' = room.mode ?? 'coop'
+    if (roomMode !== 'pvp') return null
+    const specs = [...(room.spectators ?? [])].sort(
+      (a, b) => a.joinedAt - b.joinedAt,
+    )
+    const noWork =
+      room.moves === 0 &&
+      specs.length === 0 &&
+      (room.cellOwners == null ||
+        Object.keys(room.cellOwners).length === 0) &&
+      (room.cellTints == null ||
+        Object.keys(room.cellTints).length === 0)
+    if (noWork) return null
+
+    const now = Date.now()
+    const board = createEmptyBoard(MODE)
+    const goldenCellIds = spawnInitialRubies(board, MODE, 3)
+
+    const seatedExisting = room.players.map((p, i) => ({
+      ...p,
+      slot: i,
+      lastSeen: now,
+    }))
+    const promoteCount = Math.max(
+      0,
+      Math.min(specs.length, MAX_PLAYERS - seatedExisting.length),
+    )
+    const promoted = specs.slice(0, promoteCount).map((s, i) => ({
+      playerId: s.playerId,
+      name: s.name,
+      slot: seatedExisting.length + i,
+      hand: [] as ActivePiece[],
+      handSlots: [] as (string | null)[],
+      joinedAt: s.joinedAt,
+      lastSeen: now,
+    }))
+    const remainingSpectators = specs.slice(promoteCount)
+    const allSeated = [...seatedExisting, ...promoted]
+    const players = allSeated.map((p) => {
+      const hand = dealPlayableHand(board, 30, Math.random, MODE)
+      return {
+        ...p,
+        hand,
+        handSlots: hand.map((piece) => piece.id),
+      }
+    })
+
+    await ctx.db.patch(room._id, {
+      board,
+      goldenCellIds,
+      score: 0,
+      streak: 0,
+      moves: 0,
+      players,
+      spectators: remainingSpectators,
+      lastPlacement: null,
+      cellOwners: {},
+      cellTints: {},
+      winnerPlayerId: null,
+      lastEmotes: [],
+      hovers: [],
+      state: players.length >= 1 ? 'playing' : 'waiting',
+      updatedAt: now,
+    })
+    return null
+  },
+})
+
 // Live hover broadcast. Each client throttles this to ~10 Hz while
 // dragging / hovering a piece so partners can see a tinted ghost of
 // what the player is about to drop, in close to real time. Clients
@@ -729,15 +921,32 @@ export const leaveRoom = mutation({
       .unique()
     if (!room) return null
     const remaining = room.players.filter((p) => p.playerId !== playerId)
-    if (room.state === 'gameover' && remaining.length === 0) {
+    const remainingSpectators = (room.spectators ?? []).filter(
+      (s) => s.playerId !== playerId,
+    )
+    if (
+      room.state === 'gameover' &&
+      remaining.length === 0 &&
+      remainingSpectators.length === 0
+    ) {
       await ctx.db.delete(room._id)
       return null
     }
     const hovers = (room.hovers ?? []).filter((h) => h.playerId !== playerId)
+    // "Waiting" only really applies to seated players — if seats have
+    // emptied, the next person to click the link should re-seat. A
+    // lingering spectator shouldn't keep the room in "playing".
+    const nextState =
+      room.state === 'gameover'
+        ? 'gameover'
+        : remaining.length === 0
+          ? 'waiting'
+          : room.state
     await ctx.db.patch(room._id, {
       players: remaining,
+      spectators: remainingSpectators,
       hovers,
-      state: room.state === 'gameover' ? 'gameover' : 'waiting',
+      state: nextState,
       updatedAt: Date.now(),
     })
     return null

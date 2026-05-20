@@ -927,6 +927,44 @@
   box-shadow: inset 1px 1px 0 var(--w98-shadow);
 }
 
+/* "Spectating" banner in Win98 inherits the same beveled rectangle
+   chrome as toolbars / Win98 dialogs so it reads as a system-level
+   notice rather than the rounded wood-theme pill. Square corners,
+   classic teal-on-grey is too cold for a "you're a viewer" cue —
+   we keep the warm accent text used by the system tray clock-style
+   chrome to call it out gently. */
+[data-theme="win98"] .hexaclear-spectator-banner {
+  border-radius: 0;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-shadow)
+    var(--w98-shadow)
+    var(--w98-highlight);
+  color: var(--w98-text);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0;
+  padding: 2px 8px;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+[data-theme="win98"] .hexaclear-spectator-banner-eye {
+  font-size: 12px;
+  filter: none;
+}
+
+[data-theme="win98"] .hexaclear-spectator-banner-label {
+  font-weight: 700;
+}
+
+[data-theme="win98"] .hexaclear-spectator-banner-count {
+  font-weight: 400;
+  opacity: 1;
+  color: var(--w98-deep-shadow);
+}
+
 /* PvP per-player tracks in Win98: each track gets the standard
    sunken-bevel chrome, square corners, and a black threshold notch
    replaces the glowing wood-theme line. Text uses the system font
