@@ -1601,6 +1601,26 @@
   letter-spacing: 0 !important;
 }
 
+/* Classic Win98 "default button" treatment for Resume: a 1px solid
+   black ring is painted around the standard grey bevel to mark this
+   as the Enter-key / primary action, and the label is bolded for
+   extra emphasis. The press state keeps the ring while the bevel
+   flips to its sunken form. */
+[data-theme="win98"] .hexaclear-menu-resume {
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface),
+    0 0 0 1px #000 !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-resume:active {
+  box-shadow:
+    inset 1px 1px 0 var(--w98-shadow),
+    inset -1px -1px 0 var(--w98-surface),
+    0 0 0 1px #000 !important;
+}
+
 /* The wood theme leaves these containers flush against their parent
    because the bevel is invisible. In win98 the bevel is a real frame,
    so the inner controls need a few px of breathing room or they slam
