@@ -4534,14 +4534,12 @@ function App() {
         label: 'Clears',
         value: String(runStats.patternsCleared),
       },
-    ]
-    if (runStats.rubiesCleared > 0) {
-      tiles.push({
+      {
         key: 'rubies',
         label: 'Rubies',
         value: String(runStats.rubiesCleared),
-      })
-    }
+      },
+    ]
     if (runStats.boardClears > 0) {
       tiles.push({
         key: 'boards',
@@ -6974,14 +6972,12 @@ function App() {
                 label: 'Clears',
                 value: String(ls.patternsCleared),
               },
-            ]
-            if (ls.rubiesCleared > 0) {
-              lifetimeTiles.push({
+              {
                 key: 'rubies',
                 label: 'Rubies',
                 value: String(ls.rubiesCleared),
-              })
-            }
+              },
+            ]
             if (ls.boardClears > 0) {
               lifetimeTiles.push({
                 key: 'boards',
