@@ -1028,6 +1028,14 @@ type DailyHighScoreEntry = {
 
 const DAILY_PLAYER_RUNS_PREFIX = 'cubic-daily-runs-'
 
+// How many endless rows we keep in localStorage and surface to the
+// player. Pause-menu and gameover leaderboards both paginate this
+// list at 10 rows per page. Bumping this cap also bumps the bar a
+// score has to clear to qualify for a "save score" prompt — any
+// run good enough to land inside the top N is worth recording.
+const LOCAL_ENDLESS_CAP = 30
+const LEADERBOARD_PAGE_SIZE = 10
+
 const loadHighScores = (): HighScoreEntry[] => {
   try {
     const raw = window.localStorage.getItem('cubic-highscores')
@@ -1042,7 +1050,7 @@ const loadHighScores = (): HighScoreEntry[] => {
           typeof e.date === 'number',
       )
       .sort((a, b) => b.score - a.score || a.date - b.date)
-      .slice(0, 5)
+      .slice(0, LOCAL_ENDLESS_CAP)
   } catch {
     return []
   }
@@ -1157,7 +1165,7 @@ const qualifiesForHighScore = (
   entries: HighScoreEntry[],
 ): boolean => {
   if (score <= 0) return false
-  if (entries.length < 5) return true
+  if (entries.length < LOCAL_ENDLESS_CAP) return true
   const sorted = [...entries].sort(
     (a, b) => b.score - a.score || a.date - b.date,
   )
@@ -1696,6 +1704,15 @@ function App() {
   const [lastSavedHighScoreDate, setLastSavedHighScoreDate] = useState<
     number | null
   >(null)
+  // Pagination state for the gameover modal's local-endless
+  // leaderboard. Defaults to whichever page contains the just-saved
+  // entry so the player drops in seeing their own row instead of
+  // the top of the list, then prev/next controls let them browse
+  // freely. The snap effect runs only when the gameover modal opens
+  // or a fresh save lands — it deliberately does NOT depend on
+  // `highScores` identity so user-driven prev/next clicks aren't
+  // clobbered.
+  const [gameoverEndlessPage, setGameoverEndlessPage] = useState(0)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   // Open the menu on load. The first gesture the player makes is
   // dismissing the menu, which gives us a clean moment to prime the
@@ -3001,6 +3018,32 @@ function App() {
     if (!mpRoomCode) coopScoreSubmittedRef.current = null
   }, [mpRoomCode])
 
+  // Snap the gameover endless leaderboard to whichever page contains
+  // the player's just-saved row, so the modal opens framed on their
+  // entry instead of always landing on the top of the list. We
+  // re-snap when the modal opens, when a fresh save lands, or when
+  // the saved-flag clears (which indicates a fresh run and the
+  // previous run's `lastSavedHighScoreDate` should no longer be
+  // followed). We deliberately don't depend on `highScores` identity
+  // so a player paging through their list mid-modal doesn't get
+  // yanked back.
+  useEffect(() => {
+    if (!game.gameOver) return
+    if (game.mode !== 'endless') return
+    if (highScoreSaved && lastSavedHighScoreDate !== null) {
+      const sorted = [...highScores].sort(
+        (a, b) => b.score - a.score || a.date - b.date,
+      )
+      const idx = sorted.findIndex((e) => e.date === lastSavedHighScoreDate)
+      if (idx >= 0) {
+        setGameoverEndlessPage(Math.floor(idx / LEADERBOARD_PAGE_SIZE))
+        return
+      }
+    }
+    setGameoverEndlessPage(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.gameOver, game.mode, highScoreSaved, lastSavedHighScoreDate])
+
   // Single-action "Copy Link" used from the co-op HUD. If we're not
   // already in a room, we lazily spin one up so the link points at a
   // real lobby; if we are, we copy the existing URL. Either way the
@@ -3839,7 +3882,7 @@ function App() {
     }
     const next = [...highScores, entry]
       .sort((a, b) => b.score - a.score || a.date - b.date)
-      .slice(0, 5)
+      .slice(0, LOCAL_ENDLESS_CAP)
     setHighScores(next)
     setLastSavedHighScoreDate(entry.date)
     if (typeof window !== 'undefined') {
@@ -5255,6 +5298,12 @@ function App() {
                   // global that's their playerId row (one-per-player
                   // by construction), for local it's the just-saved
                   // run.
+                  //
+                  // Local list paginates 10 rows per page (up to the
+                  // top-30 cap) and defaults to whichever page
+                  // contains the just-saved row. Global stays at top
+                  // 10 with a "Your rank" footnote when the player's
+                  // row is below it.
                   const localTop = highScores
                     .slice()
                     .sort((a, b) => b.score - a.score || a.date - b.date)
@@ -5263,7 +5312,6 @@ function App() {
                   const globalTop = (globalEndlessScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
                   const visibleCount = 10
-                  const localVisible = localTop.slice(0, visibleCount)
                   const globalVisible = globalTop.slice(0, visibleCount)
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
@@ -5277,9 +5325,28 @@ function App() {
                     playerGlobalIndex === -1
                       ? null
                       : globalTop[playerGlobalIndex]
+                  // Local pagination math. The page index is held by
+                  // `gameoverEndlessPage` and seeded by the snap
+                  // effect so the player's row is on screen by
+                  // default. Clamp here in case the list shrank
+                  // (e.g. a reset) out from under whatever page we
+                  // were sitting on.
+                  const localPageCount = Math.max(
+                    1,
+                    Math.ceil(localTop.length / LEADERBOARD_PAGE_SIZE),
+                  )
+                  const localPageIndex = Math.min(
+                    Math.max(0, gameoverEndlessPage),
+                    localPageCount - 1,
+                  )
+                  const localPageStart = localPageIndex * LEADERBOARD_PAGE_SIZE
+                  const localWindow = localTop.slice(
+                    localPageStart,
+                    localPageStart + LEADERBOARD_PAGE_SIZE,
+                  )
                   if (
                     !usingGlobal &&
-                    localVisible.length === 0 &&
+                    localTop.length === 0 &&
                     !globalLoading
                   ) {
                     return null
@@ -5360,42 +5427,86 @@ function App() {
                           )}
                         </>
                       ) : (
-                        <ol className="hexaclear-scores-list">
-                          {localVisible.map((entry, idx) => {
-                            const isRecent =
-                              highScoreSaved &&
-                              lastSavedHighScoreDate !== null &&
-                              entry.date === lastSavedHighScoreDate
-                            const rank = idx + 1
-                            const chipClass = [
-                              'hexaclear-rank-chip',
-                              rank === 1
-                                ? 'hexaclear-chip-trophy'
-                                : rank <= 3
-                                  ? 'hexaclear-chip-gold'
-                                  : 'hexaclear-chip-neutral',
-                            ].join(' ')
-                            return (
-                              <li
-                                key={entry.date + entry.name + idx}
-                                className={[
-                                  'hexaclear-scores-row',
-                                  isRecent ? 'recent' : '',
-                                ]
-                                  .filter(Boolean)
-                                  .join(' ')}
+                        <>
+                          <ol className="hexaclear-scores-list">
+                            {localWindow.map((entry, idx) => {
+                              const isRecent =
+                                highScoreSaved &&
+                                lastSavedHighScoreDate !== null &&
+                                entry.date === lastSavedHighScoreDate
+                              const rank = localPageStart + idx + 1
+                              const chipClass = [
+                                'hexaclear-rank-chip',
+                                rank === 1
+                                  ? 'hexaclear-chip-trophy'
+                                  : rank <= 3
+                                    ? 'hexaclear-chip-gold'
+                                    : 'hexaclear-chip-neutral',
+                              ].join(' ')
+                              return (
+                                <li
+                                  key={entry.date + entry.name + rank}
+                                  className={[
+                                    'hexaclear-scores-row',
+                                    isRecent ? 'recent' : '',
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' ')}
+                                >
+                                  <span className={chipClass}>{rank}</span>
+                                  <span className="hexaclear-scores-name">
+                                    {entry.name}
+                                  </span>
+                                  <span className="hexaclear-scores-value">
+                                    {entry.score}
+                                  </span>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                          {localPageCount > 1 && (
+                            <div className="hexaclear-scores-pagination">
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Previous page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverEndlessPage((p) =>
+                                    Math.max(0, p - 1),
+                                  )
+                                }}
+                                disabled={localPageIndex === 0}
                               >
-                                <span className={chipClass}>{rank}</span>
-                                <span className="hexaclear-scores-name">
-                                  {entry.name}
-                                </span>
-                                <span className="hexaclear-scores-value">
-                                  {entry.score}
-                                </span>
-                              </li>
-                            )
-                          })}
-                        </ol>
+                                ‹
+                              </button>
+                              <span className="hexaclear-scores-page-label">
+                                {localPageStart + 1}–
+                                {Math.min(
+                                  localPageStart + LEADERBOARD_PAGE_SIZE,
+                                  localTop.length,
+                                )}{' '}
+                                of {localTop.length}
+                              </span>
+                              <button
+                                type="button"
+                                className="hexaclear-scores-page-step"
+                                aria-label="Next page"
+                                onClick={() => {
+                                  playUiClick()
+                                  setGameoverEndlessPage((p) =>
+                                    Math.min(localPageCount - 1, p + 1),
+                                  )
+                                }}
+                                disabled={
+                                  localPageIndex >= localPageCount - 1
+                                }
+                              >
+                                ›
+                              </button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )
