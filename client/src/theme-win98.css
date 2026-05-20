@@ -1436,9 +1436,46 @@
    Win98 form control. */
 [data-theme="win98"] .hexaclear-scores-global-toggle {
   font-family: inherit !important;
-  font-size: 14px !important;
+  font-size: 12px !important;
   color: var(--w98-text) !important;
   letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+[data-theme="win98"] .hexaclear-scores-global-toggle input[type='checkbox'] {
+  appearance: none !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 0 !important;
+  background: var(--w98-highlight) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-surface) !important;
+}
+[data-theme="win98"] .hexaclear-scores-global-toggle input[type='checkbox']::after {
+  content: '' !important;
+  display: none !important;
+}
+[data-theme="win98"] .hexaclear-scores-global-toggle input[type='checkbox']:checked::after {
+  content: '✓' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  height: auto !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: var(--w98-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
 }
 
 /* "Your rank" footnote inside the gameover modal renders as plain
@@ -1561,6 +1598,7 @@
 
 [data-theme="win98"] .hexaclear-menu-nav-title,
 [data-theme="win98"] .hexaclear-menu-nav-subtitle,
+[data-theme="win98"] .hexaclear-menu-settings-label,
 [data-theme="win98"] .hexaclear-menu-mini-toggle,
 [data-theme="win98"] .hexaclear-menu-howto-link {
   color: var(--w98-text) !important;
@@ -2029,6 +2067,9 @@
 [data-theme="win98"] .hexaclear-stats-section-label {
   color: var(--w98-text) !important;
   letter-spacing: 0.05em !important;
+  font-weight: bold !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
 }
 [data-theme="win98"] .hexaclear-stats-tracking-since {
   color: var(--w98-text) !important;

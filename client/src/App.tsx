@@ -4569,7 +4569,7 @@ function App() {
     if (runStats.topPlacementPoints > 0) {
       moments.push({
         key: 'top',
-        label: 'Top hit',
+        label: 'Best clear',
         value: `+${runStats.topPlacementPoints}`,
       })
     }
@@ -5741,9 +5741,16 @@ function App() {
                         const currentTop = highScores[0]?.score ?? -Infinity
                         const wouldBeNewBest =
                           pendingScore !== null && pendingScore > currentTop
-                        return wouldBeNewBest
-                          ? 'New high score'
-                          : 'New local high score'
+                        if (wouldBeNewBest) return 'New high score'
+                        const localRank =
+                          pendingScore === null
+                            ? null
+                            : highScores.filter(
+                                (entry) => entry.score >= pendingScore,
+                              ).length + 1
+                        return localRank === null
+                          ? 'New local high score'
+                          : `New local high score (#${localRank})`
                       })()}
                     </div>
                     <div className="hexaclear-gameover-input-row">
@@ -5836,20 +5843,22 @@ function App() {
                   }
                   return (
                     <div className="hexaclear-gameover-section">
-                      <div className="hexaclear-gameover-section-label">
-                        Top scores{usingGlobal ? ' (global)' : ''}
+                      <div className="hexaclear-gameover-section-header">
+                        <div className="hexaclear-gameover-section-label">
+                          Top scores{usingGlobal ? ' (global)' : ''}
+                        </div>
+                        <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
+                          <input
+                            type="checkbox"
+                            checked={showGlobalLeaderboard}
+                            onChange={(e) => {
+                              playUiClick()
+                              setShowGlobalLeaderboard(e.target.checked)
+                            }}
+                          />
+                          <span>Global</span>
+                        </label>
                       </div>
-                      <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
-                        <input
-                          type="checkbox"
-                          checked={showGlobalLeaderboard}
-                          onChange={(e) => {
-                            playUiClick()
-                            setShowGlobalLeaderboard(e.target.checked)
-                          }}
-                        />
-                        <span>Show global</span>
-                      </label>
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">
                           Loading global scores…
@@ -6102,21 +6111,23 @@ function App() {
                   if (!showSection) return null
                   return (
                     <div className="hexaclear-gameover-section">
-                      <div className="hexaclear-gameover-section-label">
-                        Co-op leaderboard
-                        {usingGlobal ? ' (global)' : ''}
+                      <div className="hexaclear-gameover-section-header">
+                        <div className="hexaclear-gameover-section-label">
+                          Co-op leaderboard
+                          {usingGlobal ? ' (global)' : ''}
+                        </div>
+                        <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
+                          <input
+                            type="checkbox"
+                            checked={showGlobalLeaderboard}
+                            onChange={(e) => {
+                              playUiClick()
+                              setShowGlobalLeaderboard(e.target.checked)
+                            }}
+                          />
+                          <span>Global</span>
+                        </label>
                       </div>
-                      <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
-                        <input
-                          type="checkbox"
-                          checked={showGlobalLeaderboard}
-                          onChange={(e) => {
-                            playUiClick()
-                            setShowGlobalLeaderboard(e.target.checked)
-                          }}
-                        />
-                        <span>Show global</span>
-                      </label>
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">
                           Loading global scores…
@@ -6398,22 +6409,24 @@ function App() {
                   }
                   return (
                     <div className="hexaclear-gameover-section">
-                      <div className="hexaclear-gameover-section-label">
-                        {usingGlobal
-                          ? 'Today · global · fewest moves'
-                          : 'Your best today'}
+                      <div className="hexaclear-gameover-section-header">
+                        <div className="hexaclear-gameover-section-label">
+                          {usingGlobal
+                            ? 'Today · global · fewest moves'
+                            : 'Your best today'}
+                        </div>
+                        <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
+                          <input
+                            type="checkbox"
+                            checked={showGlobalLeaderboard}
+                            onChange={(e) => {
+                              playUiClick()
+                              setShowGlobalLeaderboard(e.target.checked)
+                            }}
+                          />
+                          <span>Global</span>
+                        </label>
                       </div>
-                      <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
-                        <input
-                          type="checkbox"
-                          checked={showGlobalLeaderboard}
-                          onChange={(e) => {
-                            playUiClick()
-                            setShowGlobalLeaderboard(e.target.checked)
-                          }}
-                        />
-                        <span>Show global</span>
-                      </label>
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">
                           Loading global scores…
@@ -6634,6 +6647,20 @@ function App() {
                 <div className="hexaclear-menu-library">
                   <button
                     type="button"
+                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-play"
+                    onClick={() => {
+                      unlockAudioOnGesture()
+                      playUiClick()
+                      setShowMenu(false)
+                      setShowScoring(true)
+                    }}
+                  >
+                    <span className="hexaclear-menu-nav-title">
+                      How to Play
+                    </span>
+                  </button>
+                  <button
+                    type="button"
                     className="hexaclear-menu-nav-card hexaclear-menu-nav-card-scores"
                     onClick={() => {
                       unlockAudioOnGesture()
@@ -6644,9 +6671,6 @@ function App() {
                   >
                     <span className="hexaclear-menu-nav-title">
                       High scores
-                    </span>
-                    <span className="hexaclear-menu-nav-subtitle">
-                      Leaderboards
                     </span>
                   </button>
                   <button
@@ -6660,26 +6684,11 @@ function App() {
                     }}
                   >
                     <span className="hexaclear-menu-nav-title">Stats</span>
-                    <span className="hexaclear-menu-nav-subtitle">
-                      Record book
-                    </span>
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  className="hexaclear-menu-howto-link"
-                  onClick={() => {
-                    unlockAudioOnGesture()
-                    playUiClick()
-                    setShowMenu(false)
-                    setShowScoring(true)
-                  }}
-                >
-                  How scoring works
-                </button>
-
                 <div className="hexaclear-menu-settings">
+                  <div className="hexaclear-menu-settings-label">Settings</div>
                   {isMultiplayer && (
                     <label className="hexaclear-menu-row">
                       <span className="hexaclear-menu-row-label">
@@ -6966,11 +6975,7 @@ function App() {
             const avgRunMs =
               totalGames > 0 ? ls.totalActivePlayMs / totalGames : 0
             const formatAverage = (value: number): string =>
-              Number.isFinite(value)
-                ? Number.isInteger(value)
-                  ? String(value)
-                  : value.toFixed(1)
-                : '0'
+              Number.isFinite(value) ? String(Math.round(value)) : '0'
             const displayTotalScore = ls.totalScore
             const avgClearsPerGame =
               totalGames > 0 ? ls.patternsCleared / totalGames : 0
@@ -7094,7 +7099,7 @@ function App() {
             if (ls.bestSinglePlacement > 0) {
               records.push({
                 key: 'best-hit',
-                label: 'Top hit',
+                label: 'Best clear',
                 value: `+${ls.bestSinglePlacement}`,
               })
             }
