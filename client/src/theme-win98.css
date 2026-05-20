@@ -703,23 +703,33 @@
   fill: var(--w98-partner-fill-tint, var(--w98-cube-fill-partner));
 }
 
-/* PvP territory tints in Win98. The wood theme uses a translucent
-   warm flood plus a colored stroke; Win98 mirrors the same idea on
-   its flat palette but with the system grid stroke replaced by a
-   color-matched outline so the boundary actually reads against the
-   flat gray surface. */
-[data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-partner {
-  fill: var(--cell-tint-color, #b9d0c8);
-  fill-opacity: 0.82;
-  stroke: var(--cell-tint-color, #b9d0c8);
+/* PvP territory tints in Win98. The wood theme floods the full
+   empty hex; Win98 instead paints an INSET tinted plate inside the
+   raised button face so "empty + owned" reads clearly distinct from
+   "filled cube" (the cube would cover the whole face edge-to-edge).
+   The outer hex polygon keeps the standard sunken stroke + no fill
+   so the button face still frames the tint. The slot-fill polygon
+   (normally hidden in Win98 — see below) is re-shown and painted
+   with the player's actual cube color, which the JS sets via
+   --cell-tint-color from the Win98 cube palette. */
+[data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-partner,
+[data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-self {
+  fill: transparent;
+  stroke: var(--w98-deep-shadow);
   stroke-opacity: 1;
 }
 
-[data-theme="win98"] .hexaclear-hex.empty.pvp-tinted-self {
-  fill: var(--cell-tint-color, #e2dfb5);
-  fill-opacity: 0.72;
-  stroke: var(--cell-tint-color, #e2dfb5);
-  stroke-opacity: 1;
+/* Re-show the slot dimple for tinted cells and paint it with the
+   player tint at full opacity, plus a darker outline so the inset
+   plate reads against the surrounding raised gray button face. */
+[data-theme="win98"] .hexaclear-cell.pvp-tinted-partner .hexaclear-slot-fill,
+[data-theme="win98"] .hexaclear-cell.pvp-tinted-self .hexaclear-slot-fill {
+  display: block !important;
+  fill: var(--cell-tint-color, var(--w98-cube-fill-partner));
+  fill-opacity: 1;
+  stroke: var(--w98-deep-shadow);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Conflict ring in Win98: a 1.5px dashed outline so it reads as

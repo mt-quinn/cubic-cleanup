@@ -102,6 +102,11 @@ const WOOD_CUBE_TOP_HEX = '#ffeaa3'
 const WOOD_CUBE_RIGHT_HEX = '#a04a18'
 const WOOD_CUBE_LEFT_HEX = '#f9a23f'
 const W98_PARTNER_FILL_HEX = '#6fbcbc'
+// Win98 self cube fill. Matches `--w98-cube-fill` in theme-win98.css
+// so PvP territory tints can use the same teal the player's cubes
+// actually paint with (the wood-theme constants above produce a
+// warm gold that's wrong in this theme).
+const W98_SELF_FILL_HEX = '#008080'
 
 const hexToRgb = (hex: string): [number, number, number] => {
   const h = hex.replace('#', '')
@@ -5679,23 +5684,32 @@ function App() {
                 const partnerTintHue = cellTintHueByCellId[cell.id]
                 const isPartnerTinted = partnerTintHue !== undefined
                 const isSelfTinted = selfTintedCellIds.has(cell.id)
+                // Theme-aware tint base. Wood mode tints with the warm
+                // wood-cube palette; Win98 swaps to the teal cube
+                // palette so the territory color actually matches the
+                // player's cube color in that theme (without this the
+                // Win98 cubes are teal but the floor tints under them
+                // read gold/cream).
+                const tintIsWin98 = theme === 'win98'
                 const tintOverlayColor = isPartnerTinted
                   ? tintCubeColor(
-                      WOOD_CUBE_LEFT_HEX,
+                      tintIsWin98 ? W98_PARTNER_FILL_HEX : WOOD_CUBE_LEFT_HEX,
                       partnerTintHue ?? 0,
-                      0.1,
-                      0.85,
+                      tintIsWin98 ? 0 : 0.1,
+                      tintIsWin98 ? 1 : 0.85,
                     )
                   : isSelfTinted
-                  ? WOOD_CUBE_TOP_HEX
+                  ? tintIsWin98
+                    ? W98_SELF_FILL_HEX
+                    : WOOD_CUBE_TOP_HEX
                   : null
                 const conflictTintHue = conflictTintHueByCellId[cell.id]
                 const isConflict = conflictTintHue !== undefined
                 const conflictStrokeColor = isConflict
                   ? tintCubeColor(
-                      WOOD_CUBE_LEFT_HEX,
+                      tintIsWin98 ? W98_PARTNER_FILL_HEX : WOOD_CUBE_LEFT_HEX,
                       conflictTintHue ?? 0,
-                      0.05,
+                      tintIsWin98 ? 0 : 0.05,
                       1,
                     )
                   : null
