@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useAuthActions, useConvexAuth } from '@convex-dev/auth/react'
 import { useMutation, useQuery } from 'convex/react'
 import {
@@ -4427,7 +4434,13 @@ function App() {
   // Game-over wind-down: when the run ends, give the board a beat to
   // desaturate and let the unplayable hand shake before the modal slams
   // in. Plays game_over.wav at the start of the wind-down.
-  useEffect(() => {
+  //
+  // useLayoutEffect (rather than useEffect) so the windingDown flag
+  // flips synchronously before the browser paints the
+  // gameOver=true / windingDown=false state — otherwise the modal
+  // briefly flashes on screen between the render that committed the
+  // game-over and the post-paint effect that starts the wind-down.
+  useLayoutEffect(() => {
     if (!game.gameOver) {
       setGameOverWindingDown(false)
       return
