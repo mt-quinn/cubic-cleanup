@@ -2241,6 +2241,32 @@
     inset 1px 1px 0 var(--w98-highlight),
     inset -1px -1px 0 var(--w98-shadow) !important;
   font-family: inherit !important;
+  /* Opt out of the global Win98 overlay-button min-size + padding
+     (80x36, 8/18 padding) which would otherwise force each calendar
+     day to be giant and explode the modal in both axes. */
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 2px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+[data-theme="win98"] .hexaclear-history-day {
+  font-size: 13px !important;
+}
+[data-theme="win98"] .hexaclear-history-best {
+  font-size: 10px !important;
+  margin-top: 1px !important;
+}
+
+/* Same opt-out for the prev/next month chevrons so they read as
+   compact toolbar buttons instead of full-size dialog buttons. */
+[data-theme="win98"] .hexaclear-history-nav-step {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 2px 10px !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
 }
 [data-theme="win98"] .hexaclear-history-cell:disabled {
   background: var(--w98-surface) !important;
