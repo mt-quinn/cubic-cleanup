@@ -4530,11 +4530,6 @@ function App() {
         value: String(runStats.piecesPlaced),
       },
       {
-        key: 'cubes',
-        label: 'Cubes',
-        value: String(runStats.cubesPlaced),
-      },
-      {
         key: 'clears',
         label: 'Clears',
         value: String(runStats.patternsCleared),
@@ -6973,11 +6968,6 @@ function App() {
                 key: 'pieces',
                 label: 'Pieces',
                 value: String(ls.piecesPlaced),
-              },
-              {
-                key: 'cubes',
-                label: 'Cubes',
-                value: String(ls.cubesPlaced),
               },
               {
                 key: 'clears',
