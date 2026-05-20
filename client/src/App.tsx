@@ -6947,6 +6947,18 @@ function App() {
               ls.gamesPlayedCoop
             const avgRunMs =
               totalGames > 0 ? ls.totalActivePlayMs / totalGames : 0
+            const formatAverage = (value: number): string =>
+              Number.isFinite(value)
+                ? Number.isInteger(value)
+                  ? String(value)
+                  : value.toFixed(1)
+                : '0'
+            const avgClearsPerGame =
+              totalGames > 0 ? ls.patternsCleared / totalGames : 0
+            const avgScorePerGame =
+              ls.scoredGamesPlayed > 0
+                ? ls.totalScore / ls.scoredGamesPlayed
+                : 0
             const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
 
             type Tile = { key: string; label: string; value: string }
@@ -6959,8 +6971,18 @@ function App() {
               },
               {
                 key: 'avg',
-                label: 'Avg/game',
+                label: 'Time/game',
                 value: formatDuration(avgRunMs),
+              },
+              {
+                key: 'clears-per-game',
+                label: 'Clears/game',
+                value: formatAverage(avgClearsPerGame),
+              },
+              {
+                key: 'score-per-game',
+                label: 'Score/game',
+                value: formatAverage(avgScorePerGame),
               },
               {
                 key: 'pieces',

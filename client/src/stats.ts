@@ -43,6 +43,11 @@ export type LifetimeStats = {
   patternsCleared: number
   rubiesCleared: number
   boardClears: number
+  // Aggregate score for scored modes (endless, big, co-op). Daily is
+  // move-ranked rather than score-ranked, so it does not contribute to
+  // Score/game.
+  totalScore: number
+  scoredGamesPlayed: number
   // Records (single best across the whole device).
   bestEndlessScore: number
   // Daily ranks ascending by moves; null until the first daily clear.
@@ -88,6 +93,8 @@ export const createEmptyLifetimeStats = (
   patternsCleared: 0,
   rubiesCleared: 0,
   boardClears: 0,
+  totalScore: 0,
+  scoredGamesPlayed: 0,
   bestEndlessScore: 0,
   bestDailyMoves: null,
   bestCombo: 1,
@@ -218,6 +225,13 @@ export const foldRunIntoLifetime = (
       run.topPlacementPoints,
     ),
     longestRunMs: Math.max(prev.longestRunMs, run.activePlayMs),
+  }
+
+  const isScoredRun =
+    args.isMultiplayer || args.mode === 'endless' || args.mode === 'big'
+  if (isScoredRun) {
+    next.totalScore = prev.totalScore + args.finalScore
+    next.scoredGamesPlayed = prev.scoredGamesPlayed + 1
   }
 
   // Per-mode game counter. Co-op rolls up under `gamesPlayedCoop`
