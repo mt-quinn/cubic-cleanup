@@ -1055,12 +1055,6 @@
   margin-top: 1px;
   letter-spacing: 0 !important;
 }
-[data-theme="win98"] .hexaclear-smiley-rank.is-unranked {
-  color: var(--w98-shadow) !important;
-  font-weight: 400 !important;
-  font-style: italic;
-  font-size: 10px !important;
-}
 
 /* PvP leaderboard tab in Win98: flatten sort toggle, header row,
    and value pills so the chrome matches the rest of the modal. */

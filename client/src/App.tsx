@@ -893,21 +893,12 @@ const SmileyRow = ({
             <span className="hexaclear-smiley-name" aria-hidden="true">
               {player.name}
             </span>
-            {player.pvpRank !== undefined && (
+            {player.pvpRank != null && (
               <span
-                className={[
-                  'hexaclear-smiley-rank',
-                  player.pvpRank === null ? 'is-unranked' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                aria-label={
-                  player.pvpRank === null
-                    ? `${player.name} is unranked`
-                    : `${player.name} is ranked #${player.pvpRank} in PvP`
-                }
+                className="hexaclear-smiley-rank"
+                aria-label={`${player.name} is ranked #${player.pvpRank} in PvP`}
               >
-                {player.pvpRank === null ? 'unranked' : `#${player.pvpRank}`}
+                #{player.pvpRank}
               </span>
             )}
             {isSelf && show && (
