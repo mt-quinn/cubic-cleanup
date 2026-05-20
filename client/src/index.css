@@ -2208,17 +2208,12 @@ body {
 }
 .hexaclear-record-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: baseline;
-  gap: 0.34rem;
+  gap: 0.48rem;
   min-width: 0;
   padding: 0.26rem 0;
   border-bottom: 1px solid rgba(255, 205, 143, 0.1);
-}
-.hexaclear-record-index {
-  font-size: 0.55rem;
-  font-weight: 900;
-  color: rgba(255, 141, 79, 0.74);
 }
 .hexaclear-record-label {
   min-width: 0;

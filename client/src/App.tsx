@@ -6972,18 +6972,39 @@ function App() {
                   ? String(value)
                   : value.toFixed(1)
                 : '0'
+            const displayTotalScore = ls.totalScore
             const avgClearsPerGame =
               totalGames > 0 ? ls.patternsCleared / totalGames : 0
             const avgScorePerGame =
-              ls.scoredGamesPlayed > 0
-                ? ls.totalScore / ls.scoredGamesPlayed
-                : 0
+              totalGames > 0 ? displayTotalScore / totalGames : 0
             const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
 
             const summaryStats: StatDatum[] = [
-              { key: 'time', label: 'Time', value: formatDuration(ls.totalActivePlayMs) },
-              { key: 'time-game', label: 'Time/game', value: formatDuration(avgRunMs) },
-              { key: 'pieces', label: 'Pieces', value: String(ls.piecesPlaced) },
+              {
+                key: 'time',
+                label: 'Time',
+                value: formatDuration(ls.totalActivePlayMs),
+              },
+              {
+                key: 'pieces',
+                label: 'Pieces',
+                value: String(ls.piecesPlaced),
+              },
+              {
+                key: 'clears',
+                label: 'Clears',
+                value: String(ls.patternsCleared),
+              },
+              {
+                key: 'rubies',
+                label: 'Rubies',
+                value: String(ls.rubiesCleared),
+              },
+              {
+                key: 'total-score',
+                label: 'Total score',
+                value: String(displayTotalScore),
+              },
             ]
             const performanceStats: StatDatum[] = [
               {
@@ -6992,15 +7013,18 @@ function App() {
                 value: formatAverage(avgScorePerGame),
               },
               {
+                key: 'time-game',
+                label: 'Time/game',
+                value: formatDuration(avgRunMs),
+              },
+              {
                 key: 'clears-game',
                 label: 'Clears/game',
                 value: formatAverage(avgClearsPerGame),
               },
-              { key: 'clears', label: 'Clears', value: String(ls.patternsCleared) },
-              { key: 'rubies', label: 'Rubies', value: String(ls.rubiesCleared) },
             ]
             if (ls.boardClears > 0) {
-              performanceStats.push({
+              summaryStats.push({
                 key: 'boards',
                 label: 'Board clears',
                 value: String(ls.boardClears),
@@ -7094,11 +7118,8 @@ function App() {
               if (items.length === 0) return null
               return (
                 <div className="hexaclear-record-book">
-                  {items.map((record, idx) => (
+                  {items.map((record) => (
                     <div key={record.key} className="hexaclear-record-row">
-                      <span className="hexaclear-record-index">
-                        {String(idx + 1).padStart(2, '0')}
-                      </span>
                       <span className="hexaclear-record-label">
                         {record.label}
                       </span>
@@ -7178,16 +7199,21 @@ function App() {
                     </p>
                   ) : (
                     <>
-                      {renderSummary()}
                       <div className="hexaclear-stats-section">
                         <div className="hexaclear-stats-section-label">
-                          Performance
+                          Totals
+                        </div>
+                        {renderSummary()}
+                      </div>
+                      <div className="hexaclear-stats-section">
+                        <div className="hexaclear-stats-section-label">
+                          Averages
                         </div>
                         {renderPerformancePanel()}
                       </div>
                       <div className="hexaclear-stats-section">
                         <div className="hexaclear-stats-section-label">
-                          By mode
+                          Games Played
                         </div>
                         {renderModeSplit()}
                       </div>

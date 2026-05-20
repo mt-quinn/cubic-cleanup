@@ -1972,9 +1972,6 @@
   background: var(--w98-surface) !important;
   border-radius: 0 !important;
 }
-[data-theme="win98"] .hexaclear-record-index {
-  color: #c80000 !important;
-}
 [data-theme="win98"] .hexaclear-run-stat-label,
 [data-theme="win98"] .hexaclear-run-moment-label,
 [data-theme="win98"] .hexaclear-profile-summary-label,
