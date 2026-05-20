@@ -7423,7 +7423,7 @@ function App() {
                             handleLeaveRoom()
                           }}
                         >
-                          Leave co-op
+                          Leave game
                         </button>
                       ) : (
                         <button
