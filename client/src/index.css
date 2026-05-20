@@ -3330,25 +3330,25 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
 }
-/* Cool patina-teal gradient: deliberately complementary to the warm
-   gold Resume gradient so the library nav reads as a distinct family
-   from the primary action without leaving the wood-theme palette. */
+/* Muted bronze gradient: stays in the wood-theme family but sits
+   noticeably below the bright Resume gold in the visual hierarchy.
+   Recessed shadow (no lift) so these read as secondary navigation,
+   not as competing primary CTAs. */
 .hexaclear-menu-nav-card {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   min-width: 0;
   min-height: 2.35rem;
-  padding: 0.6rem 0.75rem !important;
+  padding: 0.55rem 0.75rem !important;
   border-radius: 999px !important;
-  border: 1px solid rgba(176, 232, 222, 0.55) !important;
-  background: linear-gradient(135deg, #5fb5a8, #2d7568) !important;
-  color: #ecfffb !important;
+  border: 1px solid rgba(255, 205, 143, 0.28) !important;
+  background: linear-gradient(135deg, #6a4a28, #3d2614) !important;
+  color: #f0d4a8 !important;
   cursor: pointer;
   box-shadow:
-    inset 0 1px 0 rgba(236, 255, 251, 0.18),
-    0 0 0 1px rgba(0, 0, 0, 0.2),
-    0 6px 14px rgba(0, 0, 0, 0.4);
+    inset 0 1px 0 rgba(255, 214, 178, 0.1),
+    0 1px 0 rgba(0, 0, 0, 0.35);
   text-align: center;
 }
 /* "How to Play" spans the full row beneath High Scores / Stats so the
