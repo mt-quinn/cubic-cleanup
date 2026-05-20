@@ -7611,7 +7611,7 @@ function App() {
                         {Math.round(volume * 100)}%
                       </span>
                     </label>
-                    <label className="hexaclear-menu-mini-toggle">
+                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
                       <input
                         type="checkbox"
                         checked={audioMuted}
@@ -7626,30 +7626,6 @@ function App() {
                         }}
                       />
                       <span>Mute</span>
-                    </label>
-                  </div>
-                  <div className="hexaclear-menu-toggle-grid">
-                    <label className="hexaclear-menu-mini-toggle">
-                      <input
-                        type="checkbox"
-                        checked={reducedMotion}
-                        onChange={(e) => {
-                          setReducedMotion(e.target.checked)
-                          playUiClick()
-                        }}
-                      />
-                      <span>Reduced motion</span>
-                    </label>
-                    <label className="hexaclear-menu-mini-toggle">
-                      <input
-                        type="checkbox"
-                        checked={adPreviews}
-                        onChange={(e) => {
-                          setAdPreviews(e.target.checked)
-                          playUiClick()
-                        }}
-                      />
-                      <span>Ad previews</span>
                     </label>
                   </div>
                   <label className="hexaclear-menu-row hexaclear-menu-theme-row">
@@ -7670,6 +7646,30 @@ function App() {
                       ))}
                     </select>
                   </label>
+                  <div className="hexaclear-menu-toggle-grid">
+                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={reducedMotion}
+                        onChange={(e) => {
+                          setReducedMotion(e.target.checked)
+                          playUiClick()
+                        }}
+                      />
+                      <span>Reduced motion</span>
+                    </label>
+                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={adPreviews}
+                        onChange={(e) => {
+                          setAdPreviews(e.target.checked)
+                          playUiClick()
+                        }}
+                      />
+                      <span>Ad previews</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>

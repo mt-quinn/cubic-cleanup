@@ -3910,6 +3910,24 @@ body {
   accent-color: #f7b35a;
   cursor: pointer;
 }
+/* Settings-row variant of the .hexaclear-scores-global-toggle pill.
+   Wraps the toggle in the same bordered card the other settings
+   rows use (volume, theme) so the row reads as a unified group,
+   and stretches the label so the pill sits flush left while the
+   text fills the available width. The pill visual (switch + caps
+   label) inherits from .hexaclear-scores-global-toggle above. */
+.hexaclear-menu-settings-toggle {
+  justify-content: flex-start;
+  align-self: stretch;
+  min-height: 2.05rem;
+  padding: 0.42rem 0.58rem;
+  border: 1px solid rgba(255, 205, 143, 0.12);
+  border-radius: 0.65rem;
+  background: rgba(255, 205, 143, 0.028);
+}
+.hexaclear-menu-settings-toggle span {
+  flex: 1 1 auto;
+}
 .hexaclear-menu-theme-row {
   padding: 0.42rem 0.58rem;
   border: 1px solid rgba(255, 205, 143, 0.12);
