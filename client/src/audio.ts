@@ -331,6 +331,25 @@ const installVisibilityHooks = () => {
   // region). Listeners are passive — they don't preventDefault — and
   // run with `once: false` because the unlock is cheap when nothing
   // needs to change.
+  //
+  // Which events count as "activation-triggering" for AudioContext on
+  // iOS Safari is narrower than people assume. Per WebKit's
+  // implementation, the eligible events are:
+  //   - keydown (excluding Escape)
+  //   - mousedown
+  //   - pointerdown ONLY when pointerType === 'mouse'
+  //   - pointerup when pointerType !== 'mouse'
+  //   - touchend
+  //
+  // Note that touchstart and touch-type pointerdown are NOT activation
+  // events on iOS. This is why a tap-and-drag (which finishes with a
+  // pointerup/touchend rather than a click on the original element)
+  // failed to unlock audio when our only touch listeners were on
+  // touchstart/pointerdown — the gesture completed without ever firing
+  // a qualifying event. We listen on the full eligible set, paired with
+  // touchstart/pointerdown for desktop or browsers that do treat them
+  // as activation, so the unlock fires on whichever event ends up
+  // qualifying first.
   const onGesture = () => {
     try {
       unlockAudioOnGesture()
@@ -339,7 +358,9 @@ const installVisibilityHooks = () => {
     }
   }
   window.addEventListener('pointerdown', onGesture, { passive: true })
+  window.addEventListener('pointerup', onGesture, { passive: true })
   window.addEventListener('touchstart', onGesture, { passive: true })
+  window.addEventListener('touchend', onGesture, { passive: true })
   window.addEventListener('mousedown', onGesture, { passive: true })
   window.addEventListener('keydown', onGesture, { passive: true })
 }
