@@ -2819,6 +2819,27 @@ body {
 .hexaclear-history-nav-label {
   font-weight: 700;
   font-size: 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+/* Month-level "perfected" indicator. Inherits the cleared-day
+   palette (forest green / mint check) so the calendar's two
+   "you cleared this" surfaces — single day and whole month —
+   read as the same achievement at different scales. Slightly
+   nudged up the font + a soft text glow so it reads as a
+   trophy, not a checklist tick. */
+.hexaclear-history-month-check {
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 800;
+  color: #c0f0c0;
+  text-shadow:
+    0 1px 0 rgba(0, 60, 0, 0.55),
+    0 0 6px rgba(120, 220, 120, 0.35);
+}
+.hexaclear-history-nav-label-perfected {
+  color: #d8f5d8;
 }
 .hexaclear-history-nav-step {
   appearance: none;

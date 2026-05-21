@@ -2709,6 +2709,21 @@
   color: var(--w98-text) !important;
   letter-spacing: 0 !important;
 }
+/* Month-level perfected check. Wood theme uses a glowing mint
+   glyph; Win98 stays pixel-flat and uses the same dark-green that
+   day cells use, in a larger weight so it reads as a trophy
+   stamp next to the month name. No text-shadow / no glow — the
+   chrome's aesthetic. */
+[data-theme="win98"] .hexaclear-history-month-check {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #006000 !important;
+  text-shadow: none !important;
+  font-family: inherit !important;
+}
+[data-theme="win98"] .hexaclear-history-nav-label-perfected {
+  color: var(--w98-text) !important;
+}
 [data-theme="win98"] .hexaclear-history-cell {
   background: var(--w98-surface) !important;
   color: var(--w98-text) !important;

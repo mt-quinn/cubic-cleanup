@@ -9051,6 +9051,38 @@ function App() {
               year > launchY || (year === launchY && month > launchM)
             const canGoNext =
               year < todayY || (year === todayY && month < todayM)
+            // Perfect-month check: every playable day in this
+            // month has been cleared. Eligibility is conservative —
+            // a month can only be "perfected" once it's strictly in
+            // the past, or it's the current month and today is its
+            // last day (i.e. no future-day puzzles remain). Days
+            // before the global launch are excluded from the
+            // requirement since they never had a puzzle to play, so
+            // the partially-pre-launch launch month can still be
+            // perfected by clearing the post-launch days.
+            const todayD = Number.isFinite(todayParts[2])
+              ? todayParts[2]
+              : NaN
+            const isPastMonth =
+              year < todayY || (year === todayY && month < todayM)
+            const isCurrentMonth = year === todayY && month === todayM
+            const isLastDayOfCurrentMonth =
+              isCurrentMonth &&
+              Number.isFinite(todayD) &&
+              todayD === daysInMonth
+            const monthIsEligibleForPerfect =
+              isPastMonth || isLastDayOfCurrentMonth
+            const monthHasAnyPlayableDay = cells.some(
+              (c) => c.kind === 'day' && !c.isPreLaunch && !c.isFuture,
+            )
+            const monthPerfected =
+              monthIsEligibleForPerfect &&
+              monthHasAnyPlayableDay &&
+              cells.every((c) => {
+                if (c.kind !== 'day') return true
+                if (c.isPreLaunch) return true
+                return c.bestMoves !== null
+              })
             const stepMonth = (delta: number) => {
               setHistoryMonth(({ year: y, month: m }) => {
                 const date = new Date(y, m - 1 + delta, 1)
@@ -9084,8 +9116,26 @@ function App() {
                     >
                       ‹
                     </button>
-                    <span className="hexaclear-history-nav-label">
+                    <span
+                      className={[
+                        'hexaclear-history-nav-label',
+                        monthPerfected
+                          ? 'hexaclear-history-nav-label-perfected'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
                       {monthLabel}
+                      {monthPerfected && (
+                        <span
+                          className="hexaclear-history-month-check"
+                          aria-label="every day this month cleared"
+                          title="Every day this month cleared"
+                        >
+                          ✓
+                        </span>
+                      )}
                     </span>
                     <button
                       type="button"
