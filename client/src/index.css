@@ -2120,6 +2120,80 @@ body {
   margin-bottom: 0.9rem;
 }
 
+/* "Tap to resume" system prompt shown when the AudioContext can't be
+   resumed silently (iOS only) and the player has audio unmuted. Sits
+   above every other overlay because if audio is broken this is the
+   one prompt that needs to win, and it's the only way the player can
+   restore audio without a full reload. position: fixed pins it to the
+   viewport so it's dead-center regardless of where the board wrapper
+   lives in the layout. */
+.hexaclear-audio-unlock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.7),
+    rgba(0, 0, 0, 0.96)
+  );
+  cursor: pointer;
+  /* Disable iOS's tap-highlight rectangle so the whole-screen tap
+     target doesn't flash blue on press. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hexaclear-audio-unlock-card {
+  padding: 1.5rem 2rem;
+  border-radius: 1.1rem;
+  background: linear-gradient(145deg, #402116, #2a1209);
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  text-align: center;
+  color: #f3e6cf;
+  max-width: 80vw;
+  /* Gentle pulse to make it obvious this is the active prompt. */
+  animation: hexaclear-audio-unlock-pulse 1.6s ease-in-out infinite;
+}
+
+.hexaclear-audio-unlock-title {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.35rem;
+}
+
+.hexaclear-audio-unlock-sub {
+  font-size: 0.85rem;
+  opacity: 0.78;
+  line-height: 1.3;
+}
+
+@keyframes hexaclear-audio-unlock-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 22px 55px rgba(0, 0, 0, 0.85),
+      0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  }
+  50% {
+    transform: scale(1.035);
+    box-shadow:
+      0 28px 70px rgba(0, 0, 0, 0.9),
+      0 0 0 1px rgba(255, 220, 160, 0.18) inset;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hexaclear-audio-unlock-card {
+    animation: none;
+  }
+}
+
 .hexaclear-input {
   width: 100%;
   padding: 0.4rem 0.6rem;

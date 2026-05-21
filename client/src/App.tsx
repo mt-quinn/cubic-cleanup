@@ -27,6 +27,7 @@ import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { BoardDefinition } from './game/hexTypes'
 import {
+  getAudioNeedsUnlock,
   getMasterVolume,
   getMuted,
   playBreakAfterClear,
@@ -38,6 +39,7 @@ import {
   playUiClick,
   setMasterVolume,
   setMuted,
+  subscribeAudioNeedsUnlock,
   unlockAudioOnGesture,
 } from './audio'
 import { api } from '../convex/_generated/api'
@@ -2146,6 +2148,39 @@ function App() {
   const [showMenu, setShowMenu] = useState(false)
   const [volume, setVolumeState] = useState<number>(() => getMasterVolume())
   const [audioMuted, setAudioMutedState] = useState<boolean>(() => getMuted())
+  // True iff the player is unmuted AND the AudioContext is missing,
+  // stale, or not in 'running' state. The audio module owns the source
+  // of truth; we just mirror its boolean here so React can render the
+  // "Tap to resume" prompt. The lazy initializer reads the snapshot
+  // synchronously so the very first render already has the right
+  // value — no flash of "no prompt" before the subscription's first
+  // broadcast lands. See `subscribeAudioNeedsUnlock` for the exact
+  // condition and the iOS rationale.
+  const [audioNeedsUnlock, setAudioNeedsUnlock] = useState<boolean>(() =>
+    getAudioNeedsUnlock(),
+  )
+  useEffect(() => {
+    const unsubscribe = subscribeAudioNeedsUnlock(setAudioNeedsUnlock)
+    return unsubscribe
+  }, [])
+  // Touch-device gate for the audio-unlock prompt. Desktop browsers
+  // don't have the iOS "no resume from a drag" limitation that makes
+  // the prompt necessary — on desktop the first mousedown/click on
+  // anything is enough to unlock. Computed once at mount and cached
+  // for the session because hot-plugging a touchscreen mid-session is
+  // not something we need to support.
+  const isTouchDevice = useMemo<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    if ('ontouchstart' in window) return true
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.maxTouchPoints === 'number' &&
+      navigator.maxTouchPoints > 0
+    ) {
+      return true
+    }
+    return false
+  }, [])
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('cubic-reduced-motion') === 'true'
@@ -7827,6 +7862,39 @@ function App() {
                     ? 'Retry this puzzle'
                     : "Retry today's puzzle"}
                 </button>
+              </div>
+            </div>
+          )}
+          {/* iOS Safari refuses to resume an AudioContext from a touch
+              event that's part of a drag (WebKit #248265). When the
+              player is unmuted and the context is missing or stale,
+              they have to do a "touch-as-click" somewhere to unlock
+              audio — a tap-and-drag piece grab will NOT do it. We
+              render a full-screen system prompt centered on the
+              screen; tapping anywhere on the overlay fires a click
+              event, which IS a valid activation event, and the
+              `subscribeAudioNeedsUnlock` signal flips the overlay
+              away as soon as the context reaches `running`. The
+              overlay sits above the menu (z-index 60 vs the menu's
+              50) because if audio is broken the unlock prompt has to
+              win regardless of what else is on screen. */}
+          {audioNeedsUnlock && isTouchDevice && (
+            <div
+              className="hexaclear-audio-unlock-overlay"
+              role="button"
+              tabIndex={0}
+              aria-label="Tap to resume audio"
+              onClick={() => {
+                unlockAudioOnGesture()
+              }}
+            >
+              <div className="hexaclear-audio-unlock-card">
+                <div className="hexaclear-audio-unlock-title">
+                  Tap to resume
+                </div>
+                <div className="hexaclear-audio-unlock-sub">
+                  Audio needs a tap to start on mobile
+                </div>
               </div>
             </div>
           )}

@@ -197,6 +197,71 @@ const isContextStalled = (ctx: AudioContext): boolean => {
   return state === 'suspended' || state === 'interrupted' || state === 'closed'
 }
 
+// ---- "Audio needs unlock" subscription --------------------------------
+//
+// A small pub/sub the UI uses to render a "Tap to resume" prompt when
+// the player has audio unmuted but the AudioContext is unhealthy. iOS
+// Safari refuses to resume an AudioContext from any event that's part
+// of a drag gesture (see WebKit bug #248265), so when the player's
+// natural first interaction is a tap-and-drag piece grab there is no
+// way for us to silently unlock audio — they must do a touch-as-click
+// somewhere. The UI surfaces a small prompt for that click.
+//
+// `audioNeedsUnlock` is true iff:
+//   - the player is unmuted (so they're asking for audio), AND
+//   - the context is missing, may be stale, or isn't `running`.
+//
+// We only fire subscribers when the boolean actually changes so the
+// React renderer doesn't see redundant updates.
+
+type AudioNeedsUnlockListener = (needsUnlock: boolean) => void
+const audioNeedsUnlockListeners = new Set<AudioNeedsUnlockListener>()
+let lastNotifiedNeedsUnlock: boolean | null = null
+
+const computeNeedsUnlock = (): boolean => {
+  // Muted players don't want audio; the prompt would be noise.
+  if (muted) return false
+  if (contextMayBeStale) return true
+  if (!audioContext) return true
+  if ((audioContext.state as string) !== 'running') return true
+  return false
+}
+
+const notifyAudioState = (): void => {
+  const needs = computeNeedsUnlock()
+  if (needs === lastNotifiedNeedsUnlock) return
+  lastNotifiedNeedsUnlock = needs
+  for (const l of audioNeedsUnlockListeners) {
+    try {
+      l(needs)
+    } catch {
+      // Subscriber errors must not poison the broadcast.
+    }
+  }
+}
+
+export const subscribeAudioNeedsUnlock = (
+  listener: AudioNeedsUnlockListener,
+): (() => void) => {
+  audioNeedsUnlockListeners.add(listener)
+  // Fire the current state immediately so subscribers don't need their
+  // own bootstrapping logic.
+  try {
+    listener(computeNeedsUnlock())
+  } catch {
+    // Same robustness guarantee as notifyAudioState().
+  }
+  return () => {
+    audioNeedsUnlockListeners.delete(listener)
+  }
+}
+
+// Synchronous snapshot of the current needs-unlock state, intended for
+// React useState initializers that need the right value on the first
+// render rather than waiting for the subscription effect to mount and
+// flush an extra commit.
+export const getAudioNeedsUnlock = (): boolean => computeNeedsUnlock()
+
 const decodeIntoSession = (
   ctx: AudioContext,
   mySession: number,
@@ -235,7 +300,10 @@ const closeAudioContext = () => {
   audioContext = null
   masterGainNode = null
   buffers = {}
-  if (!ctx) return
+  if (!ctx) {
+    notifyAudioState()
+    return
+  }
   // close() returns a Promise; we don't await because we're already
   // moving on and the runtime will tear the resources down regardless.
   try {
@@ -243,6 +311,7 @@ const closeAudioContext = () => {
   } catch {
     // Closing a context that's already closed throws on some browsers.
   }
+  notifyAudioState()
 }
 
 const buildAudioContext = (): AudioContext | null => {
@@ -271,15 +340,22 @@ const buildAudioContext = (): AudioContext | null => {
   // mark the context as stale so the next gesture rebuilds. We don't
   // try to call resume() inline because by the time the user notices
   // and taps, we want to rebuild — not paper over a session that the
-  // OS has already torn down.
+  // OS has already torn down. We also re-broadcast the needs-unlock
+  // signal so the UI can show/hide the prompt as the runtime moves the
+  // context between suspended/interrupted/running.
   ctx.addEventListener('statechange', () => {
     if (sessionId !== mySession) return
     if (isContextStalled(ctx)) {
       contextMayBeStale = true
     }
+    notifyAudioState()
   })
 
   decodeAllCachedFor(ctx, mySession)
+  // Newly-built context typically starts in 'suspended' on iOS until
+  // resume() inside a user gesture moves it to 'running'. Broadcast so
+  // the UI can keep the prompt up until that transition lands.
+  notifyAudioState()
   return ctx
 }
 
@@ -293,6 +369,7 @@ let visibilityHooksInstalled = false
 
 const markStale = () => {
   contextMayBeStale = true
+  notifyAudioState()
 }
 
 const installVisibilityHooks = () => {
@@ -421,6 +498,7 @@ export const unlockAudioOnGesture = () => {
         if (isContextStalled(ctx)) {
           contextMayBeStale = true
         }
+        notifyAudioState()
       })
       .catch(() => {
         // resume() can reject if Safari decides the gesture window
@@ -430,7 +508,12 @@ export const unlockAudioOnGesture = () => {
         if (sessionId === mySession && audioContext === ctx) {
           contextMayBeStale = true
         }
+        notifyAudioState()
       })
+  } else {
+    // The context is already healthy (or fatally closed); broadcast
+    // either way so subscribers stay in sync with reality.
+    notifyAudioState()
   }
 }
 
@@ -471,6 +554,11 @@ export const setMuted = (next: boolean): void => {
       // Best-effort persistence.
     }
   }
+  // Mute changes flip whether the player wants audio at all, so the
+  // needs-unlock signal needs to re-broadcast: a muted player should
+  // never see the prompt, and an unmute toggle on a stale context
+  // should surface it immediately.
+  notifyAudioState()
 }
 
 // ---- Playback helpers --------------------------------------------------

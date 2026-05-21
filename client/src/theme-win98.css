@@ -1736,6 +1736,42 @@
   backdrop-filter: none !important;
 }
 
+/* Win98 dialog skin for the audio-unlock prompt: same beveled card
+   chrome as a system message box. The card itself owns the visual
+   weight; the backdrop stays the calm gray-haze of the Win98 modal
+   overlay so it doesn't fight the chrome. */
+[data-theme="win98"] .hexaclear-audio-unlock-overlay {
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="win98"] .hexaclear-audio-unlock-card {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  box-shadow:
+    inset -1px -1px 0 var(--w98-shadow),
+    inset 1px 1px 0 var(--w98-surface),
+    0 0 0 0 transparent !important;
+  border-radius: 0 !important;
+  padding: 0.85rem 1.1rem !important;
+  /* No animation: Win98 dialogs don't pulse. The chrome alone is the
+     prompt. */
+  animation: none !important;
+}
+
+[data-theme="win98"] .hexaclear-audio-unlock-title,
+[data-theme="win98"] .hexaclear-audio-unlock-sub {
+  color: var(--w98-text) !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
 [data-theme="win98"] .hexaclear-overlay-card {
   background: var(--w98-surface) !important;
   color: var(--w98-text) !important;
