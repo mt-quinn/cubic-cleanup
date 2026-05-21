@@ -1741,7 +1741,7 @@
    weight; the backdrop stays the calm gray-haze of the Win98 modal
    overlay so it doesn't fight the chrome. */
 [data-theme="win98"] .hexaclear-audio-unlock-overlay {
-  background: rgba(0, 0, 0, 0.35) !important;
+  background: rgba(0, 0, 0, 0.28) !important;
 }
 
 [data-theme="win98"] .hexaclear-audio-unlock-card {

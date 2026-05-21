@@ -2136,8 +2136,8 @@ body {
   justify-content: center;
   background: radial-gradient(
     circle,
-    rgba(0, 0, 0, 0.7),
-    rgba(0, 0, 0, 0.96)
+    rgba(0, 0, 0, 0.56),
+    rgba(0, 0, 0, 0.77)
   );
   cursor: pointer;
   /* Disable iOS's tap-highlight rectangle so the whole-screen tap
