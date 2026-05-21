@@ -2215,6 +2215,20 @@ function App() {
   const [dailyHighScoreSaved, setDailyHighScoreSaved] = useState(false)
   const [lastSavedDailyHighScoreDate, setLastSavedDailyHighScoreDate] =
     useState<number | null>(null)
+  // The daily gameover modal exits via either "Done" or "Retry".
+  // Retry restarts the puzzle, naturally clearing gameOver back to
+  // false and remounting the modal stack. Done just dismisses the
+  // celebration so the player can sit on the cleared board and
+  // navigate from there — same autosave behavior on the way out, but
+  // no forced replay. We track that dismissal here so the modal stays
+  // closed for *this* completed run; the reset effect below brings it
+  // back the next time the player reaches gameover, switches modes,
+  // or hops to a different daily date.
+  const [dailyGameOverDismissed, setDailyGameOverDismissed] =
+    useState<boolean>(false)
+  useEffect(() => {
+    setDailyGameOverDismissed(false)
+  }, [game.gameOver, game.mode, game.dailyDateKey])
   // Per-device co-op high scores. Each unique playerIds-group has at
   // most one row (best score wins) so the local view is "all the
   // co-op partnerships I've ever scored with, deduped to each one's
@@ -7518,7 +7532,10 @@ function App() {
               </div>
             </div>
           )}
-          {game.gameOver && game.mode === 'daily' && !gameOverWindingDown && (
+          {game.gameOver &&
+            game.mode === 'daily' &&
+            !gameOverWindingDown &&
+            !dailyGameOverDismissed && (
             <div className="hexaclear-overlay">
               <div
                 className={[
@@ -7833,35 +7850,63 @@ function App() {
                     </button>
                   )}
 
-                <button
-                  type="button"
-                  className="hexaclear-gameover-cta"
-                  onClick={() => {
-                    playUiClick()
-                    // Autosave on dismiss — see the endless-mode
-                    // counterpart above. The Save button stays as a
-                    // visible confirm action, but stepping away from
-                    // the modal still records the attempt.
-                    if (pendingDailyHighScore) {
-                      handleSaveDailyHighScore()
-                    }
-                    // Retry whichever day this run was for. Today's
-                    // run replays today; an archive-day run replays
-                    // that same archived day so the player can keep
-                    // chipping at their best.
-                    const next = createDailyGameState(game.dailyDateKey)
-                    setGame(next)
-                    setSavedDailyGame(next)
-                    setDailyHighScoreSaved(false)
-                    setSelectedPieceId(null)
-                    setHover(null)
-                  }}
-                >
-                  {game.dailyDateKey &&
-                  game.dailyDateKey !== getTodayKey()
-                    ? 'Retry this puzzle'
-                    : "Retry today's puzzle"}
-                </button>
+                {/* Two-button exit row: Done is the calm "I'm
+                    satisfied, leave me alone" path; Retry is the
+                    competitive "let me chase a better score" path.
+                    Both autosave any pending result on the way out
+                    so the leaderboard reflects every completed
+                    attempt regardless of which exit the player
+                    chooses. */}
+                <div className="hexaclear-gameover-cta-row">
+                  <button
+                    type="button"
+                    className="hexaclear-gameover-cta hexaclear-gameover-cta-secondary"
+                    onClick={() => {
+                      playUiClick()
+                      if (pendingDailyHighScore) {
+                        handleSaveDailyHighScore()
+                      }
+                      // Dismiss the celebration but keep the
+                      // underlying gameover state intact, so the
+                      // player lands on the cleared board with the
+                      // mode pills, menu button, and history button
+                      // still available for the next move they want
+                      // to make.
+                      setDailyGameOverDismissed(true)
+                    }}
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    className="hexaclear-gameover-cta"
+                    onClick={() => {
+                      playUiClick()
+                      // Autosave on dismiss — see the endless-mode
+                      // counterpart above. The Save button stays as
+                      // a visible confirm action, but stepping away
+                      // from the modal still records the attempt.
+                      if (pendingDailyHighScore) {
+                        handleSaveDailyHighScore()
+                      }
+                      // Retry whichever day this run was for.
+                      // Today's run replays today; an archive-day
+                      // run replays that same archived day so the
+                      // player can keep chipping at their best.
+                      const next = createDailyGameState(game.dailyDateKey)
+                      setGame(next)
+                      setSavedDailyGame(next)
+                      setDailyHighScoreSaved(false)
+                      setSelectedPieceId(null)
+                      setHover(null)
+                    }}
+                  >
+                    {game.dailyDateKey &&
+                    game.dailyDateKey !== getTodayKey()
+                      ? 'Retry this puzzle'
+                      : "Retry today's puzzle"}
+                  </button>
+                </div>
               </div>
             </div>
           )}

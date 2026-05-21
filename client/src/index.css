@@ -5011,6 +5011,41 @@ body {
   transform: scale(0.97);
 }
 
+/* Two-button exit row used in the daily gameover modal. Buttons sit
+   side by side at equal flex weight so the secondary action reads as
+   a peer to the primary one rather than a buried link, but the
+   primary keeps its gold gradient and the secondary takes a muted
+   neutral fill so the visual hierarchy still favors Retry. */
+.hexaclear-gameover-cta-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.55rem;
+  align-self: stretch;
+  margin-top: 0.4rem;
+}
+
+.hexaclear-gameover-cta-row > button.hexaclear-gameover-cta {
+  flex: 1 1 0;
+  margin-top: 0;
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-cta-secondary {
+  background: linear-gradient(
+    135deg,
+    rgba(54, 30, 18, 0.92),
+    rgba(34, 18, 10, 0.92)
+  );
+  color: #ffd9a3;
+  border-color: rgba(255, 205, 143, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-cta-secondary:hover {
+  filter: brightness(1.12);
+}
+
 /* --- Reduced motion: kill animations & transitions ------------------- */
 .cubic-viewport.reduced-motion *,
 .cubic-viewport.reduced-motion *::before,
