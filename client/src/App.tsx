@@ -8582,8 +8582,17 @@ function App() {
             const displayTotalScore = ls.totalScore
             const avgClearsPerGame =
               totalGames > 0 ? ls.patternsCleared / totalGames : 0
+            // Score/game only averages across modes that produce a
+            // score (endless / big / co-op). Daily ranks by moves and
+            // PvP is a territory race, so including them drags the
+            // average toward zero with games that were never even
+            // eligible to contribute points. `scoredGamesPlayed` and
+            // `totalScore` are already kept in lockstep on the stats
+            // side; see `foldRunIntoLifetime`.
             const avgScorePerGame =
-              totalGames > 0 ? displayTotalScore / totalGames : 0
+              ls.scoredGamesPlayed > 0
+                ? displayTotalScore / ls.scoredGamesPlayed
+                : 0
             const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
 
             const summaryStats: StatDatum[] = [
