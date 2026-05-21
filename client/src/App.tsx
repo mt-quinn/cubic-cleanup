@@ -2136,7 +2136,14 @@ function App() {
   // audio elements without that priming colliding with gameplay sounds.
   // Skip the auto-open when arriving via a room URL — the player came
   // here to play, not to land on a menu they didn't ask for.
-  const [showMenu, setShowMenu] = useState(() => mpRoomCode === null)
+  // Cold load drops the player straight onto the board for whichever
+  // mode they last played (or onto the multiplayer room if they're
+  // following an invite link). The menu is opened explicitly via the
+  // gear button or via the in-game `Esc` shortcut — it is no longer
+  // the audio-unlock gateway (see `audio.ts` module-load gesture
+  // hooks) and the cold-start "I don't even know what mode I'm in
+  // until I dismiss this" friction is gone.
+  const [showMenu, setShowMenu] = useState(false)
   const [volume, setVolumeState] = useState<number>(() => getMasterVolume())
   const [audioMuted, setAudioMutedState] = useState<boolean>(() => getMuted())
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
@@ -2804,6 +2811,34 @@ function App() {
       pointerType: null,
     }
   }, [isMultiplayer])
+
+  // Backgrounding the tab mid-drag used to be impossible to reach
+  // because the pause menu intercepted everything on refocus. With the
+  // menu no longer auto-opening on visibilitychange, a held piece would
+  // stay "in hand" across the backgrounded window and the user's first
+  // tap on return could resolve into a drop they never intended. Drop
+  // any in-flight drag the moment the tab is hidden — the piece pops
+  // safely back into its hand slot and the user lands on a clean state
+  // when they come back.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const onHidden = () => {
+      if (document.visibilityState !== 'hidden') return
+      // No-op when nothing is held — these setters bail if their next
+      // value matches the current one, so the cost is essentially zero.
+      setSelectedPieceId(null)
+      setHover(null)
+      setGhost(null)
+      setDraggingPieceId(null)
+      dragState.current = {
+        pieceId: null,
+        pointerId: null,
+        pointerType: null,
+      }
+    }
+    document.addEventListener('visibilitychange', onHidden)
+    return () => document.removeEventListener('visibilitychange', onHidden)
+  }, [])
 
   const placePieceAtCell = (
     pieceId: string,
@@ -4517,36 +4552,18 @@ function App() {
     playGameOver()
     const tid = window.setTimeout(() => {
       setGameOverWindingDown(false)
-    }, 2880)
+    }, 2500)
     return () => window.clearTimeout(tid)
   }, [game.gameOver, game.dailyCompleted, game.mode])
 
-  // Mobile pause-on-refocus: iOS suspends the AudioContext when the page
-  // is backgrounded and won't auto-resume even when the page is visible
-  // again — until a fresh user gesture. We re-open the main menu on
-  // refocus so dismissing it counts as that gesture (the menu's Resume
-  // button already calls unlockAudioOnGesture). Touch-device gated so
-  // desktop users tab-switching aren't paused unnecessarily.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const isTouchDevice =
-      'ontouchstart' in window ||
-      (typeof navigator !== 'undefined' &&
-        typeof navigator.maxTouchPoints === 'number' &&
-        navigator.maxTouchPoints > 0)
-    if (!isTouchDevice) return
-    const handler = () => {
-      if (document.visibilityState !== 'visible') return
-      // Don't stack on top of an existing modal flow — the game-over
-      // modal owns its moment, and the player can dismiss scoring /
-      // scores modals on their own time when they come back.
-      if (showScoring || showHighScores) return
-      if (game.gameOver) return
-      setShowMenu(true)
-    }
-    document.addEventListener('visibilitychange', handler)
-    return () => document.removeEventListener('visibilitychange', handler)
-  }, [showScoring, showHighScores, game.gameOver])
+  // We used to force the pause menu open on every visibilitychange so
+  // dismissing it would serve as the user gesture that unlocks audio
+  // after iOS suspended the AudioContext. `audio.ts` now installs its
+  // own global pointerdown/touchstart/keydown gesture listeners at
+  // module load, so any first tap on the board (or anywhere else)
+  // rebuilds the AudioContext invisibly. The player no longer has to
+  // wade through a modal to get audio back — they can just keep
+  // playing — so this refocus-pause is gone.
 
   useEffect(() => {
     if (recentlyPlacedCells.length === 0) return

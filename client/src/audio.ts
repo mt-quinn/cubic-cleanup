@@ -280,7 +280,6 @@ const buildAudioContext = (): AudioContext | null => {
   })
 
   decodeAllCachedFor(ctx, mySession)
-  installVisibilityHooks()
   return ctx
 }
 
@@ -344,6 +343,15 @@ const installVisibilityHooks = () => {
   window.addEventListener('mousedown', onGesture, { passive: true })
   window.addEventListener('keydown', onGesture, { passive: true })
 }
+
+// Install the global gesture / visibility listeners at module load.
+// They're SSR-safe (the function bails when `window` is undefined) and
+// idempotent. Doing it here means the very first user tap anywhere on
+// the page — including a tap on the board to pick up a piece — will
+// bootstrap the AudioContext via the global pointerdown handler. The
+// old "Resume button in the pause menu is the audio gateway" pattern
+// is no longer required; the menu can stay closed on cold load.
+installVisibilityHooks()
 
 // ---- Public unlock path -----------------------------------------------
 
