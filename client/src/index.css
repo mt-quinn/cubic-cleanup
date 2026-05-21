@@ -2867,6 +2867,10 @@ body {
   transition: background-color 100ms ease, border-color 100ms ease,
     transform 80ms ease;
   padding: 0.1rem;
+  /* Relative positioning context for the corner "cleared" check badge
+     used by .is-cleared::before below. Empty/active cells don't paint
+     the pseudo so this is layout-cheap. */
+  position: relative;
 }
 .hexaclear-history-cell:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.12);
@@ -2895,12 +2899,50 @@ body {
   color: #2a1101;
   border-color: rgba(255, 220, 140, 0.95);
 }
+/* Cleared days are the biggest "this is mine" signal in the
+   calendar, so we deliberately push the green well past the prior
+   wash. The fill is a vertical gradient so the cell reads as a
+   solid object rather than a tinted hole, and a faint inset
+   highlight + outer shadow lift it visibly above the empty grid. */
 .hexaclear-history-cell.is-cleared {
-  background: rgba(122, 200, 122, 0.18);
-  border-color: rgba(122, 200, 122, 0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(140, 220, 140, 0.36) 0%,
+    rgba(74, 158, 74, 0.5) 100%
+  );
+  border-color: rgba(160, 230, 160, 0.78);
+  box-shadow:
+    inset 0 0 0 1px rgba(190, 245, 190, 0.22),
+    0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.hexaclear-history-cell.is-cleared .hexaclear-history-day {
+  color: #f4ffea;
+}
+/* Top-right check badge — absolutely positioned over the flex
+   column so it sits in the dead space above the day number without
+   crowding the moves count below. Pointer-events disabled so it
+   never steals the click target. */
+.hexaclear-history-cell.is-cleared::before {
+  content: '✓';
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 0.62rem;
+  line-height: 1;
+  font-weight: 800;
+  color: rgba(200, 250, 200, 0.95);
+  text-shadow: 0 1px 0 rgba(0, 60, 0, 0.45);
+  pointer-events: none;
 }
 .hexaclear-history-cell.is-cleared.is-active {
   background: linear-gradient(180deg, #ffd17a 0%, #ff8a2c 100%);
+}
+/* On the currently-loaded day, the orange-gradient is already
+   shouting "this one" and the moves readout already tells the
+   user they've cleared it. A green check on orange would clash
+   and read as decoration, so we hide it. */
+.hexaclear-history-cell.is-cleared.is-active::before {
+  display: none;
 }
 .hexaclear-history-day {
   font-weight: 700;

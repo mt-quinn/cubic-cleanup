@@ -2770,12 +2770,44 @@
   outline: 1px dotted var(--w98-text) !important;
   outline-offset: -3px !important;
 }
+/* Pushed the fill from the wash-green #c0d8c0 to a punchier
+   #8fc88f so cleared days clearly read as a different surface
+   from the default Win98 button-face gray. We also stamp a bold
+   dark-green check in the top-right corner — a familiar Win98
+   confirmation glyph — and recolor the day number to dark green
+   so the cell reads "completed" at a glance even in a small
+   modal. */
 [data-theme="win98"] .hexaclear-history-cell.is-cleared {
-  background: #c0d8c0 !important;
+  background: #8fc88f !important;
   border-color: var(--w98-shadow) !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-cleared .hexaclear-history-day {
+  color: #003800 !important;
+  font-weight: 800 !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-cleared::before {
+  content: '✓';
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #003800;
+  line-height: 1;
+  font-family: inherit;
+  pointer-events: none;
 }
 [data-theme="win98"] .hexaclear-history-cell.is-active {
   background: var(--w98-blue, #000080) !important;
+  color: #fff !important;
+}
+/* Active+cleared paints navy over the green, so the dark-green
+   check would vanish — flip it to a light tone that reads on
+   navy without competing with the white day number. */
+[data-theme="win98"] .hexaclear-history-cell.is-active.is-cleared::before {
+  color: #c8ffc8 !important;
+}
+[data-theme="win98"] .hexaclear-history-cell.is-active.is-cleared .hexaclear-history-day {
   color: #fff !important;
 }
 [data-theme="win98"] .hexaclear-history-cell.is-active .hexaclear-history-best {
