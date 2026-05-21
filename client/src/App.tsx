@@ -7565,8 +7565,9 @@ function App() {
                 {!game.dailyCompleted && dailyCubesRemaining > 0 && (
                   <div className="hexaclear-gameover-subhead">
                     {dailyCubesRemaining}{' '}
-                    {dailyCubesRemaining === 1 ? 'cube' : 'cubes'} still
-                    standing — goal is to clear every numbered cube.
+                    {dailyCubesRemaining === 1 ? 'cube' : 'cubes'}{' '}
+                    remained! Clear all numbered cubes to solve the
+                    Daily puzzle.
                   </div>
                 )}
 
