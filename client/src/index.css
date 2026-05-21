@@ -2901,19 +2901,18 @@ body {
 }
 /* Cleared days are the biggest "this is mine" signal in the
    calendar, so we deliberately push the green well past the prior
-   wash. The fill is a vertical gradient so the cell reads as a
-   solid object rather than a tinted hole, and a faint inset
-   highlight + outer shadow lift it visibly above the empty grid. */
+   wash. The earlier semitransparent gradient (alpha 0.36–0.5)
+   ended up light green over the dark modal, which collided with
+   the cream day number — light-on-light. The fill is now a fully
+   opaque deep forest gradient so the cream day number and light
+   check glyph pop cleanly. A faint inset highlight + outer shadow
+   lift it visibly above the empty grid. */
 .hexaclear-history-cell.is-cleared {
-  background: linear-gradient(
-    180deg,
-    rgba(140, 220, 140, 0.36) 0%,
-    rgba(74, 158, 74, 0.5) 100%
-  );
+  background: linear-gradient(180deg, #2f7a3a 0%, #1d5224 100%);
   border-color: rgba(160, 230, 160, 0.78);
   box-shadow:
     inset 0 0 0 1px rgba(190, 245, 190, 0.22),
-    0 1px 4px rgba(0, 0, 0, 0.25);
+    0 1px 4px rgba(0, 0, 0, 0.3);
 }
 .hexaclear-history-cell.is-cleared .hexaclear-history-day {
   color: #f4ffea;
