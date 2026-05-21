@@ -2598,10 +2598,10 @@
     1px -1px 0 var(--w98-highlight),
     -1px 1px 0 var(--w98-highlight) !important;
 }
-[data-theme="win98"] .hexaclear-multi-clear-tier-2 { font-size: 32px !important; }
-[data-theme="win98"] .hexaclear-multi-clear-tier-3 { font-size: 40px !important; }
+[data-theme="win98"] .hexaclear-multi-clear-tier-2 { font-size: 48px !important; }
+[data-theme="win98"] .hexaclear-multi-clear-tier-3 { font-size: 60px !important; }
 [data-theme="win98"] .hexaclear-multi-clear-tier-4 {
-  font-size: 48px !important;
+  font-size: 72px !important;
   color: #c80000 !important;
 }
 
