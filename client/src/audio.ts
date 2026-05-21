@@ -12,6 +12,39 @@
 // and every play creates a new AudioBufferSourceNode. Sources are
 // throwaway, plays freely overlap, there's no Promise to reject, and
 // scheduling latency is essentially the audio device's frame size.
+//
+// Mobile background-resume robustness:
+// When iOS Safari (and to a lesser extent Chrome Android) backgrounds
+// the tab and another app/tab grabs the audio session — phone call,
+// YouTube tab, Spotify, control-center playback, etc. — the existing
+// AudioContext often gets stuck in one of two bad states once the user
+// comes back:
+//   1. ctx.state === 'interrupted' (iOS-only) and resume() doesn't move
+//      it back to 'running' inside the next user gesture.
+//   2. ctx.state === 'running' but audio actually routes to nowhere —
+//      the audio session was lost while we were hidden and the runtime
+//      never reclaimed it for our context. This is the worst case:
+//      everything looks healthy but nothing plays. Calling resume()
+//      again is a no-op.
+//
+// Empirically the ONLY reliable cure is the same thing the user does by
+// hand: throw the context away and build a fresh one. A new context
+// asks the platform for a new audio session from inside a user gesture
+// and routes correctly even when other media is still playing in
+// another app, just like the page does on a cold load.
+//
+// We therefore:
+//   * Cache the raw ArrayBuffers of every clip so a rebuild doesn't
+//     re-fetch over the network (decoded AudioBuffers are tied to the
+//     context that decoded them and can't be reused).
+//   * Mark the context as "may be stale" on every hidden→visible
+//     transition, pageshow, and focus event.
+//   * On the very next call to unlockAudioOnGesture (which always runs
+//     inside a real user gesture), close the suspect context and build
+//     a new one before doing anything else.
+//
+// The result mirrors the user's "kill the tab and reopen" workaround
+// without making them do it manually.
 
 // Clear SFX naming convention:
 //   - "clear<S>" (S = 1..7) is the single-clear sound for streak S.
@@ -103,17 +136,60 @@ let muted = readInitialMuted()
 export const getMasterVolume = (): number => masterVolume
 export const getMuted = (): boolean => muted
 
+const computeMasterGainValue = (): number => (muted ? 0 : masterVolume)
+
+// ---- Raw audio cache --------------------------------------------------
+//
+// Lives for the page's lifetime, independent of any single AudioContext.
+// Each entry is the raw bytes of the .wav file. We slice() into a fresh
+// ArrayBuffer every time we decode, because decodeAudioData is allowed
+// to detach the input buffer on some platforms (notably older Safari).
+
+const rawAudioData: Partial<Record<SoundKey, ArrayBuffer>> = {}
+let rawFetchStarted = false
+
+const startFetchingRawAudio = () => {
+  if (rawFetchStarted) return
+  if (typeof window === 'undefined') return
+  rawFetchStarted = true
+  for (const key of Object.keys(SOURCES) as SoundKey[]) {
+    fetch(SOURCES[key])
+      .then((res) => res.arrayBuffer())
+      .then((arr) => {
+        rawAudioData[key] = arr
+        // If a context already exists and is waiting on this clip,
+        // decode it now so the next play has a buffer ready.
+        const ctx = audioContext
+        if (ctx && !buffers[key]) {
+          decodeIntoSession(ctx, sessionId, key, arr.slice(0))
+        }
+      })
+      .catch(() => {
+        // Best-effort: a failed clip silently no-ops on play.
+      })
+  }
+}
+
+// ---- Audio context lifecycle ------------------------------------------
+//
+// Every rebuild bumps `sessionId`. Async decodes from a previous session
+// check the id when they resolve and discard themselves if they're
+// landing in the wrong context.
+
 let audioContext: AudioContext | null = null
 let masterGainNode: GainNode | null = null
-const buffers: Partial<Record<SoundKey, AudioBuffer>> = {}
-let buffersStartedLoading = false
+let buffers: Partial<Record<SoundKey, AudioBuffer>> = {}
+let sessionId = 0
 
-const computeMasterGainValue = (): number => (muted ? 0 : masterVolume)
+// Set on every visibility transition that could have lost the audio
+// session. Consumed by the next user-gesture unlock, which rebuilds the
+// context. Starts false so the very first gesture on a fresh page boots
+// a context normally instead of "rebuilding" a non-existent one.
+let contextMayBeStale = false
 
 // True when the AudioContext is in any of the not-actually-playing
 // states. iOS Safari emits a non-standard 'interrupted' state when
-// another app/tab grabs the audio session (phone call, background
-// music app, control-center playback, etc.) — it's not in the W3C
+// another app/tab grabs the audio session — it's not in the W3C
 // AudioContext spec but the runtime uses it, so we string-match
 // rather than rely on the TS lib types.
 const isContextStalled = (ctx: AudioContext): boolean => {
@@ -121,134 +197,212 @@ const isContextStalled = (ctx: AudioContext): boolean => {
   return state === 'suspended' || state === 'interrupted' || state === 'closed'
 }
 
-// Best-effort resume. Safe to call repeatedly: a context that's
-// already running is a no-op, a context that's suspended/interrupted
-// gets a resume() kicked off, and a closed one is a hard no-op (we
-// can't recover those without rebuilding the context).
-const resumeAudioIfNeeded = (): void => {
+const decodeIntoSession = (
+  ctx: AudioContext,
+  mySession: number,
+  key: SoundKey,
+  arr: ArrayBuffer,
+): void => {
+  // decodeAudioData has both Promise-returning and callback-based forms;
+  // wrap the callback form so it works uniformly on older Safari.
+  new Promise<AudioBuffer>((resolve, reject) =>
+    ctx.decodeAudioData(arr, resolve, reject),
+  )
+    .then((buf) => {
+      // Discard the decode if a newer session has replaced us. Without
+      // this guard a slow decode from an old context could overwrite a
+      // fresh decode in the new context and crash on play (AudioBuffer
+      // cross-context).
+      if (sessionId !== mySession) return
+      if (audioContext !== ctx) return
+      buffers[key] = buf
+    })
+    .catch(() => {
+      // Bad clip / corrupted decode — let it stay missing.
+    })
+}
+
+const decodeAllCachedFor = (ctx: AudioContext, mySession: number) => {
+  for (const key of Object.keys(SOURCES) as SoundKey[]) {
+    const raw = rawAudioData[key]
+    if (!raw) continue
+    decodeIntoSession(ctx, mySession, key, raw.slice(0))
+  }
+}
+
+const closeAudioContext = () => {
   const ctx = audioContext
+  audioContext = null
+  masterGainNode = null
+  buffers = {}
   if (!ctx) return
-  const state = ctx.state as string
-  if (state === 'closed') return
-  if (state === 'running') return
-  ctx.resume().catch(() => {
-    // iOS Safari sometimes rejects resume() outside a user gesture.
-    // We also wire up a pointerdown listener below as a fallback so
-    // the very next tap re-tries from inside a gesture, which is the
-    // path the platform actually allows.
-  })
+  // close() returns a Promise; we don't await because we're already
+  // moving on and the runtime will tear the resources down regardless.
+  try {
+    void ctx.close()
+  } catch {
+    // Closing a context that's already closed throws on some browsers.
+  }
 }
 
-let visibilityHooksInstalled = false
-
-const installVisibilityHooks = () => {
-  if (visibilityHooksInstalled) return
-  if (typeof window === 'undefined' || typeof document === 'undefined') return
-  visibilityHooksInstalled = true
-
-  // Re-prod the context every time the tab becomes visible. Covers
-  // tab-switch, multitasking app-switch, lock-screen → unlock, etc.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') resumeAudioIfNeeded()
-  })
-
-  // window.focus picks up the desktop-browser case where
-  // visibilitychange doesn't fire (clicking another window).
-  window.addEventListener('focus', resumeAudioIfNeeded)
-
-  // Restored from bfcache on mobile back-navigation. Same recovery
-  // path needed.
-  window.addEventListener('pageshow', resumeAudioIfNeeded)
-
-  // The platform-correct path on iOS: any user gesture is allowed to
-  // resume an interrupted context, so we hook the global pointer/
-  // touch down events. This is the fallback for the "returned to the
-  // game but no SFX yet" window between visibilitychange (which iOS
-  // sometimes ignores) and the player's first interaction.
-  const onGesture = () => resumeAudioIfNeeded()
-  window.addEventListener('pointerdown', onGesture, { passive: true })
-  window.addEventListener('touchstart', onGesture, { passive: true })
-  window.addEventListener('mousedown', onGesture, { passive: true })
-  window.addEventListener('keydown', onGesture, { passive: true })
-}
-
-const ensureContext = (): AudioContext | null => {
+const buildAudioContext = (): AudioContext | null => {
   if (typeof window === 'undefined') return null
-  if (audioContext) return audioContext
   const Ctor =
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
       .AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
       .webkitAudioContext
   if (!Ctor) return null
+  let ctx: AudioContext
   try {
-    const ctx = new Ctor()
-    audioContext = ctx
-    masterGainNode = ctx.createGain()
-    masterGainNode.gain.value = computeMasterGainValue()
-    masterGainNode.connect(ctx.destination)
-    // If the context flaps mid-session (iOS interruption / user
-    // pulled the audio session out from under us / etc.), try to
-    // recover automatically. This is in addition to the visibility
-    // hooks below — sometimes the runtime emits statechange without
-    // a corresponding visibility event.
-    ctx.addEventListener('statechange', () => {
-      if (isContextStalled(ctx) && ctx.state !== 'closed') {
-        // Ride the next tick — calling resume() synchronously inside
-        // the statechange handler is sometimes ignored by iOS.
-        Promise.resolve().then(resumeAudioIfNeeded)
-      }
-    })
-    installVisibilityHooks()
-    return ctx
+    ctx = new Ctor()
   } catch {
     return null
   }
+  const mySession = ++sessionId
+  audioContext = ctx
+  masterGainNode = ctx.createGain()
+  masterGainNode.gain.value = computeMasterGainValue()
+  masterGainNode.connect(ctx.destination)
+  buffers = {}
+
+  // If the runtime emits a stalled statechange mid-session (iOS
+  // interruption that fires without a corresponding visibility event),
+  // mark the context as stale so the next gesture rebuilds. We don't
+  // try to call resume() inline because by the time the user notices
+  // and taps, we want to rebuild — not paper over a session that the
+  // OS has already torn down.
+  ctx.addEventListener('statechange', () => {
+    if (sessionId !== mySession) return
+    if (isContextStalled(ctx)) {
+      contextMayBeStale = true
+    }
+  })
+
+  decodeAllCachedFor(ctx, mySession)
+  installVisibilityHooks()
+  return ctx
 }
 
-// Kick off fetch + decodeAudioData for every sample. Buffers populate as
-// they finish; until a buffer is ready, plays for that key no-op silently.
-// In practice the WAV files are tiny and decoding is comfortably done
-// before the player dismisses the start-up menu.
-const loadAllBuffers = () => {
-  if (buffersStartedLoading) return
-  const ctx = ensureContext()
-  if (!ctx) return
-  buffersStartedLoading = true
-  for (const key of Object.keys(SOURCES) as SoundKey[]) {
-    fetch(SOURCES[key])
-      .then((res) => res.arrayBuffer())
-      .then(
-        (arr) =>
-          // decodeAudioData has both a Promise-returning and callback-
-          // based form; modern browsers support the Promise form.
-          new Promise<AudioBuffer>((resolve, reject) =>
-            ctx.decodeAudioData(arr, resolve, reject),
-          ),
-      )
-      .then((buf) => {
-        buffers[key] = buf
-      })
-      .catch(() => {
-        // Best-effort: if this clip fails to load, plays for that key
-        // will silently no-op. Other clips are unaffected.
-      })
-  }
+// ---- Visibility / focus hooks -----------------------------------------
+//
+// These do NOT touch the AudioContext directly — touching it outside a
+// user gesture is what got us here in the first place. They just flip
+// `contextMayBeStale` so the next gesture rebuilds.
+
+let visibilityHooksInstalled = false
+
+const markStale = () => {
+  contextMayBeStale = true
 }
+
+const installVisibilityHooks = () => {
+  if (visibilityHooksInstalled) return
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  visibilityHooksInstalled = true
+
+  // Hidden→visible: the most common path. Tab-switch, app-switch on
+  // iOS, lock-screen unlock, etc. We mark stale on BOTH transitions:
+  // hidden (so we don't bother trying to play while backgrounded) and
+  // visible (so the return-trip path is covered even if 'hidden' was
+  // never observed, e.g. when the page boots straight into visible
+  // after a bfcache restore).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      markStale()
+    } else if (document.visibilityState === 'visible') {
+      markStale()
+    }
+  })
+
+  // bfcache restore on mobile back-navigation: the page wakes up in
+  // visible state without a visibilitychange event firing. pageshow
+  // with persisted=true is the canonical signal.
+  window.addEventListener('pageshow', (e: PageTransitionEvent) => {
+    if (e.persisted) markStale()
+  })
+
+  // Desktop window-focus path (clicking another browser window) —
+  // visibilitychange doesn't fire for that.
+  window.addEventListener('focus', markStale)
+
+  // Safety net: any global user gesture runs the unlock path. This
+  // catches gestures that don't go through our explicit
+  // unlockAudioOnGesture() callsites (e.g. tapping a non-button
+  // region). Listeners are passive — they don't preventDefault — and
+  // run with `once: false` because the unlock is cheap when nothing
+  // needs to change.
+  const onGesture = () => {
+    try {
+      unlockAudioOnGesture()
+    } catch {
+      // Swallow — the explicit callsites will retry on the next tap.
+    }
+  }
+  window.addEventListener('pointerdown', onGesture, { passive: true })
+  window.addEventListener('touchstart', onGesture, { passive: true })
+  window.addEventListener('mousedown', onGesture, { passive: true })
+  window.addEventListener('keydown', onGesture, { passive: true })
+}
+
+// ---- Public unlock path -----------------------------------------------
 
 // Must be called from inside a user gesture so the AudioContext can move
 // out of the "suspended" / "interrupted" state. Subsequent plays from
 // non-gesture code (pointermove, timer callbacks, etc.) are then
 // permitted. Idempotent — fine to call on every gesture.
+//
+// This is also the rebuild path: if the page has been backgrounded
+// since the context was last known good, we throw it away and create a
+// fresh one inside this gesture. The new context claims a new audio
+// session from the platform, which is the only reliable way to
+// recover from an iOS audio-session steal.
 export const unlockAudioOnGesture = () => {
-  const ctx = ensureContext()
-  if (!ctx) return
-  if (isContextStalled(ctx) && ctx.state !== 'closed') {
-    ctx.resume().catch(() => {
-      // Ignore — user can try again on next gesture.
-    })
+  if (typeof window === 'undefined') return
+
+  // If we're returning from a hidden-page round-trip, the existing
+  // context — if any — is suspect. Close it now, inside the gesture,
+  // and let the rebuild below claim a fresh audio session.
+  if (contextMayBeStale && audioContext) {
+    closeAudioContext()
   }
-  loadAllBuffers()
+  // Always clear the flag once we've reacted to it. If the rebuild
+  // below fails for any reason, the next gesture will start with a
+  // clean (false) state and try again from scratch.
+  contextMayBeStale = false
+
+  startFetchingRawAudio()
+
+  const ctx = audioContext ?? buildAudioContext()
+  if (!ctx) return
+
+  // Bring a freshly-created or recovering context into 'running' from
+  // inside this same gesture. We don't await the promise — the next
+  // play() call checks ctx.state directly.
+  if (isContextStalled(ctx) && ctx.state !== 'closed') {
+    const mySession = sessionId
+    ctx.resume()
+      .then(() => {
+        // Belt-and-suspenders against the iOS "resume promise
+        // resolves but state didn't actually move" case. If we
+        // surface back to 'running', great; if not, mark stale so
+        // the next gesture rebuilds rather than silently failing.
+        if (sessionId !== mySession) return
+        if (audioContext !== ctx) return
+        if (isContextStalled(ctx)) {
+          contextMayBeStale = true
+        }
+      })
+      .catch(() => {
+        // resume() can reject if Safari decides the gesture window
+        // closed (e.g. nested setTimeout from a click handler) or
+        // if the audio session is hard-locked by another app.
+        // Either way, the next gesture should rebuild from scratch.
+        if (sessionId === mySession && audioContext === ctx) {
+          contextMayBeStale = true
+        }
+      })
+  }
 }
 
 export const setMasterVolume = (next: number): void => {
@@ -290,21 +444,28 @@ export const setMuted = (next: boolean): void => {
   }
 }
 
-const playOneShot = (key: SoundKey) => {
-  if (muted) return
+// ---- Playback helpers --------------------------------------------------
+
+// Common entry guard for every play call. Returns the running context
+// if it's healthy, or null if we should silently no-op for this play.
+//
+// When the context is stalled we don't kick off recovery from here —
+// the visibility hooks already marked staleness if anything changed,
+// and the next user gesture will rebuild. Trying to resume() from a
+// non-gesture path (which is what most plays are) just produces
+// console noise on iOS without doing anything useful.
+const readyContext = (): AudioContext | null => {
+  if (muted) return null
   const ctx = audioContext
-  if (!ctx || !masterGainNode) return
-  // If the context is stalled (suspended on first load, interrupted
-  // by another iOS audio session, etc.) kick off a resume and bail
-  // for THIS frame. The next play after resume completes will land —
-  // we deliberately don't queue this sound because by the time the
-  // resume promise resolves the action it represented is stale.
-  if (ctx.state !== 'running') {
-    if (isContextStalled(ctx) && ctx.state !== 'closed') {
-      resumeAudioIfNeeded()
-    }
-    return
-  }
+  if (!ctx) return null
+  if (!masterGainNode) return null
+  if (ctx.state !== 'running') return null
+  return ctx
+}
+
+const playOneShot = (key: SoundKey) => {
+  const ctx = readyContext()
+  if (!ctx) return
   const buf = buffers[key]
   if (!buf) return
   try {
@@ -312,7 +473,7 @@ const playOneShot = (key: SoundKey) => {
     src.buffer = buf
     const clipGain = ctx.createGain()
     clipGain.gain.value = VOLUMES[key]
-    src.connect(clipGain).connect(masterGainNode)
+    src.connect(clipGain).connect(masterGainNode!)
     src.start(0)
   } catch {
     // Ignore — playback is best-effort.
@@ -329,15 +490,8 @@ export const playGameOver = () => playOneShot('gameOver')
 // clear's attack. We use the AudioContext clock instead of setTimeout
 // so the offset is sample-accurate and doesn't drift under load.
 export const playBreakAfterClear = (delayMs = 80) => {
-  if (muted) return
-  const ctx = audioContext
-  if (!ctx || !masterGainNode) return
-  if (ctx.state !== 'running') {
-    if (isContextStalled(ctx) && ctx.state !== 'closed') {
-      resumeAudioIfNeeded()
-    }
-    return
-  }
+  const ctx = readyContext()
+  if (!ctx) return
   const buf = buffers.break
   if (!buf) return
   try {
@@ -345,7 +499,7 @@ export const playBreakAfterClear = (delayMs = 80) => {
     src.buffer = buf
     const clipGain = ctx.createGain()
     clipGain.gain.value = VOLUMES.break
-    src.connect(clipGain).connect(masterGainNode)
+    src.connect(clipGain).connect(masterGainNode!)
     src.start(ctx.currentTime + delayMs / 1000)
   } catch {
     // Ignore — playback is best-effort.
@@ -358,15 +512,8 @@ export const playBreakAfterClear = (delayMs = 80) => {
 // setTimeout so the two clips sit tightly back-to-back without
 // audible overlap or gap.
 export const playUiClick = () => {
-  if (muted) return
-  const ctx = audioContext
-  if (!ctx || !masterGainNode) return
-  if (ctx.state !== 'running') {
-    if (isContextStalled(ctx) && ctx.state !== 'closed') {
-      resumeAudioIfNeeded()
-    }
-    return
-  }
+  const ctx = readyContext()
+  if (!ctx) return
   const downBuf = buffers.clickDown
   const upBuf = buffers.clickUp
   if (!downBuf || !upBuf) return
@@ -376,14 +523,14 @@ export const playUiClick = () => {
     downSrc.buffer = downBuf
     const downGain = ctx.createGain()
     downGain.gain.value = VOLUMES.clickDown
-    downSrc.connect(downGain).connect(masterGainNode)
+    downSrc.connect(downGain).connect(masterGainNode!)
     downSrc.start(now)
 
     const upSrc = ctx.createBufferSource()
     upSrc.buffer = upBuf
     const upGain = ctx.createGain()
     upGain.gain.value = VOLUMES.clickUp
-    upSrc.connect(upGain).connect(masterGainNode)
+    upSrc.connect(upGain).connect(masterGainNode!)
     upSrc.start(now + downBuf.duration)
   } catch {
     // Ignore — playback is best-effort.
