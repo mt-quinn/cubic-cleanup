@@ -7755,18 +7755,31 @@ function App() {
                   )
                 })()}
 
-                {undoStack.length > 0 && !dailyHighScoreSaved && (
-                  <button
-                    type="button"
-                    className="hexaclear-menu-link"
-                    onClick={() => {
-                      playUiClick()
-                      handleUndo()
-                    }}
-                  >
-                    Undo last move
-                  </button>
-                )}
+                {/* "Undo last move" is the rescue hatch for a daily
+                    run that ran out of moves a few cubes shy of the
+                    target — undoing lets the player try a different
+                    placement instead of accepting the loss. Once
+                    they've cleared the puzzle, though, the move
+                    count is the score, so undoing back into a
+                    pre-clear state would be a way to keep retrying
+                    placements until they luck into a better number.
+                    Hide the button when the daily is a confirmed
+                    clear so the score they just earned is the
+                    score they keep. */}
+                {undoStack.length > 0 &&
+                  !dailyHighScoreSaved &&
+                  !game.dailyCompleted && (
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link"
+                      onClick={() => {
+                        playUiClick()
+                        handleUndo()
+                      }}
+                    >
+                      Undo last move
+                    </button>
+                  )}
 
                 <button
                   type="button"
