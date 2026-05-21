@@ -2315,17 +2315,28 @@ function App() {
   // Live global queries. We subscribe whenever a leaderboard surface
   // is visible (the High Scores card OR the gameover modal) AND the
   // global toggle is on — passing 'skip' tears down the subscription
-  // otherwise. Daily is hard-pinned to today globally regardless of
-  // which date the local stepper happens to be sitting on.
+  // otherwise.
+  //
+  // Daily date selection: the standalone High Scores card is
+  // hard-pinned to today (per product call — the daily list there
+  // is "today's competition"). The gameover modal, on the other
+  // hand, follows whichever puzzle the player actually finished:
+  // if they replayed an archive day, the leaderboard shown is for
+  // that historical day so the rankings line up with the moves
+  // count they just earned.
   const wantsGlobalSubscription =
     showGlobalLeaderboard && (showHighScores || game.gameOver)
+  const globalDailyDateKey =
+    game.gameOver && game.mode === 'daily'
+      ? game.dailyDateKey ?? getTodayKey()
+      : getTodayKey()
   const globalEndlessScores = useQuery(
     api.leaderboard.getTopEndlessScores,
     wantsGlobalSubscription ? {} : 'skip',
   )
   const globalDailyScores = useQuery(
     api.leaderboard.getTopDailyScoresForDate,
-    wantsGlobalSubscription ? { dateKey: getTodayKey() } : 'skip',
+    wantsGlobalSubscription ? { dateKey: globalDailyDateKey } : 'skip',
   )
   const globalCoopScores = useQuery(
     api.leaderboard.getTopCoopScores,
@@ -2412,17 +2423,26 @@ function App() {
     return count
   }, [game.mode, game.dailyHits])
 
+  // Local "your best" list shown in the daily gameover modal.
+  // Previously hard-coded to today's runs, which made the list go
+  // blank (or worse, show today's data) whenever the player just
+  // finished a historical puzzle from the calendar. Now follows the
+  // run's actual date: today when the active mode is today's
+  // daily, the archive date when replaying a calendar day, falling
+  // back to today otherwise so the memo has something stable to
+  // key on.
   const todayPlayerDailyRuns = useMemo(() => {
     if (typeof window === 'undefined') return []
     const name = playerName.trim()
     if (!name) return []
-    const todayKey = getTodayKey()
-    const runs = loadDailyRunsForDateKey(todayKey)
+    const targetDateKey =
+      (game.mode === 'daily' ? game.dailyDateKey : null) ?? getTodayKey()
+    const runs = loadDailyRunsForDateKey(targetDateKey)
     return runs
       .filter((r) => r.name === name && r.moves > 0)
       .sort((a, b) => a.moves - b.moves || a.date - b.date)
       .slice(0, 5)
-  }, [playerName, dailyRunsToken])
+  }, [playerName, dailyRunsToken, game.mode, game.dailyDateKey])
   const [undoStack, setUndoStack] = useState<GameState[]>([])
   const [undoAnimation, setUndoAnimation] = useState<{
     piece: ActivePiece
@@ -5246,6 +5266,29 @@ function App() {
     )
   }
 
+  // Whenever the player has a dialog/menu surface up they have a
+  // tap target available which will fire a click and unlock the
+  // AudioContext via audio.ts's global gesture listener. In those
+  // cases the "Tap to resume" overlay is redundant noise (and on
+  // small modals, the overlay's z-index used to occlude the very
+  // button the user was about to press to dismiss). Keep this list
+  // in sync with the modal renders below — game-over modal renders
+  // for all modes when `game.gameOver && !gameOverWindingDown`,
+  // except daily which additionally hides when
+  // `dailyGameOverDismissed` is true.
+  const gameOverModalOpen =
+    game.gameOver &&
+    !gameOverWindingDown &&
+    !(game.mode === 'daily' && dailyGameOverDismissed)
+  const anyDialogOpen =
+    showMenu ||
+    showHighScores ||
+    showScoring ||
+    showStats ||
+    showAccount ||
+    showDailyHistory ||
+    gameOverModalOpen
+
   return (
     <div
       className={[
@@ -7660,9 +7703,28 @@ function App() {
                     <div className="hexaclear-gameover-section">
                       <div className="hexaclear-gameover-section-header">
                         <div className="hexaclear-gameover-section-label">
-                          {usingGlobal
-                            ? 'Today · global · fewest moves'
-                            : 'Your best today'}
+                          {(() => {
+                            // When the player just finished an
+                            // archive-day daily, both local and
+                            // global lists below reflect THAT day's
+                            // attempts. Surface the date so the
+                            // moves-vs-leaderboard comparison reads
+                            // cleanly without the player wondering
+                            // why "today's" list looks off. Today's
+                            // run keeps the original "today" copy.
+                            const runDateKey =
+                              game.dailyDateKey ?? getTodayKey()
+                            const isHistorical =
+                              runDateKey !== getTodayKey()
+                            if (usingGlobal) {
+                              return isHistorical
+                                ? `${formatFriendlyDateKey(runDateKey)} · global · fewest moves`
+                                : 'Today · global · fewest moves'
+                            }
+                            return isHistorical
+                              ? `Your best on ${formatFriendlyDateKey(runDateKey)}`
+                              : 'Your best today'
+                          })()}
                         </div>
                         <label className="hexaclear-scores-global-toggle hexaclear-gameover-toggle">
                           <input
@@ -7920,11 +7982,17 @@ function App() {
               screen; tapping anywhere on the overlay fires a click
               event, which IS a valid activation event, and the
               `subscribeAudioNeedsUnlock` signal flips the overlay
-              away as soon as the context reaches `running`. The
-              overlay sits above the menu (z-index 60 vs the menu's
-              50) because if audio is broken the unlock prompt has to
-              win regardless of what else is on screen. */}
-          {audioNeedsUnlock && isTouchDevice && (
+              away as soon as the context reaches `running`.
+
+              Suppressed whenever another dialog is on screen — pause
+              menu, high scores, stats, account, history calendar,
+              how-to-play, or any gameover modal. In those cases the
+              player has tappable UI in front of them already (at
+              minimum a Close / Back / Done button), and that tap
+              counts as a valid activation gesture which `audio.ts`
+              picks up via its global pointerup/touchend listener.
+              Stacking our prompt on top would be redundant noise. */}
+          {audioNeedsUnlock && isTouchDevice && !anyDialogOpen && (
             <div
               className="hexaclear-audio-unlock-overlay"
               role="button"
