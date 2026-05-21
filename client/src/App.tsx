@@ -7892,9 +7892,6 @@ function App() {
                 <div className="hexaclear-audio-unlock-title">
                   Tap to resume
                 </div>
-                <div className="hexaclear-audio-unlock-sub">
-                  Audio needs a tap to start on mobile
-                </div>
               </div>
             </div>
           )}

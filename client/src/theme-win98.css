@@ -1760,13 +1760,9 @@
     0 0 0 0 transparent !important;
   border-radius: 0 !important;
   padding: 0.85rem 1.1rem !important;
-  /* No animation: Win98 dialogs don't pulse. The chrome alone is the
-     prompt. */
-  animation: none !important;
 }
 
-[data-theme="win98"] .hexaclear-audio-unlock-title,
-[data-theme="win98"] .hexaclear-audio-unlock-sub {
+[data-theme="win98"] .hexaclear-audio-unlock-title {
   color: var(--w98-text) !important;
   opacity: 1 !important;
   text-shadow: none !important;
