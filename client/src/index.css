@@ -3220,7 +3220,14 @@ body {
    stays compact without losing legibility. */
 .hexaclear-hold {
   flex: 0 0 auto;
-  width: clamp(48px, 12vw, 72px);
+  /* Wider floor (72px) than a naive 12vw scale because on narrow
+     portrait phones (~360px viewport) a 12vw pocket collapses to
+     ~43px, which leaves the held piece preview too small to read.
+     Hand slots flex: 1 so they shrink to absorb the extra real
+     estate. Desktop max stays in the ~80px range — the held piece
+     uses fitToBounds + a per-piece scale so legibility holds across
+     this size band. */
+  width: clamp(72px, 22vw, 84px);
   align-self: stretch;
   border-radius: 0.6rem;
   border: 1px dashed rgba(255, 197, 138, 0.32);
