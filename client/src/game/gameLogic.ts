@@ -520,6 +520,21 @@ export const applyPlacement = (
     }
   }
 
+  // Determine whether the placement cleared the entire board BEFORE
+  // respawning any replacement rubies. spawnGoldenCell may flip an
+  // 'empty' cell to 'filled' (the new ruby's home), which would
+  // otherwise sneak in ahead of the board-empty check and rob the
+  // player of the board-clear bonus + animation on the move that
+  // emptied the last ruby off the board.
+  const wasBoardEmptyBefore = Object.values(current.board).every(
+    (state) => state === 'empty',
+  )
+  const isBoardEmptyAfter = Object.values(board).every(
+    (state) => state === 'empty',
+  )
+  const boardCleared = !wasBoardEmptyBefore && isBoardEmptyAfter
+  const boardClearedBonus = boardCleared ? scoring.boardClearedBonus : 0
+
   // Rebuild goldenCellIds: keep the survivors, then for each cleared
   // ruby spawn a replacement (avoiding the surviving ruby cells and the
   // rosette the cleared one had been in).
@@ -542,15 +557,6 @@ export const applyPlacement = (
   const numClears = clearedPatterns.length
   const comboMultiplier = 1 + 0.5 * (numClears - 1)
   const streakMultiplier = 1 + 0.1 * current.streak
-
-  const wasBoardEmptyBefore = Object.values(current.board).every(
-    (state) => state === 'empty',
-  )
-  const isBoardEmptyAfter = Object.values(board).every(
-    (state) => state === 'empty',
-  )
-  const boardCleared = !wasBoardEmptyBefore && isBoardEmptyAfter
-  const boardClearedBonus = boardCleared ? scoring.boardClearedBonus : 0
 
   const rubiesCleared = clearedRubyIds.length
   const rubyBonusTotal = rubiesCleared * scoring.rubyClearedBonus
