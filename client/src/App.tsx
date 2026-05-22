@@ -2267,9 +2267,37 @@ function App() {
     return window.localStorage.getItem('cubic-player-name') ?? 'Player'
   })
   const [bestScore, setBestScore] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null
     const stored = window.localStorage.getItem('hexaclear-best-score')
     return stored ? Number(stored) : null
   })
+  // Keep the HUD's endless "Best" readout in sync with the account-
+  // synced lifetime best. `bestScore` updates live in-run via the
+  // placement reducer (so the LCD ticks up as you pass your own
+  // personal record), but `lifetimeStats.bestEndlessScore` is the
+  // authoritative cross-device best — it's the field that the
+  // account sync's merge takes the per-device max of, and it's the
+  // field the syncStatsToAccount writeback updates on this device
+  // when another device's run was higher. Pulling that max back
+  // into `bestScore` (and the `hexaclear-best-score` localStorage
+  // mirror it boot-hydrates from) closes the loop so the HUD
+  // shows the cross-device record instead of the stale local one
+  // after a sync. Daily mode's "Best" already reads through
+  // `lifetimeStats.dailyBestMovesByDate` directly, so it's
+  // automatic over there.
+  useEffect(() => {
+    const synced = lifetimeStats.bestEndlessScore
+    if (synced <= 0) return
+    if (bestScore !== null && synced <= bestScore) return
+    setBestScore(synced)
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('hexaclear-best-score', String(synced))
+      } catch {
+        // Best-effort mirror; state copy still drives the HUD.
+      }
+    }
+  }, [lifetimeStats.bestEndlessScore, bestScore])
   // Each mode persists into its own localStorage slot so toggling
   // between modes (or refreshing while in a different mode) never
   // throws away the others' in-progress runs. The React state cache is
