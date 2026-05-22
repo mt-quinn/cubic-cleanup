@@ -61,6 +61,9 @@ export type LifetimeStats = {
   bestCombo: number
   bestStreak: number
   bestSinglePlacement: number
+  // Most rubies cleared in a single run. Rubies only appear in
+  // endless / big / co-op, so daily runs never advance this record.
+  bestRubiesInRun: number
   longestRunMs: number
   // Unique daily date keys (YYYY-M-D) cleared and played-but-not-cleared.
   // Stored as arrays for JSON compatibility; treated as Sets in code.
@@ -119,6 +122,7 @@ export const createEmptyLifetimeStats = (
   bestCombo: 1,
   bestStreak: 0,
   bestSinglePlacement: 0,
+  bestRubiesInRun: 0,
   longestRunMs: 0,
   dailyDaysCleared: [],
   dailyDaysPlayed: [],
@@ -382,6 +386,10 @@ export const calculateStatsSyncDelta = (
       current.bestSinglePlacement > base.bestSinglePlacement
         ? current.bestSinglePlacement
         : 0,
+    bestRubiesInRun:
+      current.bestRubiesInRun > base.bestRubiesInRun
+        ? current.bestRubiesInRun
+        : 0,
     longestRunMs: current.longestRunMs > base.longestRunMs ? current.longestRunMs : 0,
     dailyDaysCleared: newSetValues(
       current.dailyDaysCleared,
@@ -477,6 +485,7 @@ export const foldRunIntoLifetime = (
       prev.bestSinglePlacement,
       run.topPlacementPoints,
     ),
+    bestRubiesInRun: Math.max(prev.bestRubiesInRun, run.rubiesCleared),
     longestRunMs: Math.max(prev.longestRunMs, run.activePlayMs),
   }
 

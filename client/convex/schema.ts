@@ -132,6 +132,9 @@ export const lifetimeStatsValidator = v.object({
   bestCombo: v.number(),
   bestStreak: v.number(),
   bestSinglePlacement: v.number(),
+  // Optional so older accountStats rows keep validating until they're
+  // folded into a run that backfills the record to 0.
+  bestRubiesInRun: v.optional(v.number()),
   longestRunMs: v.number(),
   dailyDaysCleared: v.array(v.string()),
   dailyDaysPlayed: v.array(v.string()),

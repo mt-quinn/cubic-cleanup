@@ -51,6 +51,7 @@ const sanitizeStats = (stats: LifetimeStats): LifetimeStats => ({
   bestCombo: Math.max(1, nonNegative(stats.bestCombo)),
   bestStreak: nonNegative(stats.bestStreak),
   bestSinglePlacement: nonNegative(stats.bestSinglePlacement),
+  bestRubiesInRun: nonNegative(stats.bestRubiesInRun ?? 0),
   longestRunMs: nonNegative(stats.longestRunMs),
   dailyDaysCleared: uniqueStrings(stats.dailyDaysCleared),
   dailyDaysPlayed: uniqueStrings(stats.dailyDaysPlayed),
@@ -99,6 +100,10 @@ const mergeStats = (server: LifetimeStats, delta: LifetimeStats): LifetimeStats 
     bestSinglePlacement: Math.max(
       cleanServer.bestSinglePlacement,
       cleanDelta.bestSinglePlacement,
+    ),
+    bestRubiesInRun: Math.max(
+      cleanServer.bestRubiesInRun ?? 0,
+      cleanDelta.bestRubiesInRun ?? 0,
     ),
     longestRunMs: Math.max(cleanServer.longestRunMs, cleanDelta.longestRunMs),
     dailyDaysCleared: uniqueStrings([
@@ -152,6 +157,7 @@ const emptyStats = (timestamp: number): LifetimeStats => ({
   bestCombo: 1,
   bestStreak: 0,
   bestSinglePlacement: 0,
+  bestRubiesInRun: 0,
   longestRunMs: 0,
   dailyDaysCleared: [],
   dailyDaysPlayed: [],
