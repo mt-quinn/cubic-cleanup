@@ -2534,6 +2534,15 @@ function App() {
     piece: ActivePiece
     x: number
     y: number
+    // Captured from the originating pointer event so the ghost
+    // renderer can pick the right anchoring strategy:
+    //   * touch  → keep the historical "lifted above the finger"
+    //              offset so the player can see the piece despite
+    //              their finger covering the board
+    //   * mouse  → anchor the piece's (0,0) origin cell exactly at
+    //              the cursor so what's shown matches what'll be
+    //              placed (desktop users found the offset confusing)
+    pointerType: string | null
   } | null>(null)
 
   const playablePieceIds = useMemo<Set<string>>(() => {
@@ -7036,14 +7045,50 @@ function App() {
               Undo
         </button>
           )}
-          {ghost && (
-            <div
-              className="hexaclear-ghost"
-              style={{
+          {ghost && (() => {
+            // Touch keeps the historical "lift above the finger" offset
+            // so the player can see the piece. For mouse / pen, we
+            // anchor the ghost so the piece's (0,0) origin cell sits
+            // exactly under the cursor — i.e. visually on the cell
+            // that's about to receive the placement. Every generated
+            // piece has (0,0) as its first cell (see pieces.ts:
+            // `start = [{q:0, r:0}]`), so finding that cell's pixel
+            // position inside the rendered SVG just requires
+            // mirroring PiecePreview's board-mode layout math.
+            const isTouchGhost = ghost.pointerType === 'touch'
+            let ghostStyle: React.CSSProperties
+            if (isTouchGhost) {
+              ghostStyle = {
                 left: ghost.x,
                 top: ghost.y,
                 transform: 'translate(-30%, -10%)',
-              }}
+              }
+            } else {
+              const cells = ghost.piece.shape.cells
+              let minQ = Infinity
+              let minR = Infinity
+              for (const c of cells) {
+                if (c.q < minQ) minQ = c.q
+                if (c.r < minR) minR = c.r
+              }
+              // Normalized coords of the (0,0) origin within the
+              // PiecePreview's board-mode coordinate system.
+              const originNQ = -minQ
+              const originNR = -minR
+              const originSvgX =
+                HEX_SIZE *
+                  (SQRT3 * originNQ + (SQRT3 / 2) * originNR) +
+                HEX_SIZE
+              const originSvgY = HEX_SIZE * (1.5 * originNR) + HEX_SIZE
+              ghostStyle = {
+                left: ghost.x - originSvgX,
+                top: ghost.y - originSvgY,
+              }
+            }
+            return (
+            <div
+              className="hexaclear-ghost"
+              style={ghostStyle}
             >
               <PiecePreview shape={ghost.piece.shape} mode="board" />
               {/* Multi-clear hint: when the current hover position
@@ -7071,7 +7116,8 @@ function App() {
                   </span>
                 )}
             </div>
-          )}
+            )
+          })()}
           {undoAnimation && (
             <div
               className="hexaclear-undo-animation"
@@ -10429,6 +10475,7 @@ function App() {
                       piece: displayPiece,
                       x: (e.clientX - rect.left) / scale,
                       y: (e.clientY - rect.top) / scale,
+                      pointerType: e.pointerType || null,
                     })
                   }
                   triggerGrabHaptic()
@@ -10565,6 +10612,7 @@ function App() {
                       piece: displayPiece,
                       x: (e.clientX - rect.left) / scale,
                       y: (e.clientY - rect.top) / scale,
+                      pointerType: e.pointerType || null,
                     })
                   }
                   triggerGrabHaptic()
