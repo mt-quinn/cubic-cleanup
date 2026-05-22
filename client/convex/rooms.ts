@@ -50,13 +50,14 @@ const roomToGameState = (room: {
   streak: number
   moves: number
   goldenCellIds: string[]
-}, hand: ActivePiece[]): GameState => ({
+}, hand: ActivePiece[], hold: ActivePiece | null = null): GameState => ({
   mode: MODE,
   board: { ...room.board },
   score: room.score,
   streak: room.streak,
   hand,
   handSlots: hand.map((p) => p.id),
+  hold,
   gameOver: false,
   moves: room.moves,
   dailyHits: {},
@@ -162,6 +163,7 @@ export const createRoom = mutation({
           slot: 0,
           hand,
           handSlots: hand.map((p) => p.id),
+          hold: null,
           joinedAt: now,
           lastSeen: now,
         },
@@ -290,6 +292,7 @@ export const joinRoom = mutation({
           slot,
           hand,
           handSlots: hand.map((p) => p.id),
+          hold: null,
           joinedAt: now,
           lastSeen: now,
         },
@@ -346,6 +349,10 @@ export const joinRoom = mutation({
             slot: stalest.slot,
             hand,
             handSlots: hand.map((p2) => p2.id),
+            // Evicting a stale seat starts the new occupant with an
+            // empty hold — the evicted player's held piece (if any)
+            // is forfeited along with their hand.
+            hold: null,
             joinedAt: now,
             lastSeen: now,
           }
@@ -457,12 +464,25 @@ export const placePiece = mutation({
     if (playerIndex < 0) throw new Error('You are not in this room')
     const player = room.players[playerIndex]
 
-    const piece = player.hand.find((p) => p.id === pieceId) as
-      | ActivePiece
-      | undefined
+    // Pieces may live in the hand OR in the player's hold slot (Tetris
+    // style). The placement path treats them identically; only the
+    // post-placement bookkeeping differs (a hand piece vacates a hand
+    // slot, a hold piece empties the hold).
+    const playerHold = (player.hold ?? null) as ActivePiece | null
+    const playedFromHold =
+      playerHold !== null && playerHold.id === pieceId
+    const piece = playedFromHold
+      ? playerHold
+      : ((player.hand.find((p) => p.id === pieceId)) as
+          | ActivePiece
+          | undefined)
     if (!piece) throw new Error('Piece not in hand')
 
-    const fakeGame = roomToGameState(room, player.hand as ActivePiece[])
+    const fakeGame = roomToGameState(
+      room,
+      player.hand as ActivePiece[],
+      playerHold,
+    )
     const result = applyPlacement(fakeGame, piece, cellId)
     if (!result) throw new Error('Invalid placement')
 
@@ -506,22 +526,34 @@ export const placePiece = mutation({
       }
     }
 
-    // New per-player hand: drop the just-played piece. If that empties the
-    // player's hand, deal a fresh playable hand against the new board.
-    const remainingHand = (player.hand as ActivePiece[]).filter(
-      (p) => p.id !== piece.id,
-    )
-    const remainingSlots = player.handSlots.map((id) =>
-      id === piece.id ? null : id,
-    )
+    // New per-player hand / hold. Two cases:
+    //   1) Played from hand: drop the played piece out of hand, keep hold
+    //      untouched. If the hand is now empty, deal a fresh playable hand.
+    //   2) Played from hold: hand is unchanged, hold becomes null.
+    let newHand: ActivePiece[]
+    let newHandSlots: (string | null)[]
+    let newHold: ActivePiece | null = playerHold
 
-    let newHand = remainingHand
-    let newHandSlots = remainingSlots
+    if (playedFromHold) {
+      newHand = player.hand as ActivePiece[]
+      newHandSlots = player.handSlots
+      newHold = null
+    } else {
+      const remainingHand = (player.hand as ActivePiece[]).filter(
+        (p) => p.id !== piece.id,
+      )
+      const remainingSlots = player.handSlots.map((id) =>
+        id === piece.id ? null : id,
+      )
 
-    if (remainingHand.length === 0) {
-      const dealt = dealPlayableHand(result.board, 30, Math.random, MODE)
-      newHand = dealt
-      newHandSlots = dealt.map((p) => p.id)
+      newHand = remainingHand
+      newHandSlots = remainingSlots
+
+      if (remainingHand.length === 0) {
+        const dealt = dealPlayableHand(result.board, 30, Math.random, MODE)
+        newHand = dealt
+        newHandSlots = dealt.map((p) => p.id)
+      }
     }
 
     const updatedPlayers = room.players.map((p, i) =>
@@ -530,6 +562,7 @@ export const placePiece = mutation({
             ...p,
             hand: newHand,
             handSlots: newHandSlots,
+            hold: newHold,
             lastSeen: Date.now(),
           }
         : p,
@@ -544,10 +577,18 @@ export const placePiece = mutation({
     const newMoves = room.moves + 1
 
     // Game over when EVERY seated player is out of valid moves on
-    // their current hand. With N-seat rooms we have to scan all of
-    // them — the old "find the other seat" check was 2-player only.
+    // their current hand AND their held piece. With N-seat rooms we
+    // have to scan all of them — the old "find the other seat"
+    // check was 2-player only. The held piece is included as a move
+    // source so a player whose three hand pieces are blocked but
+    // whose held piece can still be placed keeps the match alive.
     const anyoneCanMove = updatedPlayers.some((p) =>
-      hasAnyValidMove(result.board, p.hand as ActivePiece[], MODE),
+      hasAnyValidMove(
+        result.board,
+        p.hand as ActivePiece[],
+        MODE,
+        (p.hold ?? null) as ActivePiece | null,
+      ),
     )
     const stuckGameOver = !anyoneCanMove
 
@@ -644,6 +685,156 @@ export const placePiece = mutation({
       gameOver,
       winnerPlayerId,
     }
+  },
+})
+
+// Park / swap / pull a piece between this player's hand and their
+// single-slot hold buffer. Atomic and authoritative so two clients
+// can't race their hold state out of sync. `target` is either the
+// hold slot or a specific hand slot index. Four cases:
+//   1) source=hand, target=hold (empty) — park
+//   2) source=hand, target=hold (full)  — swap; held piece goes to
+//      the vacated hand slot
+//   3) source=hold, target=hand[N] (empty) — pull into hand
+//   4) source=hold, target=hand[N] (full)  — swap; displaced hand
+//      piece goes to hold
+// If parking the last hand piece would leave the hand empty we deal
+// a fresh playable hand against the current board (mirrors the
+// single-player rule and keeps the room in a playable state).
+//
+// We deliberately do not write `lastPlacement` or recompute the
+// game-over flag here. Swapping itself doesn't change the board
+// state, and any subsequent placement re-runs the full game-over
+// check via `placePiece` with the new hand/hold included.
+export const holdSwap = mutation({
+  args: {
+    code: v.string(),
+    playerId: v.string(),
+    sourcePieceId: v.string(),
+    target: v.union(
+      v.object({ kind: v.literal('hold') }),
+      v.object({
+        kind: v.literal('hand'),
+        slotIndex: v.number(),
+      }),
+    ),
+  },
+  handler: async (
+    ctx,
+    { code, playerId, sourcePieceId, target },
+  ) => {
+    const room = await ctx.db
+      .query('rooms')
+      .withIndex('by_code', (q) => q.eq('code', code))
+      .unique()
+    if (!room) throw new Error('Room not found')
+    if (room.state === 'gameover') {
+      throw new Error('Game already over')
+    }
+
+    const playerIndex = room.players.findIndex(
+      (p) => p.playerId === playerId,
+    )
+    if (playerIndex < 0) throw new Error('You are not in this room')
+    const player = room.players[playerIndex]
+
+    const playerHold = (player.hold ?? null) as ActivePiece | null
+    const sourceInHand = player.hand.find(
+      (p) => p.id === sourcePieceId,
+    ) as ActivePiece | undefined
+    const sourceFromHold =
+      playerHold !== null && playerHold.id === sourcePieceId
+        ? playerHold
+        : null
+
+    if (!sourceInHand && !sourceFromHold) {
+      throw new Error('Source piece not in hand or hold')
+    }
+
+    let newHand = [...player.hand] as ActivePiece[]
+    let newHandSlots = [...player.handSlots]
+    let newHold: ActivePiece | null = playerHold
+
+    if (sourceInHand) {
+      // source is hand → target must be hold (no hand-to-hand drags).
+      if (target.kind !== 'hold') {
+        throw new Error('Hand-to-hand swaps are not supported')
+      }
+      const sourceSlotIndex = player.handSlots.findIndex(
+        (id) => id === sourceInHand.id,
+      )
+      if (sourceSlotIndex < 0) {
+        throw new Error('Source piece slot not found')
+      }
+      // Drop the source out of the hand; swap in the previously-held
+      // piece (if any) at the same slot to keep slot positions stable.
+      newHand = newHand.filter((p) => p.id !== sourceInHand.id)
+      if (playerHold) {
+        newHand = [...newHand, playerHold]
+        newHandSlots[sourceSlotIndex] = playerHold.id
+      } else {
+        newHandSlots[sourceSlotIndex] = null
+      }
+      newHold = sourceInHand
+    } else if (sourceFromHold) {
+      // source is hold → target must be hand[N].
+      if (target.kind !== 'hand') {
+        throw new Error('Hold-to-hold swaps are a no-op')
+      }
+      const idx = target.slotIndex
+      if (idx < 0 || idx >= newHandSlots.length) {
+        throw new Error('Invalid target hand slot')
+      }
+      const existingId = newHandSlots[idx]
+      const existing = existingId
+        ? (newHand.find((p) => p.id === existingId) as
+            | ActivePiece
+            | undefined)
+        : null
+      if (existing) {
+        // Swap: existing hand piece goes to hold; source goes into slot.
+        newHand = newHand.filter((p) => p.id !== existing.id)
+        newHand = [...newHand, sourceFromHold]
+        newHandSlots[idx] = sourceFromHold.id
+        newHold = existing
+      } else {
+        // Pull: empty hand slot is filled by the source; hold empties.
+        newHand = [...newHand, sourceFromHold]
+        newHandSlots[idx] = sourceFromHold.id
+        newHold = null
+      }
+    }
+
+    // If the swap left the hand empty (e.g. player parked their final
+    // hand piece into an empty hold while their hand was already
+    // running low), deal a fresh playable hand against the current
+    // board. Same rule as a normal placement that consumed the last
+    // hand piece.
+    if (newHand.length === 0) {
+      const dealt = dealPlayableHand(room.board, 30, Math.random, MODE)
+      newHand = dealt
+      newHandSlots = dealt.map((p) => p.id)
+    }
+
+    const now = Date.now()
+    const updatedPlayers = room.players.map((p, i) =>
+      i === playerIndex
+        ? {
+            ...p,
+            hand: newHand,
+            handSlots: newHandSlots,
+            hold: newHold,
+            lastSeen: now,
+          }
+        : p,
+    )
+
+    await ctx.db.patch(room._id, {
+      players: updatedPlayers,
+      updatedAt: now,
+    })
+
+    return null
   },
 })
 
@@ -749,6 +940,7 @@ export const restartRoom = mutation({
         ...p,
         hand,
         handSlots: hand.map((piece) => piece.id),
+        hold: null,
         lastSeen: now,
       }
     })
@@ -825,6 +1017,7 @@ export const prepareRoomForShare = mutation({
         slot: i,
         hand,
         handSlots: hand.map((piece) => piece.id),
+        hold: null,
         lastSeen: now,
       }
     })

@@ -3213,6 +3213,133 @@ body {
   position: relative;
 }
 
+/* HOLD POCKET: Tetris-style single-piece buffer pinned to the left
+   end of the hand tray. Renders narrower (~0.6× a hand slot) and
+   visually inset/dimmer so it reads as a reserve compartment rather
+   than a fourth hand slot. Held piece scales to 50% so the pocket
+   stays compact without losing legibility. */
+.hexaclear-hold {
+  flex: 0 0 auto;
+  width: clamp(48px, 12vw, 72px);
+  align-self: stretch;
+  border-radius: 0.6rem;
+  border: 1px dashed rgba(255, 197, 138, 0.32);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  -webkit-user-drag: none;
+  user-select: none;
+  touch-action: none;
+  position: relative;
+  margin-right: 0.25rem;
+  box-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 197, 138, 0.08);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.hexaclear-hold.is-empty {
+  cursor: default;
+}
+
+.hexaclear-hold-label {
+  position: absolute;
+  top: 0.22rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 0.55rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 226, 184, 0.65);
+  pointer-events: none;
+}
+
+/* Held piece sits centered in the pocket, slightly lower than the
+   HOLD label. The PiecePreview itself uses a fitToBounds viewBox
+   so the piece naturally fills its container; the inline
+   transform: scale(...) on this wrapper (set by App.tsx via
+   computeHoldDisplayScale) tunes the final size — small pieces
+   render at ~0.85, larger pieces shrink dynamically. */
+.hexaclear-hold-piece {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  /* Leave room above for the HOLD label so the piece doesn't sit
+     directly under it. */
+  padding-top: 0.45rem;
+  box-sizing: border-box;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
+/* Make the embedded PiecePreview SVG fill the wrapper. The hand
+   selector earlier in this file already handles `.hexaclear-piece-button
+   .hexaclear-piece-svg`; this is the equivalent for the Hold pocket
+   so its SVG doesn't render at its native pixel size and overflow. */
+.hexaclear-hold-piece .hexaclear-piece-svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Active drop affordance: when a hand piece is being dragged and the
+   cursor sits over the hold pocket, glow the border + warm the
+   background so it reads as "release here to park". */
+.hexaclear-hold.is-drop-active {
+  border-color: rgba(255, 211, 156, 0.95);
+  background: rgba(255, 197, 138, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 197, 138, 0.18),
+    0 0 0 1px rgba(255, 211, 156, 0.55),
+    0 0 12px rgba(255, 200, 130, 0.4);
+}
+
+.hexaclear-hold.selected {
+  border-color: rgba(255, 211, 156, 0.75);
+  background: rgba(255, 197, 138, 0.1);
+}
+
+.hexaclear-hold.unplayable .hexaclear-piece-svg {
+  opacity: 0.4;
+  filter: grayscale(0.55);
+}
+
+.hexaclear-hold.dragging .hexaclear-hold-piece {
+  display: none;
+}
+
+/* Reuse the existing failed-drop shake so an invalid hold-source
+   placement bounces the pocket the same way a hand slot would. */
+.hexaclear-hold.failed-drop {
+  animation: hexaclear-piece-failed-shake 190ms ease-out;
+}
+
+/* Hand slot drop affordance: when the held piece is being dragged
+   over a specific hand slot, warm that slot's frame so the player
+   sees exactly which one they'll swap with. The hand row has no
+   per-slot frame by default, so we paint a soft inset highlight
+   directly on the button. */
+.hexaclear-piece-button.is-swap-target {
+  background: rgba(255, 197, 138, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 211, 156, 0.6),
+    0 0 14px rgba(255, 200, 130, 0.35);
+  border-radius: 0.6rem;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
 /* Subtle divider between adjacent slots (skipped on the first slot). */
 .hexaclear-piece-button + .hexaclear-piece-button::before {
   content: '';

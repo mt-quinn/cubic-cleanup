@@ -1666,6 +1666,56 @@
   border-radius: 0;
 }
 
+/* Hold pocket: same sunken Minesweeper well treatment as a hand
+   slot but slightly tighter so the pocket reads as a separate
+   compartment. Empty-state dashed inset is dropped in favor of the
+   theme's deep-shadow inset (the dashed cream outline doesn't
+   match Win98's chrome). */
+[data-theme="win98"] .hexaclear-hold {
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow);
+  box-shadow: none;
+  border-radius: 0;
+  margin-right: 4px;
+}
+
+[data-theme="win98"] .hexaclear-hold.is-drop-active {
+  background: var(--w98-surface);
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-highlight);
+}
+
+[data-theme="win98"] .hexaclear-hold-label {
+  color: var(--w98-text);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+[data-theme="win98"] .hexaclear-piece-button.is-swap-target {
+  background: var(--w98-surface);
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow);
+  box-shadow:
+    inset 1px 1px 0 var(--w98-deep-shadow),
+    inset -1px -1px 0 var(--w98-highlight);
+}
+
 /* --- Generic Win98 buttons ------------------------------------------- */
 /* Anything inside an overlay-card or styled as a primary action gets
    the classic raised 3D button. The press-down state inverts the

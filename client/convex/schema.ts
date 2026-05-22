@@ -34,6 +34,10 @@ const playerValidator = v.object({
   // Mirror of single-player handSlots: positional ids so the UI can keep
   // empty slots stable across re-deals.
   handSlots: v.array(v.union(v.string(), v.null())),
+  // Single-piece "hold" buffer (Tetris-style). Players can park a piece
+  // here to play later. Optional so rooms created before the field
+  // existed continue to validate; missing == empty (`null`).
+  hold: v.optional(v.union(activePieceValidator, v.null())),
   // ms timestamps used as a coarse presence signal.
   joinedAt: v.number(),
   lastSeen: v.number(),

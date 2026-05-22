@@ -1403,6 +1403,12 @@ const loadGameForMode = (mode: GameMode): GameState | null => {
     if (typeof game.mode !== 'string') {
       game.mode = mode
     }
+    // `hold` was added later. Older saves don't have it; default to
+    // an empty hold so downstream code that reads `game.hold` (and
+    // distinguishes null from a filled buffer) doesn't see undefined.
+    if (game.hold === undefined) {
+      game.hold = null
+    }
     return game
   } catch {
     return null
@@ -2455,11 +2461,26 @@ function App() {
   const [pendingUndoRestoreSlotIndex, setPendingUndoRestoreSlotIndex] = useState<
     number | null
   >(null)
+  // True while the undo animation is mid-flight for a piece headed
+  // back into the hold pocket. The hold button reads this to hide
+  // its rendered piece during the flight so the in-flight ghost is
+  // the only visible copy.
+  const [pendingUndoRestoreFromHold, setPendingUndoRestoreFromHold] = useState<
+    boolean
+  >(false)
   const handButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
+  // Live ref for the Hold slot button, used both as a drag drop-target
+  // hit-test surface and as the destination for the undo animation
+  // when the restored piece originated in the hold buffer rather than
+  // a hand slot.
+  const holdSlotRef = useRef<HTMLButtonElement | null>(null)
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
-    return game.hand.find((p) => p.id === selectedPieceId) ?? null
-  }, [game.hand, selectedPieceId])
+    const inHand = game.hand.find((p) => p.id === selectedPieceId)
+    if (inHand) return inHand
+    if (game.hold && game.hold.id === selectedPieceId) return game.hold
+    return null
+  }, [game.hand, game.hold, selectedPieceId])
 
   const rootRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -2487,6 +2508,16 @@ function App() {
   // Used to avoid removing the celebrate class too early when celebrations overlap.
   const scoreCelebrateTokenRef = useRef(0)
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
+  // Drag affordance flags for the Hold-slot drop targets. Only one is
+  // ever non-null/true at a time:
+  //   - `holdDropActive`: cursor is over the hold pocket during a
+  //     hand-source drag (drop = park/swap into hold).
+  //   - `handSwapTargetSlot`: cursor is over hand slot N during a
+  //     hold-source drag (drop = pull/swap from hold into slot N).
+  const [holdDropActive, setHoldDropActive] = useState(false)
+  const [handSwapTargetSlot, setHandSwapTargetSlot] = useState<
+    number | null
+  >(null)
   const scale = 1
   const [ghost, setGhost] = useState<{
     piece: ActivePiece
@@ -2496,7 +2527,13 @@ function App() {
 
   const playablePieceIds = useMemo<Set<string>>(() => {
     const playable = new Set<string>()
-    for (const piece of game.hand) {
+    // Hand and hold are checked identically — both are valid placement
+    // sources, and an unplayable held piece should grey out the same
+    // way an unplayable hand piece does.
+    const candidates: ActivePiece[] = game.hold
+      ? [...game.hand, game.hold]
+      : game.hand
+    for (const piece of candidates) {
       for (const cell of boardDef.cells) {
         if (canPlacePiece(game.board, piece.shape, cell.id, game.mode)) {
           playable.add(piece.id)
@@ -2505,7 +2542,7 @@ function App() {
       }
     }
     return playable
-  }, [game.board, game.hand, game.mode, boardDef])
+  }, [game.board, game.hand, game.hold, game.mode, boardDef])
 
   // Co-op only: when one player is stuck (no valid moves) but the
   // other still has options, both players see a small status label
@@ -2528,6 +2565,7 @@ function App() {
       game.board,
       mp.selfPlayer.hand,
       game.mode,
+      mp.selfPlayer.hold,
     )
     // Other-side "stuck" detection across all non-self seats. We
     // treat the room as "partner can move" if ANY other player has
@@ -2537,7 +2575,7 @@ function App() {
     const stuckOthers: typeof mp.otherPlayers = []
     let anyOtherCanMove = false
     for (const op of mp.otherPlayers) {
-      if (hasAnyValidMove(game.board, op.hand, game.mode)) {
+      if (hasAnyValidMove(game.board, op.hand, game.mode, op.hold)) {
         anyOtherCanMove = true
       } else {
         stuckOthers.push(op)
@@ -2874,6 +2912,8 @@ function App() {
     setHover(null)
     setGhost(null)
     setDraggingPieceId(null)
+    setHoldDropActive(false)
+    setHandSwapTargetSlot(null)
     dragState.current = {
       pieceId: null,
       pointerId: null,
@@ -2899,6 +2939,8 @@ function App() {
       setHover(null)
       setGhost(null)
       setDraggingPieceId(null)
+      setHoldDropActive(false)
+      setHandSwapTargetSlot(null)
       dragState.current = {
         pieceId: null,
         pointerId: null,
@@ -2908,6 +2950,140 @@ function App() {
     document.addEventListener('visibilitychange', onHidden)
     return () => document.removeEventListener('visibilitychange', onHidden)
   }, [])
+
+  // Park / swap / pull a piece between the player's hand and the
+  // single-slot hold buffer. Source is resolved by piece id (hand or
+  // hold); target is either the hold slot or a specific hand slot
+  // index. Mirrors the four cases described in the convex
+  // `holdSwap` mutation, with one extra wrinkle: in multiplayer we
+  // round-trip through the server so the room row is authoritative;
+  // in single-player we mutate local state directly.
+  //
+  // Hold swaps are NOT pushed onto the undo stack — per the design
+  // discussion, only board placements are undoable. The undo stack
+  // does include hold-source placements (their pre-state snapshot
+  // captures `hold`, so restoring sends the piece back to hold).
+  const handleHoldSwap = (
+    sourcePieceId: string,
+    target:
+      | { kind: 'hold' }
+      | { kind: 'hand'; slotIndex: number },
+  ) => {
+    if (isMultiplayer) {
+      mp.holdSwap(sourcePieceId, target).catch(() => {
+        setFailedPlacementPieceId(sourcePieceId)
+        playError()
+      })
+      return
+    }
+
+    setGame((current) => {
+      if (current.gameOver) return current
+      const inHand = current.hand.find((p) => p.id === sourcePieceId)
+      const fromHold =
+        current.hold != null && current.hold.id === sourcePieceId
+          ? current.hold
+          : null
+      if (!inHand && !fromHold) return current
+
+      let newHand: ActivePiece[] = current.hand
+      let newHandSlots: (string | null)[] = current.handSlots
+      let newHold: ActivePiece | null = current.hold
+
+      if (inHand) {
+        if (target.kind !== 'hold') return current
+        const sourceSlotIndex = current.handSlots.findIndex(
+          (id) => id === inHand.id,
+        )
+        if (sourceSlotIndex < 0) return current
+        newHand = current.hand.filter((p) => p.id !== inHand.id)
+        if (current.hold) {
+          newHand = [...newHand, current.hold]
+          newHandSlots = current.handSlots.map((id, i) =>
+            i === sourceSlotIndex ? current.hold!.id : id,
+          )
+        } else {
+          newHandSlots = current.handSlots.map((id, i) =>
+            i === sourceSlotIndex ? null : id,
+          )
+        }
+        newHold = inHand
+      } else if (fromHold) {
+        if (target.kind !== 'hand') return current
+        const idx = target.slotIndex
+        if (idx < 0 || idx >= current.handSlots.length) return current
+        const existingId = current.handSlots[idx]
+        const existing = existingId
+          ? current.hand.find((p) => p.id === existingId) ?? null
+          : null
+        if (existing) {
+          newHand = current.hand.filter((p) => p.id !== existing.id)
+          newHand = [...newHand, fromHold]
+          newHandSlots = current.handSlots.map((id, i) =>
+            i === idx ? fromHold.id : id,
+          )
+          newHold = existing
+        } else {
+          newHand = [...current.hand, fromHold]
+          newHandSlots = current.handSlots.map((id, i) =>
+            i === idx ? fromHold.id : id,
+          )
+          newHold = null
+        }
+      }
+
+      // Re-deal the hand if the swap emptied it (e.g. the player
+      // parked their final hand piece into an empty hold). Same rule
+      // as a normal placement that consumed the last hand piece.
+      let nextHandDealCount = current.dailyHandDealCount
+      if (newHand.length === 0) {
+        if (current.mode === 'daily' && current.dailySeed != null) {
+          nextHandDealCount = (current.dailyHandDealCount ?? 0) + 1
+          newHand = dealDailyHand(
+            current.board,
+            current.dailySeed,
+            nextHandDealCount,
+          )
+        } else {
+          newHand = dealPlayableHand(
+            current.board,
+            undefined,
+            undefined,
+            current.mode,
+          )
+        }
+        newHandSlots = newHand.map((p) => p.id)
+        setHandFlyInToken((t) => t + 1)
+      }
+
+      // Recompute game-over with the new hand AND new hold so the
+      // run can survive on the strength of a single playable piece
+      // regardless of where it lives.
+      const noMovesLeft = !hasAnyValidMove(
+        current.board,
+        newHand,
+        current.mode,
+        newHold,
+      )
+      const gameOver = current.mode === 'daily'
+        ? current.dailyCompleted || noMovesLeft
+        : noMovesLeft
+
+      return {
+        ...current,
+        hand: newHand,
+        handSlots: newHandSlots,
+        hold: newHold,
+        dailyHandDealCount: nextHandDealCount,
+        gameOver,
+      }
+    })
+
+    // Hold swaps end the click-to-select state and any in-flight
+    // hover so a subsequent gesture starts clean.
+    setSelectedPieceId(null)
+    setHover(null)
+  }
 
   const placePieceAtCell = (
     pieceId: string,
@@ -2936,7 +3112,14 @@ function App() {
     const actionId = (placementActionIdRef.current += 1)
     setGame((current) => {
       if (current.gameOver) return current
-      const piece = current.hand.find((p) => p.id === pieceId)
+      // Pieces can come from the hand or from the single-slot hold
+      // buffer. The bulk of the placement pipeline is identical for
+      // both — only the post-placement bookkeeping differs (a hand
+      // piece vacates a hand slot, a hold piece empties the hold).
+      const inHand = current.hand.find((p) => p.id === pieceId)
+      const playFromHold =
+        !inHand && current.hold != null && current.hold.id === pieceId
+      const piece = inHand ?? (playFromHold ? current.hold! : null)
       if (!piece) return current
 
       const before = current
@@ -3087,10 +3270,18 @@ function App() {
         setClearingClassesByCell(nextClearingClasses)
       }
 
-      const remainingHand = current.hand.filter((p) => p.id !== piece.id)
-      const updatedSlots = current.handSlots.map((id) =>
-        id === piece.id ? null : id,
-      )
+      // If the piece came from hold, hand and handSlots stay
+      // untouched; the only mutation is emptying the hold buffer.
+      // Otherwise the played piece vacates its hand slot (slot id ->
+      // null) and a fresh hand may be dealt if it was the last one.
+      const remainingHand = playFromHold
+        ? current.hand
+        : current.hand.filter((p) => p.id !== piece.id)
+      const updatedSlots = playFromHold
+        ? current.handSlots
+        : current.handSlots.map((id) =>
+            id === piece.id ? null : id,
+          )
 
       let newStreak = current.streak
       if (result.clearedPatterns.length > 0) {
@@ -3117,7 +3308,11 @@ function App() {
       let newHand = remainingHand
       let gameOver = false
 
-      const isThirdPieceThisHand = remainingHand.length === 0
+      // "Third piece" only makes sense when the consumed piece came
+      // out of the hand. Playing from hold never empties the hand,
+      // so we never auto-deal or bump the fly-in token in that case.
+      const isThirdPieceThisHand =
+        !playFromHold && remainingHand.length === 0
       let nextHandDealCount = current.dailyHandDealCount
 
       if (isThirdPieceThisHand) {
@@ -3141,7 +3336,16 @@ function App() {
         setHandFlyInToken((t) => t + 1)
       }
 
-      const noMovesLeft = !hasAnyValidMove(result.board, newHand, current.mode)
+      // Game-over check considers the held piece as a possible move
+      // source too. The post-placement hold is null when the played
+      // piece came from hold, otherwise unchanged.
+      const newHold = playFromHold ? null : current.hold
+      const noMovesLeft = !hasAnyValidMove(
+        result.board,
+        newHand,
+        current.mode,
+        newHold,
+      )
 
       if (current.mode === 'daily') {
         // Daily puzzles end either when all numbered targets are broken
@@ -3453,6 +3657,7 @@ function App() {
         streak: result.clearedPatterns.length > 0 ? newStreak : 0,
         hand: newHand,
         handSlots: updatedSlots,
+        hold: newHold,
         gameOver,
         moves: newMoves,
         dailyHits: result.dailyHits,
@@ -4111,10 +4316,25 @@ function App() {
       }
     }
     
-    // Find which piece was added back to the hand
+    // Find which piece was added back. Two possibilities:
+    //   1) the placement consumed a hand piece → previous.hand has an
+    //      id missing from the current hand
+    //   2) the placement consumed the held piece → previous.hold is
+    //      set but the current hold is null (or holds a different id)
+    // Case 2 takes priority because a hold-source placement leaves
+    // the hand untouched, so the "missing from hand" check would
+    // return nothing.
     const currentHandIds = new Set(game.hand.map((p) => p.id))
-    const restoredPieceId = previous.hand.find((p) => !currentHandIds.has(p.id))?.id
-    
+    const restoredFromHold =
+      previous.hold != null &&
+      (game.hold == null || game.hold.id !== previous.hold.id)
+    const restoredHandPieceId = previous.hand.find(
+      (p) => !currentHandIds.has(p.id),
+    )?.id
+    const restoredPieceId = restoredFromHold
+      ? previous.hold!.id
+      : restoredHandPieceId
+
     if (cellsToRemove.length > 0 && restoredPieceId) {
       // Calculate centroid of cells being removed (board position)
       let sumX = 0
@@ -4129,56 +4349,71 @@ function App() {
       }
       const startX = sumX / cellsToRemove.length
       const startY = sumY / cellsToRemove.length
-      
-      // Find which slot the piece will occupy in the hand
-      const slotIndex = previous.handSlots.findIndex((id) => id === restoredPieceId)
-      const restoredPiece = previous.hand.find((p) => p.id === restoredPieceId)
-      
-      if (slotIndex >= 0 && restoredPiece && boardWrapperRef.current) {
-        // Get the hand button's position
-        const handButton = handButtonRefs.current[slotIndex]
-        if (handButton) {
-          const boardRect = boardWrapperRef.current.getBoundingClientRect()
-          const buttonRect = handButton.getBoundingClientRect()
-          const endX = (buttonRect.left + buttonRect.width / 2 - boardRect.left) / scale
-          const endY = (buttonRect.top + buttonRect.height / 2 - boardRect.top) / scale
-          
-          // Restore game state immediately so pieces reappear
-          setUndoStack(remaining)
-          setPendingUndoRestoreSlotIndex(slotIndex)
-          setGoldenPopupCellIds([])
-          setClearingCells([])
-          setClearingGoldenCellIds([])
-          setPendingGoldenSpawnCellIds([])
-          setScorePopup(null)
-          setGame((current) => {
-            const restoredMoves =
-              current.mode === 'daily' ? current.moves : previous.moves
-            return {
-              ...previous,
-              moves: restoredMoves,
-            }
-          })
-          
-          // Set up animation (visual only - state already restored)
-          setUndoAnimation({
-            piece: restoredPiece,
-            startX,
-            startY,
-            endX,
-            endY,
-            cellIds: cellsToRemove,
-          })
-          
-          // Clear animation state after animation completes
-          setTimeout(() => {
-            setSelectedPieceId(null)
-            setHover(null)
-            setUndoAnimation(null)
-            setPendingUndoRestoreSlotIndex(null)
-          }, 350) // Match animation duration
-          return
-        }
+
+      // Resolve the actual ActivePiece + destination DOM element. The
+      // destination depends on whether the restored piece is heading
+      // back into the hold pocket or into a specific hand slot — the
+      // animation flies to whichever button corresponds.
+      const restoredPiece = restoredFromHold
+        ? previous.hold
+        : previous.hand.find((p) => p.id === restoredPieceId) ?? null
+      const slotIndex = restoredFromHold
+        ? -1
+        : previous.handSlots.findIndex((id) => id === restoredPieceId)
+      const destinationButton = restoredFromHold
+        ? holdSlotRef.current
+        : slotIndex >= 0
+          ? handButtonRefs.current[slotIndex]
+          : null
+
+      if (restoredPiece && destinationButton && boardWrapperRef.current) {
+        const boardRect = boardWrapperRef.current.getBoundingClientRect()
+        const buttonRect = destinationButton.getBoundingClientRect()
+        const endX = (buttonRect.left + buttonRect.width / 2 - boardRect.left) / scale
+        const endY = (buttonRect.top + buttonRect.height / 2 - boardRect.top) / scale
+
+        // Restore game state immediately so pieces reappear
+        setUndoStack(remaining)
+        // Only hand restorations need a slot index to hide-during-fly;
+        // a hold restoration uses the hold button's own pending flag
+        // (see `pendingUndoRestoreFromHold`).
+        setPendingUndoRestoreSlotIndex(
+          restoredFromHold ? null : slotIndex,
+        )
+        setPendingUndoRestoreFromHold(restoredFromHold)
+        setGoldenPopupCellIds([])
+        setClearingCells([])
+        setClearingGoldenCellIds([])
+        setPendingGoldenSpawnCellIds([])
+        setScorePopup(null)
+        setGame((current) => {
+          const restoredMoves =
+            current.mode === 'daily' ? current.moves : previous.moves
+          return {
+            ...previous,
+            moves: restoredMoves,
+          }
+        })
+
+        // Set up animation (visual only - state already restored)
+        setUndoAnimation({
+          piece: restoredPiece,
+          startX,
+          startY,
+          endX,
+          endY,
+          cellIds: cellsToRemove,
+        })
+
+        // Clear animation state after animation completes
+        setTimeout(() => {
+          setSelectedPieceId(null)
+          setHover(null)
+          setUndoAnimation(null)
+          setPendingUndoRestoreSlotIndex(null)
+          setPendingUndoRestoreFromHold(false)
+        }, 350)
+        return
       }
     }
     
@@ -4994,6 +5229,48 @@ function App() {
       )
     }
 
+    // Hit-test the Hold pocket. Used as a drop target whenever a hand
+    // piece is being dragged (and to no-op when the held piece is
+    // dragged back over itself).
+    const isPointOverHoldSlot = (
+      clientX: number,
+      clientY: number,
+    ): boolean => {
+      const node = holdSlotRef.current
+      if (!node) return false
+      const r = node.getBoundingClientRect()
+      return (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      )
+    }
+
+    // Hit-test the hand row. Returns the slot index (0..N-1) under
+    // the point, or -1 if the point isn't over any hand button. Used
+    // to drop a held piece into a hand slot (swap or pull).
+    const findHandSlotAtPoint = (
+      clientX: number,
+      clientY: number,
+    ): number => {
+      const refs = handButtonRefs.current
+      for (let i = 0; i < refs.length; i++) {
+        const node = refs[i]
+        if (!node) continue
+        const r = node.getBoundingClientRect()
+        if (
+          clientX >= r.left &&
+          clientX <= r.right &&
+          clientY >= r.top &&
+          clientY <= r.bottom
+        ) {
+          return i
+        }
+      }
+      return -1
+    }
+
     const updateFromClientPoint = (clientX: number, clientY: number) => {
       if (!dragState.current.pieceId) return
       const wrapper = boardWrapperRef.current
@@ -5003,13 +5280,51 @@ function App() {
       const y = (clientY - rect.top) / scale
       setGhost((prev) => (prev ? { ...prev, x, y } : prev))
 
+      // Identify the source of the in-flight piece (hand vs hold) so
+      // we can hit-test the right set of drop targets and show
+      // matching affordances. Pieces dragged out of hand can swap
+      // into the hold pocket; pieces dragged out of hold can swap
+      // into any hand slot.
+      const draggedId = dragState.current.pieceId
+      const draggedFromHold =
+        game.hold != null && game.hold.id === draggedId
+
       // While the cursor sits over the × cancel marker, kill the
       // on-board preview entirely so cells don't light up behind the
       // held piece.
       if (isPointOverCancelMark(clientX, clientY)) {
         setHover(null)
+        setHoldDropActive(false)
+        setHandSwapTargetSlot(null)
         return
       }
+
+      // Hand → hold drop affordance: highlight the hold pocket when
+      // the cursor is over it (excluding the self-overlap when the
+      // hold piece is being dragged over its own slot).
+      if (
+        !draggedFromHold &&
+        isPointOverHoldSlot(clientX, clientY)
+      ) {
+        setHover(null)
+        setHoldDropActive(true)
+        setHandSwapTargetSlot(null)
+        return
+      }
+      setHoldDropActive(false)
+
+      // Hold → hand drop affordance: only meaningful when the source
+      // is the held piece. Highlight whichever hand slot the cursor
+      // is over so the player can see the swap target clearly.
+      if (draggedFromHold) {
+        const slot = findHandSlotAtPoint(clientX, clientY)
+        if (slot >= 0) {
+          setHover(null)
+          setHandSwapTargetSlot(slot)
+          return
+        }
+      }
+      setHandSwapTargetSlot(null)
 
       const isTouch = dragState.current.pointerType === 'touch'
       const previewOffsetY = isTouch ? 80 : 0
@@ -5038,8 +5353,39 @@ function App() {
         clientY !== null &&
         isPointOverCancelMark(clientX, clientY)
 
+      const pieceId = dragState.current.pieceId
+      const draggedFromHold =
+        pieceId !== null &&
+        game.hold != null &&
+        game.hold.id === pieceId
+
+      // Drop-target hit-tests for the new hold/hand swap surfaces.
+      // These take priority over the board placement path because they
+      // sit visually below it in the layout (the hand row), and any
+      // release with the cursor sitting over them should be a swap,
+      // not a closest-board-cell snap. We deliberately exclude the
+      // self-overlap case (releasing the held piece back onto its own
+      // pocket) which falls through to a silent cancel.
+      const releasedOverHoldSlot =
+        !releasedOverCancelMark &&
+        !draggedFromHold &&
+        clientX !== null &&
+        clientY !== null &&
+        isPointOverHoldSlot(clientX, clientY)
+      const releasedOverHandSlot =
+        !releasedOverCancelMark &&
+        draggedFromHold &&
+        clientX !== null &&
+        clientY !== null
+          ? findHandSlotAtPoint(clientX, clientY)
+          : -1
+
       let cellId: string | null = null
-      if (!releasedOverCancelMark) {
+      if (
+        !releasedOverCancelMark &&
+        !releasedOverHoldSlot &&
+        releasedOverHandSlot < 0
+      ) {
         cellId = hover?.cellId ?? null
         if (!cellId && clientX !== null && clientY !== null) {
           cellId = findClosestCellIdFromClientPoint(
@@ -5048,12 +5394,13 @@ function App() {
           )
         }
       }
-      const pieceId = dragState.current.pieceId
       // Compute the full attempted footprint for visual feedback even if
-      // placement turns out to be invalid.
+      // placement turns out to be invalid. Source can be hand OR hold.
       let attemptedCellIds: string[] | undefined
       if (cellId && pieceId) {
-        const piece = game.hand.find((p) => p.id === pieceId) ?? null
+        const piece =
+          game.hand.find((p) => p.id === pieceId) ??
+          (game.hold && game.hold.id === pieceId ? game.hold : null)
         if (piece) {
           const previewForDrop = getBestPlacementPreview(cellId, piece, game)
           attemptedCellIds = previewForDrop?.targetIds
@@ -5064,13 +5411,24 @@ function App() {
       dragState.current.pointerType = null
       setDraggingPieceId(null)
       setGhost(null)
+      setHoldDropActive(false)
+      setHandSwapTargetSlot(null)
 
       // The player set the piece down — fire the drop click regardless
       // of whether the placement was actually valid (or whether they
       // dropped it back into the cancel slot).
       playClickUp()
 
-      if (cellId && pieceId) {
+      if (releasedOverHoldSlot && pieceId) {
+        handleHoldSwap(pieceId, { kind: 'hold' })
+        setSelectedPieceId(null)
+      } else if (releasedOverHandSlot >= 0 && pieceId) {
+        handleHoldSwap(pieceId, {
+          kind: 'hand',
+          slotIndex: releasedOverHandSlot,
+        })
+        setSelectedPieceId(null)
+      } else if (cellId && pieceId) {
         placePieceAtCell(pieceId, cellId, attemptedCellIds)
         // Drag-based placement is one-shot: after the player lifts off
         // the board (success or fail) we deselect so the on-board hover
@@ -9951,6 +10309,113 @@ function App() {
               {mpMoveStatus.message}
             </div>
           )}
+          {/* Hold pocket. Lives on the leftmost edge of the hand tray so
+              hand↔hold drags are short and the slot reads as a reserve
+              compartment (inset, narrower, dimmer) rather than a 4th
+              hand slot. Held piece renders at half scale so the pocket
+              can stay compact without losing legibility. */}
+          {(() => {
+            const heldPiece = game.hold
+            const isHiddenByUndo =
+              undoAnimation != null && pendingUndoRestoreFromHold
+            const displayPiece = isHiddenByUndo ? null : heldPiece
+            const isSelected =
+              !!displayPiece && selectedPieceId === displayPiece.id
+            const isDragging =
+              !!displayPiece && draggingPieceId === displayPiece.id
+            const isPlayable =
+              !!displayPiece && playablePieceIds.has(displayPiece.id)
+            const isFailedDrop =
+              !!displayPiece && failedPlacementPieceId === displayPiece.id
+
+            return (
+              <button
+                key="hexaclear-hold-slot"
+                ref={holdSlotRef}
+                type="button"
+                className={[
+                  'hexaclear-hold',
+                  !displayPiece ? 'is-empty' : '',
+                  holdDropActive ? 'is-drop-active' : '',
+                  isSelected ? 'selected' : '',
+                  isDragging ? 'dragging' : '',
+                  displayPiece && !isPlayable ? 'unplayable' : '',
+                  isFailedDrop ? 'failed-drop' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                aria-label={
+                  displayPiece
+                    ? `Held ${displayPiece.shape.size}-cube piece`
+                    : 'Empty hold slot'
+                }
+                onClick={() => {
+                  if (!displayPiece) return
+                  setSelectedPieceId(
+                    selectedPieceId === displayPiece.id
+                      ? null
+                      : displayPiece.id,
+                  )
+                  setHover(null)
+                }}
+                onPointerDown={(e) => {
+                  if (!displayPiece) return
+                  e.preventDefault()
+                  unlockAudioOnGesture()
+                  dragState.current = {
+                    pieceId: displayPiece.id,
+                    pointerId: e.pointerId,
+                    pointerType: e.pointerType || null,
+                  }
+                  setSelectedPieceId(displayPiece.id)
+                  setDraggingPieceId(displayPiece.id)
+                  const wrapper = boardWrapperRef.current
+                  if (wrapper) {
+                    const rect = wrapper.getBoundingClientRect()
+                    setGhost({
+                      piece: displayPiece,
+                      x: (e.clientX - rect.left) / scale,
+                      y: (e.clientY - rect.top) / scale,
+                    })
+                  }
+                  triggerGrabHaptic()
+                  playClickDown()
+                }}
+              >
+                <span
+                  className="hexaclear-hold-label"
+                  aria-hidden="true"
+                >
+                  Hold
+                </span>
+                {displayPiece && !isDragging && (
+                  <span
+                    className="hexaclear-hold-piece"
+                    style={{
+                      transform: `scale(${computeHoldDisplayScale(displayPiece.shape.cells)})`,
+                    }}
+                  >
+                    <PiecePreview
+                      shape={displayPiece.shape}
+                      mode="hand"
+                      fitToBounds
+                    />
+                  </span>
+                )}
+                {isDragging && (
+                  <span
+                    ref={cancelMarkRef}
+                    className="hexaclear-piece-cancel-mark"
+                    aria-hidden="true"
+                  >
+                    ×
+                  </span>
+                )}
+              </button>
+            )
+          })()}
           {game.handSlots.map((pieceId, slotIndex) => {
             const piece = game.hand.find((p) => p.id === pieceId) ?? null
             const isHiddenByUndo =
@@ -9966,6 +10431,7 @@ function App() {
               !!displayPiece && playablePieceIds.has(displayPiece.id)
             const isFailedDrop =
               !!displayPiece && failedPlacementPieceId === displayPiece.id
+            const isSwapTarget = handSwapTargetSlot === slotIndex
 
             return (
               <button
@@ -9995,6 +10461,7 @@ function App() {
                   isDragging ? 'dragging' : '',
                   piece && !isPlayable ? 'unplayable' : '',
                   isFailedDrop ? 'failed-drop' : '',
+                  isSwapTarget ? 'is-swap-target' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -10077,9 +10544,54 @@ function App() {
 type PiecePreviewProps = {
   shape: ActivePiece['shape']
   mode?: 'hand' | 'board'
+  /**
+   * When true, tighten the SVG viewBox to the piece's own bounding
+   * box (plus one hex of padding so outer hexes are fully visible)
+   * instead of the default fixed 5-hex viewport. Lets a small piece
+   * fill its container instead of being a tiny mark in the corner.
+   * Used by the Hold pocket so 1-cube pieces don't render as dots.
+   */
+  fitToBounds?: boolean
 }
 
-const PiecePreview = ({ shape, mode = 'hand' }: PiecePreviewProps) => {
+/**
+ * Per-piece display scale for the Hold pocket. Smaller pieces are
+ * rendered close to the max (0.85× the pocket's natural fit size)
+ * so they're legible. Larger pieces shrink so they don't crowd the
+ * pocket. `extent` is the maximum hex-axial span across the three
+ * hex axes — a 1-cube piece has extent 1, a 4-in-a-line piece has
+ * extent 4.
+ */
+const computeHoldDisplayScale = (
+  cells: ReadonlyArray<{ q: number; r: number }>,
+) => {
+  let minQ = Infinity
+  let maxQ = -Infinity
+  let minR = Infinity
+  let maxR = -Infinity
+  let minS = Infinity
+  let maxS = -Infinity
+  for (const { q, r } of cells) {
+    if (q < minQ) minQ = q
+    if (q > maxQ) maxQ = q
+    if (r < minR) minR = r
+    if (r > maxR) maxR = r
+    const s = -q - r
+    if (s < minS) minS = s
+    if (s > maxS) maxS = s
+  }
+  const extent = Math.max(maxQ - minQ, maxR - minR, maxS - minS) + 1
+  return Math.max(
+    0.5,
+    Math.min(0.85, 0.85 - (extent - 1) * 0.07),
+  )
+}
+
+const PiecePreview = ({
+  shape,
+  mode = 'hand',
+  fitToBounds = false,
+}: PiecePreviewProps) => {
   const coords = shape.cells
 
   if (mode === 'board') {
@@ -10153,8 +10665,6 @@ const PiecePreview = ({ shape, mode = 'hand' }: PiecePreviewProps) => {
   }
 
   const PREVIEW_SIZE = HEX_SIZE * 0.9
-  const CARD_W = PREVIEW_SIZE * SQRT3 * 5
-  const CARD_H = PREVIEW_SIZE * 1.5 * 5
 
   const axialToPixelPreview = (q: number, r: number) => {
     const x = PREVIEW_SIZE * (SQRT3 * q + (SQRT3 / 2) * r)
@@ -10177,6 +10687,17 @@ const PiecePreview = ({ shape, mode = 'hand' }: PiecePreviewProps) => {
   })
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
+
+  // Default canvas is a 5-hex-wide × 5-hex-tall viewport that every
+  // piece is centered inside. `fitToBounds` instead tightens to the
+  // piece's own bbox + one hex of padding so e.g. a 1-cube piece
+  // fills its container rather than rendering at 1/5 of it.
+  const CARD_W = fitToBounds
+    ? maxX - minX + PREVIEW_SIZE * SQRT3
+    : PREVIEW_SIZE * SQRT3 * 5
+  const CARD_H = fitToBounds
+    ? maxY - minY + PREVIEW_SIZE * 2
+    : PREVIEW_SIZE * 1.5 * 5
 
   const buildPreviewHexPoints = (cx: number, cy: number): string => {
     const points: string[] = []

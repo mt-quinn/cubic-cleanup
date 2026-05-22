@@ -16,6 +16,9 @@ export type MultiplayerPlayer = {
   slot: number
   hand: ActivePiece[]
   handSlots: (string | null)[]
+  // Single-piece "hold" buffer per Tetris-style hold mechanic. Only
+  // surfaced for self (we don't render partner holds).
+  hold: ActivePiece | null
   isSelf: boolean
 }
 
@@ -130,6 +133,16 @@ export type UseMultiplayerGameResult = {
   // tinting in App.
   hueShiftByPlayerId: Record<string, number>
   placePiece: (pieceId: string, cellId: string) => Promise<void>
+  // Park a piece into the hold slot, swap it with a held piece, or
+  // pull a held piece into a hand slot. `target` is either the hold
+  // slot or a specific hand slot index. The server is authoritative;
+  // a successful return means the swap has landed in the room row.
+  holdSwap: (
+    sourcePieceId: string,
+    target:
+      | { kind: 'hold' }
+      | { kind: 'hand'; slotIndex: number },
+  ) => Promise<void>
   sendEmote: (emoji: string) => Promise<void>
   setName: (name: string) => Promise<void>
   restart: () => Promise<void>
@@ -170,6 +183,7 @@ const buildGameStateFromRoom = (
   room: NonNullable<ReturnType<typeof useQuery<typeof api.rooms.getRoom>>>,
   selfHand: ActivePiece[],
   selfHandSlots: (string | null)[],
+  selfHold: ActivePiece | null,
 ): GameState => ({
   mode: 'big',
   board: room.board as GameState['board'],
@@ -177,6 +191,7 @@ const buildGameStateFromRoom = (
   streak: room.streak,
   hand: selfHand,
   handSlots: selfHandSlots,
+  hold: selfHold,
   gameOver: room.state === 'gameover',
   moves: room.moves,
   dailyHits: {},
@@ -196,6 +211,7 @@ export const useMultiplayerGame = ({
     code ? { code } : 'skip',
   )
   const placePieceMutation = useMutation(api.rooms.placePiece)
+  const holdSwapMutation = useMutation(api.rooms.holdSwap)
   const leaveMutation = useMutation(api.rooms.leaveRoom)
   const heartbeatMutation = useMutation(api.rooms.heartbeat)
   const sendEmoteMutation = useMutation(api.rooms.sendEmote)
@@ -225,6 +241,7 @@ export const useMultiplayerGame = ({
       slot: me.slot,
       hand: me.hand as ActivePiece[],
       handSlots: me.handSlots as (string | null)[],
+      hold: (me.hold ?? null) as ActivePiece | null,
       isSelf: true,
     }
   }, [room, playerId])
@@ -239,6 +256,7 @@ export const useMultiplayerGame = ({
         slot: p.slot,
         hand: p.hand as ActivePiece[],
         handSlots: p.handSlots as (string | null)[],
+        hold: (p.hold ?? null) as ActivePiece | null,
         isSelf: p.playerId === playerId,
       }))
   }, [room, playerId])
@@ -319,10 +337,11 @@ export const useMultiplayerGame = ({
         room,
         selfPlayer.hand,
         selfPlayer.handSlots,
+        selfPlayer.hold,
       )
     }
     if (isSpectator) {
-      return buildGameStateFromRoom(room, [], [])
+      return buildGameStateFromRoom(room, [], [], null)
     }
     return null
   }, [room, selfPlayer, isSpectator])
@@ -346,6 +365,16 @@ export const useMultiplayerGame = ({
   const placePiece = async (pieceId: string, cellId: string) => {
     if (!code) return
     await placePieceMutation({ code, playerId, pieceId, cellId })
+  }
+
+  const holdSwap = async (
+    sourcePieceId: string,
+    target:
+      | { kind: 'hold' }
+      | { kind: 'hand'; slotIndex: number },
+  ) => {
+    if (!code) return
+    await holdSwapMutation({ code, playerId, sourcePieceId, target })
   }
 
   const sendEmote = async (emoji: string) => {
@@ -516,6 +545,7 @@ export const useMultiplayerGame = ({
     hoverByPlayerId,
     hueShiftByPlayerId,
     placePiece,
+    holdSwap,
     sendEmote,
     setName,
     restart,

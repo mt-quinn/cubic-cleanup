@@ -99,6 +99,11 @@ export type GameState = {
   streak: number
   hand: Hand
   handSlots: (string | null)[]
+  // Single-slot "hold" buffer (Tetris-style). Players can park a piece
+  // outside their hand to play later, or swap it back into hand. null
+  // means the slot is empty. The held piece counts toward the
+  // game-over check just like a hand piece (see `hasAnyValidMove`).
+  hold: ActivePiece | null
   gameOver: boolean
   // Count of successful piece placements in this run.
   moves: number
@@ -577,6 +582,7 @@ export const hasAnyValidMove = (
   board: BoardState,
   hand: Hand,
   mode: GameMode = 'endless',
+  hold: ActivePiece | null = null,
 ): boolean => {
   const boardDef = getBoardDefinitionForMode(mode)
   // Use the same placement path as real moves (including clears),
@@ -588,6 +594,7 @@ export const hasAnyValidMove = (
     streak: 0,
     hand,
     handSlots: hand.map((p) => p.id),
+    hold,
     gameOver: false,
     moves: 0,
     dailyHits: {},
@@ -596,7 +603,11 @@ export const hasAnyValidMove = (
     dailyCompleted: false,
     goldenCellIds: [],
   }
-  for (const piece of hand) {
+  // Held piece counts toward "any valid move" — a player whose three
+  // hand pieces are all blocked but whose held piece can still be
+  // placed should not be game over.
+  const candidates: Hand = hold ? [...hand, hold] : hand
+  for (const piece of candidates) {
     for (const cell of boardDef.cells) {
       const result = applyPlacement(fakeGame, piece, cell.id)
       if (result) return true
@@ -641,6 +652,7 @@ export const createInitialGameState = (): GameState => {
     streak: 0,
     hand,
     handSlots: hand.map((p) => p.id),
+    hold: null,
     gameOver: !hasAnyValidMove(board, hand, 'endless'),
     moves: 0,
     dailyHits: {},
@@ -665,6 +677,7 @@ export const createBigGameState = (): GameState => {
     streak: 0,
     hand,
     handSlots: hand.map((p) => p.id),
+    hold: null,
     gameOver: !hasAnyValidMove(board, hand, 'big'),
     moves: 0,
     dailyHits: {},
@@ -771,6 +784,7 @@ export const createDailyGameState = (dateKey?: string): GameState => {
     streak: 0,
     hand,
     handSlots: hand.map((p) => p.id),
+    hold: null,
     gameOver: false,
     moves: 0,
     dailyHits,
