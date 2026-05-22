@@ -2474,6 +2474,17 @@ function App() {
   // when the restored piece originated in the hold buffer rather than
   // a hand slot.
   const holdSlotRef = useRef<HTMLButtonElement | null>(null)
+  // Tracks the pixel width of (a) any one hand-piece button and (b)
+  // the Hold pocket so we can compute the held-piece preview scale
+  // such that the held-piece HEX never renders larger than a hand
+  // hex. Both controls use the same 5-hex SVG viewport, so the hex
+  // size collapses to container_width / 5; the held piece is scaled
+  // by hand_w / hold_w to match (then clamped down for pieces that
+  // would otherwise spill outside the pocket).
+  const [holdSizing, setHoldSizing] = useState<{
+    handSlotPx: number
+    holdPocketPx: number
+  }>({ handSlotPx: 0, holdPocketPx: 0 })
   const selectedPiece = useMemo<ActivePiece | null>(() => {
     if (!selectedPieceId) return null
     const inHand = game.hand.find((p) => p.id === selectedPieceId)
@@ -4825,6 +4836,46 @@ function App() {
     }
   }, [theme])
 
+
+  // Measure the live pixel widths of a hand-piece slot and the Hold
+  // pocket whenever either resizes (viewport changes, sidebar opens,
+  // etc.). We feed both into computeHoldDisplayScale so the held
+  // piece's hex size matches the hand's at most — never larger.
+  // Falls back to the previous numbers when refs aren't mounted yet
+  // (transitional states between modes).
+  useLayoutEffect(() => {
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const measure = () => {
+      const handBtn = handButtonRefs.current.find(
+        (r): r is HTMLButtonElement => !!r,
+      )
+      const holdEl = holdSlotRef.current
+      const handSlotPx = handBtn
+        ? handBtn.getBoundingClientRect().width
+        : 0
+      const holdPocketPx = holdEl
+        ? holdEl.getBoundingClientRect().width
+        : 0
+      setHoldSizing((prev) =>
+        prev.handSlotPx === handSlotPx &&
+        prev.holdPocketPx === holdPocketPx
+          ? prev
+          : { handSlotPx, holdPocketPx },
+      )
+    }
+    const ro = new ResizeObserver(measure)
+    // Observe the hold (which is stable across renders) and any
+    // currently-mounted hand button. The hand mounts/unmounts on
+    // fly-in token changes, but its layout width is determined by
+    // the same flex math as its siblings, so observing one is enough.
+    if (holdSlotRef.current) ro.observe(holdSlotRef.current)
+    const sample = handButtonRefs.current.find((r) => !!r)
+    if (sample) ro.observe(sample)
+    measure()
+    return () => ro.disconnect()
+  }, [game.mode, game.handSlots.length])
 
   // Game-over wind-down: when the run ends, give the board a beat to
   // desaturate and let the unplayable hand shake before the modal slams
@@ -10394,13 +10445,16 @@ function App() {
                   <span
                     className="hexaclear-hold-piece"
                     style={{
-                      transform: `scale(${computeHoldDisplayScale(displayPiece.shape.cells)})`,
+                      transform: `scale(${computeHoldDisplayScale(
+                        displayPiece.shape.cells,
+                        holdSizing.handSlotPx,
+                        holdSizing.holdPocketPx,
+                      )})`,
                     }}
                   >
                     <PiecePreview
                       shape={displayPiece.shape}
                       mode="hand"
-                      fitToBounds
                     />
                   </span>
                 )}
@@ -10555,15 +10609,25 @@ type PiecePreviewProps = {
 }
 
 /**
- * Per-piece display scale for the Hold pocket. Smaller pieces are
- * rendered close to the max (0.85× the pocket's natural fit size)
- * so they're legible. Larger pieces shrink so they don't crowd the
- * pocket. `extent` is the maximum hex-axial span across the three
- * hex axes — a 1-cube piece has extent 1, a 4-in-a-line piece has
- * extent 4.
+ * Per-piece display scale for the Hold pocket. Both the hand and
+ * the Hold use the same 5-hex SVG viewport, so a single hex always
+ * renders at (container_width / 5) px. To keep the held piece's
+ * hex from rendering LARGER than the hand's (which felt visually
+ * odd — a held 1-cube looked bigger than a 4-cube line in the
+ * hand), we scale by (hand / hold) so the held hex matches the
+ * hand hex exactly. We then clamp DOWN for pieces whose bounding
+ * box would otherwise spill outside the pocket at that scale.
+ *
+ * `extent` is the maximum hex-axial span — a 1-cube has extent 1,
+ * a 4-in-a-line has extent 4. `handSlotPx` / `holdPocketPx` are
+ * measured at runtime by the layout effect that wires up the
+ * ResizeObserver; both fall back gracefully to a neutral 1.0
+ * scale before the first measurement lands.
  */
 const computeHoldDisplayScale = (
   cells: ReadonlyArray<{ q: number; r: number }>,
+  handSlotPx: number,
+  holdPocketPx: number,
 ) => {
   let minQ = Infinity
   let maxQ = -Infinity
@@ -10581,10 +10645,21 @@ const computeHoldDisplayScale = (
     if (s > maxS) maxS = s
   }
   const extent = Math.max(maxQ - minQ, maxR - minR, maxS - minS) + 1
-  return Math.max(
-    0.5,
-    Math.min(0.85, 0.85 - (extent - 1) * 0.07),
-  )
+  // Until both refs have measured, render at 1× (the SVG already
+  // fits the pocket via width: 100% / height: 100%).
+  if (handSlotPx <= 0 || holdPocketPx <= 0) {
+    return 1
+  }
+  // Scale the pocket's SVG so its hex matches the hand hex. With
+  // the hold typically narrower than a hand slot this is > 1, but
+  // overflow on .hexaclear-hold is clipped so the extra empty SVG
+  // canvas around the centered piece is just invisible.
+  const handMatchScale = handSlotPx / holdPocketPx
+  // Independent cap: at scale s, the piece occupies
+  // extent/5 * holdPocketPx * s. Keep that within ~90% of the
+  // pocket so the piece never hugs the pocket walls.
+  const pocketFitScale = (5 * 0.9) / Math.max(extent, 1)
+  return Math.max(0.3, Math.min(handMatchScale, pocketFitScale))
 }
 
 const PiecePreview = ({

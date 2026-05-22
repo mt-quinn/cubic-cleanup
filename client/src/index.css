@@ -3225,8 +3225,9 @@ body {
      ~43px, which leaves the held piece preview too small to read.
      Hand slots flex: 1 so they shrink to absorb the extra real
      estate. Desktop max stays in the ~80px range — the held piece
-     uses fitToBounds + a per-piece scale so legibility holds across
-     this size band. */
+     re-uses the hand's 5-hex SVG viewport and gets a JS-computed
+     scale capped at the hand's hex size, so legibility holds across
+     this band. */
   width: clamp(72px, 22vw, 84px);
   align-self: stretch;
   border-radius: 0.6rem;
@@ -3242,6 +3243,11 @@ body {
   touch-action: none;
   position: relative;
   margin-right: 0.25rem;
+  /* Held piece is rendered at hand-hex parity, which on narrow
+     pockets means the SVG is visually scaled up beyond the pocket
+     bounds. Empty SVG canvas around the centered piece overflows
+     and must be clipped so it doesn't bleed onto neighbors. */
+  overflow: hidden;
   box-shadow:
     inset 0 1px 0 rgba(0, 0, 0, 0.55),
     inset 0 -1px 0 rgba(255, 197, 138, 0.08);
@@ -3270,11 +3276,12 @@ body {
 }
 
 /* Held piece sits centered in the pocket, slightly lower than the
-   HOLD label. The PiecePreview itself uses a fitToBounds viewBox
-   so the piece naturally fills its container; the inline
-   transform: scale(...) on this wrapper (set by App.tsx via
-   computeHoldDisplayScale) tunes the final size — small pieces
-   render at ~0.85, larger pieces shrink dynamically. */
+   HOLD label. PiecePreview uses the standard 5-hex viewport so a
+   single hex matches its hand-piece counterpart; the inline
+   transform: scale(...) (set by App.tsx via computeHoldDisplayScale)
+   resizes the whole SVG so that hex pixel size matches the hand's,
+   clipped by .hexaclear-hold's overflow: hidden when the scaled SVG
+   spills outside the pocket. */
 .hexaclear-hold-piece {
   display: flex;
   align-items: center;
