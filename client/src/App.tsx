@@ -3219,7 +3219,11 @@ function App() {
               endY:
                 (dstRect.top + dstRect.height / 2 - wrapperRect.top) / scale,
             })
-            setTimeout(() => setRescueAnimation(null), 450)
+            // Matches the 1200ms hexaclear-rescue-fly + flash keyframes
+            // in index.css. Slightly long on purpose: an auto-rescue
+            // is a rare "you almost died" moment, so the save should
+            // read as deliberate rather than zipping by in a flash.
+            setTimeout(() => setRescueAnimation(null), 1200)
           }
           playError()
           triggerHaptics(true)
@@ -3580,7 +3584,11 @@ function App() {
             endY:
               (dstRect.top + dstRect.height / 2 - wrapperRect.top) / scale,
           })
-          setTimeout(() => setRescueAnimation(null), 450)
+          // Matches the 1200ms hexaclear-rescue-fly + flash keyframes
+          // in index.css. Slightly long on purpose: an auto-rescue
+          // is a rare "you almost died" moment, so the save should
+          // read as deliberate rather than zipping by in a flash.
+          setTimeout(() => setRescueAnimation(null), 1200)
         }
         // Auto-rescue isn't a player choice and shouldn't be replayable
         // by mashing redo — but the underlying placement still IS
