@@ -2005,6 +2005,7 @@ function App() {
           gamesPlayedPvp: rawMerged.gamesPlayedPvp ?? 0,
           pvpWins: rawMerged.pvpWins ?? 0,
           pvpShames: rawMerged.pvpShames ?? 0,
+          bestRubiesInRun: rawMerged.bestRubiesInRun ?? 0,
           dailyBestMovesByDate: rawMerged.dailyBestMovesByDate ?? {},
         }
         saveLifetimeStats(merged)
@@ -2557,10 +2558,26 @@ function App() {
   // refs to ensure we don't schedule merge-time score increments twice.
   const placementActionIdRef = useRef(0)
   const lastScheduledScoreParticleActionIdRef = useRef<number | null>(null)
+  const lastScheduledCubeParticleActionIdRef = useRef<number | null>(null)
   // Used to ignore timeouts scheduled by particles from a previous run/mode.
   const scoreParticleGenerationRef = useRef(0)
   // Used to avoid removing the celebrate class too early when celebrations overlap.
   const scoreCelebrateTokenRef = useRef(0)
+  // Pending visual offset to the daily "Cubes" counter while -1 particles are
+  // still in flight. Each in-flight particle bumps this up by 1 so the HUD
+  // readout stays at its pre-placement value until the particle "lands";
+  // mergeTimeMs into the flight we decrement and let the counter catch up.
+  const [pendingCubesDelta, setPendingCubesDelta] = useState(0)
+  // What the "Cubes" HUD readout actually displays. The underlying count
+  // drops the moment a numbered cube is fully cleared, but we want the
+  // visual to lag behind in-flight -1 particles so it pops as the
+  // particle merges into it (mirrors the endless score-counter flow).
+  // pendingCubesDelta is always >= 0 outside of flight; clamping at 0
+  // is belt-and-braces in case undo / mode-switch races the merge.
+  const displayedCubesRemaining = Math.max(
+    0,
+    dailyCubesRemaining + pendingCubesDelta,
+  )
   const [draggingPieceId, setDraggingPieceId] = useState<string | null>(null)
   // Drag affordance flags for the Hold-slot drop targets. Only one is
   // ever non-null/true at a time:
@@ -3787,6 +3804,154 @@ function App() {
         if (result.clearedPatterns.length > 0) {
           setClearingCells(result.clearedCellIds)
           setClearingGoldenCellIds(current.goldenCellIds)
+
+          // Score-particle treatment for numbered cubes that this
+          // placement fully eliminated (hits went from >0 to 0). One
+          // "-1" particle per cube, flying from the cube's last
+          // position up to the "Cubes" HUD readout. The HUD's
+          // numeric update is held off until the particle merges in,
+          // exactly like the endless score counter does.
+          const fullyClearedCubeIds: string[] = []
+          for (const [cellId, beforeHits] of Object.entries(
+            current.dailyHits,
+          )) {
+            if (beforeHits > 0 && (result.dailyHits[cellId] ?? 0) === 0) {
+              fullyClearedCubeIds.push(cellId)
+            }
+          }
+
+          if (
+            fullyClearedCubeIds.length > 0 &&
+            // StrictMode dev re-runs the setGame updater (and all of
+            // its side effects) twice. The ref mutates synchronously
+            // on first pass, so the second pass bails out before
+            // either bumping pendingCubesDelta or queueing a second
+            // rAF chain. Setting it here (rather than inside the
+            // rAF) guarantees the offset and the particle scheduling
+            // stay in lockstep — exactly once per placement.
+            lastScheduledCubeParticleActionIdRef.current !== actionId
+          ) {
+            lastScheduledCubeParticleActionIdRef.current = actionId
+            const cubeCounterEl = getScoreCounterEl()
+            const boardWrapper = boardWrapperRef.current
+            if (cubeCounterEl && boardWrapper) {
+              const generationAtStart = scoreParticleGenerationRef.current
+              const animationDurationMs = 1400
+              const mergeTimeMs = Math.round(animationDurationMs * 0.85)
+              const offset = fullyClearedCubeIds.length
+
+              // Hold the displayed count steady until particles land.
+              setPendingCubesDelta((d) => d + offset)
+
+              // Defer particle creation until after React has
+              // rendered + the DOM is updated, so getBoundingClientRect
+              // gives us the post-commit cube counter position.
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  if (
+                    scoreParticleGenerationRef.current !== generationAtStart
+                  )
+                    return
+
+                  const cubeCounter = getScoreCounterEl()
+                  const boardWrapper2 = boardWrapperRef.current
+                  if (!cubeCounter || !boardWrapper2) {
+                    // Fallback: if we can't measure, just let the
+                    // count catch up immediately so we don't leave
+                    // the HUD permanently desynced.
+                    setPendingCubesDelta((d) => Math.max(0, d - offset))
+                    return
+                  }
+                  const counterRect = cubeCounter.getBoundingClientRect()
+                  const boardRect = boardWrapper2.getBoundingClientRect()
+                  const endX =
+                    (counterRect.left +
+                      counterRect.width / 2 -
+                      boardRect.left) /
+                    scale
+                  const endY =
+                    (counterRect.top +
+                      counterRect.height / 2 -
+                      boardRect.top) /
+                    scale
+
+                  const spawnedParticleIds: string[] = []
+                  for (const cellId of fullyClearedCubeIds) {
+                    const cellPos = boardLayout.positions[cellId]
+                    if (!cellPos) continue
+                    const startX = cellPos.x + boardLayout.offsetX
+                    const startY = cellPos.y + boardLayout.offsetY
+                    const deltaX = endX - startX
+                    const deltaY = endY - startY
+
+                    const particleId = `cube-${Date.now()}-${Math.random()
+                      .toString(16)
+                      .slice(2)}`
+                    spawnedParticleIds.push(particleId)
+                    setScoreParticles((prev) => [
+                      ...prev,
+                      {
+                        id: particleId,
+                        value: -1,
+                        startX,
+                        startY,
+                        deltaX,
+                        deltaY,
+                        delay: 0,
+                        type: 'base',
+                      },
+                    ])
+                  }
+
+                  // If, for some reason, no cells resolved to
+                  // positions (boardLayout in flux, e.g.), claw
+                  // back the offset so the counter doesn't stay
+                  // permanently inflated.
+                  if (spawnedParticleIds.length < offset) {
+                    const missed = offset - spawnedParticleIds.length
+                    setPendingCubesDelta((d) => Math.max(0, d - missed))
+                  }
+
+                  // Merge time: drop the offset by however many
+                  // particles we actually spawned, then play the
+                  // counter pop just like endless does.
+                  window.setTimeout(() => {
+                    if (
+                      scoreParticleGenerationRef.current !==
+                      generationAtStart
+                    )
+                      return
+                    const landed = spawnedParticleIds.length
+                    if (landed > 0) {
+                      setPendingCubesDelta((d) => Math.max(0, d - landed))
+                    }
+                    const counterAtMerge = getScoreCounterEl()
+                    if (counterAtMerge && landed > 0) {
+                      scoreCelebrateTokenRef.current += 1
+                      const token = scoreCelebrateTokenRef.current
+                      counterAtMerge.classList.add('score-celebrate')
+                      window.setTimeout(() => {
+                        if (scoreCelebrateTokenRef.current !== token) return
+                        counterAtMerge.classList.remove('score-celebrate')
+                      }, 400)
+                    }
+                  }, mergeTimeMs)
+
+                  // Tidy up the particles after the flight ends.
+                  window.setTimeout(() => {
+                    if (
+                      scoreParticleGenerationRef.current !==
+                      generationAtStart
+                    )
+                      return
+                    setScoreParticles((prev) =>
+                      prev.filter((p) => !spawnedParticleIds.includes(p.id)),
+                    )
+                  }, animationDurationMs + 200)
+                })
+              })
+            }
+          }
         }
       }
 
@@ -3904,7 +4069,9 @@ function App() {
   const resetGame = () => {
     scoreParticleGenerationRef.current += 1
     lastScheduledScoreParticleActionIdRef.current = null
+    lastScheduledCubeParticleActionIdRef.current = null
     setScoreParticles([])
+    setPendingCubesDelta(0)
     if (game.mode === 'daily') {
       // Preserve the active daily date key when resetting — if the
       // player is replaying an archive day from history, "Reset"
@@ -3949,7 +4116,9 @@ function App() {
   const handleStartDailyForDateKey = (dateKey: string) => {
     scoreParticleGenerationRef.current += 1
     lastScheduledScoreParticleActionIdRef.current = null
+    lastScheduledCubeParticleActionIdRef.current = null
     setScoreParticles([])
+    setPendingCubesDelta(0)
     const next = createDailyGameState(dateKey)
     setGame(next)
     setSavedDailyGame(next)
@@ -3981,7 +4150,9 @@ function App() {
     mp.restart().catch(() => {})
     scoreParticleGenerationRef.current += 1
     lastScheduledScoreParticleActionIdRef.current = null
+    lastScheduledCubeParticleActionIdRef.current = null
     setScoreParticles([])
+    setPendingCubesDelta(0)
     setSelectedPieceId(null)
     setHover(null)
     setUndoStack([])
@@ -4524,7 +4695,22 @@ function App() {
     if (undoStack.length === 0) return
     const previous = undoStack[undoStack.length - 1]
     const remaining = undoStack.slice(0, -1)
-    
+
+    // Cancel any cube-counter delays from this placement. After undo the
+    // dailyHits state bounces back to its pre-placement values, so the
+    // displayed cube counter needs to ignore the offset we layered on top
+    // when the particle was first scheduled (otherwise it briefly reads
+    // higher than the actual remaining count until the merge timeout
+    // fires, at which point we'd over-decrement and drop below the truth).
+    if (game.mode === 'daily' && pendingCubesDelta !== 0) {
+      scoreParticleGenerationRef.current += 1
+      lastScheduledCubeParticleActionIdRef.current = null
+      setPendingCubesDelta(0)
+      setScoreParticles((prev) =>
+        prev.filter((p) => !(p.value < 0)),
+      )
+    }
+
     // Find cells that are currently filled but will be empty after undo
     const cellsToRemove: string[] = []
     for (const cellId in game.board) {
@@ -4698,6 +4884,16 @@ function App() {
     setGame(nextGame)
     setSelectedPieceId(null)
     setHover(null)
+    // Any in-flight cube-counter delay belongs to the run we're leaving.
+    // Without this, switching out and back into daily could resume with
+    // a stale +N offset, making the HUD read inflated until the next
+    // clear's merge timeout fires.
+    if (pendingCubesDelta !== 0) {
+      scoreParticleGenerationRef.current += 1
+      lastScheduledCubeParticleActionIdRef.current = null
+      setPendingCubesDelta(0)
+      setScoreParticles((prev) => prev.filter((p) => !(p.value < 0)))
+    }
   }
 
   const preview = useMemo(
@@ -5831,7 +6027,13 @@ function App() {
         value: String(runStats.boardClears),
       })
     }
-    if (runStats.bestCombo >= 2) {
+    // Daily is move-ranked, not score-ranked: combos and points-per-
+    // placement don't read as "achievements" there (the player isn't
+    // chasing a high score, they're chasing fewest moves to clear the
+    // numbered cubes). Hide the score/combo moments in daily so the
+    // ribbon only surfaces things that actually matter for that mode.
+    const showScoreMoments = game.mode !== 'daily'
+    if (showScoreMoments && runStats.bestCombo >= 2) {
       moments.push({
         key: 'combo',
         label: 'Combo',
@@ -5845,7 +6047,7 @@ function App() {
         value: String(runStats.bestStreak),
       })
     }
-    if (runStats.topPlacementPoints > 0) {
+    if (showScoreMoments && runStats.topPlacementPoints > 0) {
       moments.push({
         key: 'top',
         label: 'Best clear',
@@ -5974,7 +6176,7 @@ function App() {
             : 'Best'
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
-          game.mode === 'daily' ? dailyCubesRemaining : game.score
+          game.mode === 'daily' ? displayedCubesRemaining : game.score
         const showLiveStat = true
         return (
           <header className="hexaclear-header">
@@ -6166,7 +6368,7 @@ function App() {
             : bestScore
         const liveStatLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
         const liveStatValue =
-          game.mode === 'daily' ? dailyCubesRemaining : game.score
+          game.mode === 'daily' ? displayedCubesRemaining : game.score
         // Modes other than daily that don't have a recorded best
         // (Big / co-op, or a first-ever endless run) fall back to
         // the live score so the LCD doesn't read "---" — the slot
@@ -7347,33 +7549,41 @@ function App() {
           {scorePopup && game.mode !== 'daily' && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
           )}
-          {scoreParticles.length > 0 && game.mode !== 'daily' && (
+          {scoreParticles.length > 0 && (
             <div className="hexaclear-score-particles">
-              {scoreParticles.map((particle) => (
-                <div
-                  key={particle.id}
-                  className={`hexaclear-score-particle hexaclear-score-particle-${particle.type}`}
-                  style={{
-                    left: particle.startX,
-                    top: particle.startY,
-                    '--particle-delta-x': `${particle.deltaX}px`,
-                    '--particle-delta-y': `${particle.deltaY}px`,
-                    animationDelay: `${particle.delay}ms`,
-                  } as React.CSSProperties & {
-                    '--particle-delta-x': string
-                    '--particle-delta-y': string
-                  }}
-                >
-                  <span className="hexaclear-score-particle-value">
-                    +{particle.value}
-                  </span>
-                  {particle.label && (
-                    <span className="hexaclear-score-particle-label">
-                      {particle.label}
+              {scoreParticles.map((particle) => {
+                const isNegative = particle.value < 0
+                const valueText = isNegative
+                  ? String(particle.value)
+                  : `+${particle.value}`
+                return (
+                  <div
+                    key={particle.id}
+                    className={`hexaclear-score-particle hexaclear-score-particle-${particle.type}${
+                      isNegative ? ' is-negative' : ''
+                    }`}
+                    style={{
+                      left: particle.startX,
+                      top: particle.startY,
+                      '--particle-delta-x': `${particle.deltaX}px`,
+                      '--particle-delta-y': `${particle.deltaY}px`,
+                      animationDelay: `${particle.delay}ms`,
+                    } as React.CSSProperties & {
+                      '--particle-delta-x': string
+                      '--particle-delta-y': string
+                    }}
+                  >
+                    <span className="hexaclear-score-particle-value">
+                      {valueText}
                     </span>
-                  )}
-                </div>
-              ))}
+                    {particle.label && (
+                      <span className="hexaclear-score-particle-label">
+                        {particle.label}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
           {game.gameOver && game.mode === 'endless' && !gameOverWindingDown && (
@@ -9514,6 +9724,13 @@ function App() {
                 key: 'best-hit',
                 label: 'Best clear',
                 value: `+${ls.bestSinglePlacement}`,
+              })
+            }
+            if (ls.bestRubiesInRun > 0) {
+              records.push({
+                key: 'best-rubies',
+                label: 'Most rubies',
+                value: String(ls.bestRubiesInRun),
               })
             }
             if (ls.longestRunMs > 0) {
