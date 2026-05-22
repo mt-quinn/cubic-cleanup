@@ -132,7 +132,13 @@ export type UseMultiplayerGameResult = {
   // maps to (i + 1) * HUE_STEP_DEG. Drives the per-player cube
   // tinting in App.
   hueShiftByPlayerId: Record<string, number>
-  placePiece: (pieceId: string, cellId: string) => Promise<void>
+  placePiece: (
+    pieceId: string,
+    cellId: string,
+  ) => Promise<{
+    autoRescuedPieceId: string | null
+    autoRescuedSlotIndex: number | null
+  } | null>
   // Park a piece into the hold slot, swap it with a held piece, or
   // pull a held piece into a hand slot. `target` is either the hold
   // slot or a specific hand slot index. The server is authoritative;
@@ -363,8 +369,17 @@ export const useMultiplayerGame = ({
   }, [name])
 
   const placePiece = async (pieceId: string, cellId: string) => {
-    if (!code) return
-    await placePieceMutation({ code, playerId, pieceId, cellId })
+    if (!code) return null
+    const result = await placePieceMutation({
+      code,
+      playerId,
+      pieceId,
+      cellId,
+    })
+    return {
+      autoRescuedPieceId: result?.autoRescuedPieceId ?? null,
+      autoRescuedSlotIndex: result?.autoRescuedSlotIndex ?? null,
+    }
   }
 
   const holdSwap = async (

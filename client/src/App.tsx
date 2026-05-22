@@ -2468,6 +2468,21 @@ function App() {
   const [pendingUndoRestoreFromHold, setPendingUndoRestoreFromHold] = useState<
     boolean
   >(false)
+  // Auto-rescue: when a placement would otherwise end the run with
+  // exactly one unplayable piece left in hand and the hold pocket
+  // empty, we silently park that piece into hold and deal a new
+  // hand (something the player could do themselves by dragging into
+  // hold). The animation state flies the rescued piece from its
+  // hand slot into the hold pocket so the player can see what
+  // happened; the "is-rescue-flash" class on the hold slot pulses
+  // red for the same window.
+  const [rescueAnimation, setRescueAnimation] = useState<{
+    piece: ActivePiece
+    startX: number
+    startY: number
+    endX: number
+    endY: number
+  } | null>(null)
   const handButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
   // Live ref for the Hold slot button, used both as a drag drop-target
   // hit-test surface and as the destination for the undo animation
@@ -3117,15 +3132,62 @@ function App() {
       setSelectedPieceId(null)
       setHover(null)
       setGhost(null)
-      mp.placePiece(pieceId, cellId).catch(() => {
-        setFailedPlacementPieceId(pieceId)
-        setInvalidDropCellIds(
-          attemptedCellIds && attemptedCellIds.length > 0
-            ? attemptedCellIds
-            : [cellId],
-        )
-        playError()
-      })
+      // Snapshot the local hand right now so we can map the rescued
+      // piece's id back to its DOM slot button even after the server
+      // confirms the rescue and the room state has already shifted
+      // to the freshly-dealt hand.
+      const handBeforePlacement = mp.selfPlayer?.handSlots ?? null
+      mp.placePiece(pieceId, cellId)
+        .then((result) => {
+          if (!result || !result.autoRescuedPieceId) return
+          // Server says we just auto-rescued this player. Find the
+          // rescued piece's source slot (preferring the server's
+          // slot index, falling back to the snapshotted hand), then
+          // play the same flight + flash animation as single player.
+          const sourceSlot =
+            result.autoRescuedSlotIndex ??
+            (handBeforePlacement
+              ? handBeforePlacement.indexOf(result.autoRescuedPieceId)
+              : -1)
+          const rescuedShape = mp.selfPlayer?.hold?.shape ?? null
+          const sourceBtn =
+            sourceSlot >= 0 ? handButtonRefs.current[sourceSlot] : null
+          const holdBtn = holdSlotRef.current
+          const wrapper = boardWrapperRef.current
+          if (rescuedShape && sourceBtn && holdBtn && wrapper) {
+            const wrapperRect = wrapper.getBoundingClientRect()
+            const srcRect = sourceBtn.getBoundingClientRect()
+            const dstRect = holdBtn.getBoundingClientRect()
+            setRescueAnimation({
+              piece: {
+                id: result.autoRescuedPieceId,
+                shape: rescuedShape,
+              },
+              startX:
+                (srcRect.left + srcRect.width / 2 - wrapperRect.left) /
+                scale,
+              startY:
+                (srcRect.top + srcRect.height / 2 - wrapperRect.top) / scale,
+              endX:
+                (dstRect.left + dstRect.width / 2 - wrapperRect.left) /
+                scale,
+              endY:
+                (dstRect.top + dstRect.height / 2 - wrapperRect.top) / scale,
+            })
+            setTimeout(() => setRescueAnimation(null), 450)
+          }
+          playError()
+          triggerHaptics(true)
+        })
+        .catch(() => {
+          setFailedPlacementPieceId(pieceId)
+          setInvalidDropCellIds(
+            attemptedCellIds && attemptedCellIds.length > 0
+              ? attemptedCellIds
+              : [cellId],
+          )
+          playError()
+        })
       return
     }
 
@@ -3359,7 +3421,7 @@ function App() {
       // Game-over check considers the held piece as a possible move
       // source too. The post-placement hold is null when the played
       // piece came from hold, otherwise unchanged.
-      const newHold = playFromHold ? null : current.hold
+      let newHold = playFromHold ? null : current.hold
       const noMovesLeft = !hasAnyValidMove(
         result.board,
         newHand,
@@ -3375,6 +3437,113 @@ function App() {
         if (noMovesLeft) {
           gameOver = true
         }
+      }
+
+      // Auto-rescue: the player can manually drag a piece into the
+      // empty hold pocket to dodge a game-over (we'll redeal a hand
+      // so the held piece + the new hand have a fresh shot at a
+      // valid move). When the only remaining hand piece is
+      // unplayable and the hold is empty, that's the one and only
+      // configuration where the player is forced to perform that
+      // exact action to keep playing. Doing it for them removes the
+      // friction; the red flash + flight animation key the player to
+      // what just happened and why so the rescue doesn't feel
+      // invisible.
+      //
+      // We intentionally only auto-rescue with EXACTLY one piece in
+      // hand. With two or three unplayable pieces and an empty hold
+      // the player still has a real choice (which piece to bank),
+      // so we let game-over stand unless they take that action
+      // themselves.
+      if (
+        gameOver &&
+        newHand.length === 1 &&
+        newHold == null &&
+        !result.dailyCompleted
+      ) {
+        const rescuedPiece = newHand[0]
+        const rescuedSlot = updatedSlots.indexOf(rescuedPiece.id)
+        const sourceBtn =
+          rescuedSlot >= 0 ? handButtonRefs.current[rescuedSlot] : null
+        const holdBtn = holdSlotRef.current
+        const wrapper = boardWrapperRef.current
+
+        // Park the rescued piece into hold and clear its hand slot.
+        newHold = rescuedPiece
+        if (rescuedSlot >= 0) {
+          updatedSlots[rescuedSlot] = null
+        }
+
+        // Deal a fresh hand. Daily uses the deterministic seeded
+        // dealer (same path as a manual hold-park would take),
+        // endless / big retry up to 30 times for a playable hand.
+        if (current.mode === 'daily' && current.dailySeed != null) {
+          nextHandDealCount = (nextHandDealCount ?? 0) + 1
+          newHand = dealDailyHand(
+            result.board,
+            current.dailySeed,
+            nextHandDealCount,
+          )
+        } else {
+          newHand = dealPlayableHand(
+            result.board,
+            undefined,
+            undefined,
+            current.mode,
+          )
+        }
+        for (let i = 0; i < 3; i++) {
+          updatedSlots[i] = newHand[i]?.id ?? null
+        }
+        setHandFlyInToken((t) => t + 1)
+
+        // Re-evaluate game-over with the rescued state. The rescued
+        // piece itself is still unplayable by definition, so survival
+        // depends on the new hand having at least one playable piece.
+        // In endless / big that's nearly guaranteed by dealPlayableHand;
+        // in daily the deterministic deal could still be all-blocked,
+        // in which case we let the game end after the rescue animation
+        // for honesty.
+        const stillStuck = !hasAnyValidMove(
+          result.board,
+          newHand,
+          current.mode,
+          newHold,
+        )
+        gameOver =
+          current.mode === 'daily'
+            ? result.dailyCompleted || stillStuck
+            : stillStuck
+
+        // Visual: fly the rescued piece from its hand slot into the
+        // hold pocket and pulse the pocket red. Positions are captured
+        // from the DOM right now (the slot button hasn't been re-laid
+        // out — only its piece content changes on the next commit), so
+        // a getBoundingClientRect here gives the right start/end.
+        if (sourceBtn && holdBtn && wrapper) {
+          const wrapperRect = wrapper.getBoundingClientRect()
+          const srcRect = sourceBtn.getBoundingClientRect()
+          const dstRect = holdBtn.getBoundingClientRect()
+          setRescueAnimation({
+            piece: rescuedPiece,
+            startX:
+              (srcRect.left + srcRect.width / 2 - wrapperRect.left) / scale,
+            startY:
+              (srcRect.top + srcRect.height / 2 - wrapperRect.top) / scale,
+            endX:
+              (dstRect.left + dstRect.width / 2 - wrapperRect.left) / scale,
+            endY:
+              (dstRect.top + dstRect.height / 2 - wrapperRect.top) / scale,
+          })
+          setTimeout(() => setRescueAnimation(null), 450)
+        }
+        // Auto-rescue isn't a player choice and shouldn't be replayable
+        // by mashing redo — but the underlying placement still IS
+        // undoable. The pre-placement snapshot is appended below via
+        // the usual code path, which correctly reverts both the
+        // placement and the rescued hold/hand state.
+        playError()
+        triggerHaptics(true)
       }
 
       // Score is only surfaced in endless mode. We keep it updated
@@ -7131,6 +7300,22 @@ function App() {
               <PiecePreview shape={undoAnimation.piece.shape} mode="board" />
             </div>
           )}
+          {rescueAnimation && (
+            <div
+              className="hexaclear-rescue-animation"
+              style={{
+                left: rescueAnimation.startX,
+                top: rescueAnimation.startY,
+                '--rescue-delta-x': `${rescueAnimation.endX - rescueAnimation.startX}px`,
+                '--rescue-delta-y': `${rescueAnimation.endY - rescueAnimation.startY}px`,
+              } as React.CSSProperties & {
+                '--rescue-delta-x': string
+                '--rescue-delta-y': string
+              }}
+            >
+              <PiecePreview shape={rescueAnimation.piece.shape} mode="board" />
+            </div>
+          )}
           {scorePopup && game.mode !== 'daily' && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
           )}
@@ -10438,6 +10623,7 @@ function App() {
                   isDragging ? 'dragging' : '',
                   displayPiece && !isPlayable ? 'unplayable' : '',
                   isFailedDrop ? 'failed-drop' : '',
+                  rescueAnimation ? 'is-rescue-flash' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -10488,23 +10674,36 @@ function App() {
                 >
                   Hold
                 </span>
-                {displayPiece && !isDragging && (
-                  <span
-                    className="hexaclear-hold-piece"
-                    style={{
-                      transform: `scale(${computeHoldDisplayScale(
-                        displayPiece.shape.cells,
-                        holdSizing.handSlotPx,
-                        holdSizing.holdPocketPx,
-                      )})`,
-                    }}
-                  >
-                    <PiecePreview
-                      shape={displayPiece.shape}
-                      mode="hand"
-                    />
-                  </span>
-                )}
+                {displayPiece &&
+                  !isDragging &&
+                  // Hide the pocket-rendered piece while the rescue
+                  // animation is flying its own copy across the
+                  // board — otherwise the player sees two pieces
+                  // (the smaller pocket render and the in-flight
+                  // overlay) at the same time. The flight settles
+                  // ~50ms before the rescueAnimation state clears,
+                  // and the pocket render reappears on the next
+                  // render cycle, looking like the piece "landed".
+                  !(
+                    rescueAnimation &&
+                    rescueAnimation.piece.id === displayPiece.id
+                  ) && (
+                    <span
+                      className="hexaclear-hold-piece"
+                      style={{
+                        transform: `scale(${computeHoldDisplayScale(
+                          displayPiece.shape.cells,
+                          holdSizing.handSlotPx,
+                          holdSizing.holdPocketPx,
+                        )})`,
+                      }}
+                    >
+                      <PiecePreview
+                        shape={displayPiece.shape}
+                        mode="hand"
+                      />
+                    </span>
+                  )}
                 {isDragging && (
                   <span
                     ref={cancelMarkRef}

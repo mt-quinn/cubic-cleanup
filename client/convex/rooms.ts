@@ -556,6 +556,36 @@ export const placePiece = mutation({
       }
     }
 
+    // Auto-rescue: if the placement leaves the player with EXACTLY one
+    // unplayable hand piece and an empty hold pocket, park that
+    // piece into hold and deal a fresh hand. This mirrors the
+    // single-player rule — the player could have done this manually
+    // by dragging into hold, and forcing them through that exact
+    // sequence to keep the room alive feels punitive. We return the
+    // rescued piece's id + slot so the placer's client can play the
+    // flight + red-flash animation.
+    let autoRescuedPieceId: string | null = null
+    let autoRescuedSlotIndex: number | null = null
+    if (
+      newHand.length === 1 &&
+      newHold === null &&
+      !hasAnyValidMove(result.board, newHand, MODE, null)
+    ) {
+      const rescuedPiece = newHand[0]
+      const rescuedSlot = newHandSlots.indexOf(rescuedPiece.id)
+      autoRescuedPieceId = rescuedPiece.id
+      autoRescuedSlotIndex = rescuedSlot >= 0 ? rescuedSlot : null
+      newHold = rescuedPiece
+      if (rescuedSlot >= 0) {
+        newHandSlots = newHandSlots.map((id, i) =>
+          i === rescuedSlot ? null : id,
+        )
+      }
+      const dealt = dealPlayableHand(result.board, 30, Math.random, MODE)
+      newHand = dealt
+      newHandSlots = dealt.map((p) => p.id)
+    }
+
     const updatedPlayers = room.players.map((p, i) =>
       i === playerIndex
         ? {
@@ -684,6 +714,8 @@ export const placePiece = mutation({
       boardCleared: result.boardCleared,
       gameOver,
       winnerPlayerId,
+      autoRescuedPieceId,
+      autoRescuedSlotIndex,
     }
   },
 })
