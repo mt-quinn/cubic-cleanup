@@ -122,4 +122,43 @@ const generateShapes = (): PieceShape[] => {
 
 export const ALL_PIECE_SHAPES: PieceShape[] = generateShapes()
 
+// Human-readable nomenclature for the procedurally-generated polyhex
+// shapes. Keyed by the deterministic id `generateShapes` assigns to
+// each canonical shape (size-first iteration order, so ids are stable
+// across runs).
+//
+// Naming scheme is intentionally descriptive rather than thematic so
+// the Piecetiary in the help screen reads cleanly to a new player:
+//   * size class is implicit in the visual (the piece preview lives
+//     right next to its name) — no need to encode "tetra" / "quad"
+//     in the label;
+//   * each name picks the closest familiar shape (Triangle, Rhombus,
+//     Tee, Pinwheel, Zigzag, Bar, etc.) so a player can refer to a
+//     specific piece in conversation without ambiguity.
+//
+// The cells / ids referenced below are the ones emitted by
+// `generateShapes` today; if the canonical-shape enumeration ever
+// changes, this map will need updating (or be regenerated from the
+// shape cells themselves). A unit test could pin this — none exists
+// today, so the safety net here is just "the names land alongside
+// their preview rendering" in the Piecetiary view.
+export const PIECE_SHAPE_NAMES: Record<string, string> = {
+  // size 1
+  'shape-1-0': 'Singlet',
+  // size 2
+  'shape-2-1': 'Pair',
+  // size 3
+  'shape-3-2': 'Triangle',
+  'shape-3-3': 'Wedge',
+  'shape-3-4': 'Trio',
+  // size 4
+  'shape-4-5': 'Rhombus',
+  'shape-4-6': 'Tee',
+  'shape-4-7': 'Pinwheel',
+  'shape-4-8': 'Hook',
+  'shape-4-9': 'Zigzag',
+  'shape-4-10': 'Comma',
+  'shape-4-11': 'Bar',
+}
+
 

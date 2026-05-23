@@ -2484,6 +2484,73 @@
   gap: 12px !important;
 }
 
+/* How-to-Play tab strip: flatten to a row of toolbar-style buttons
+   that follows Win98's inset/raised conventions. The active tab gets
+   a sunken treatment so it reads as "this is the page you're on". */
+[data-theme="win98"] .hexaclear-scoring-tabs {
+  border-bottom-color: var(--w98-deep-shadow) !important;
+  gap: 2px !important;
+}
+
+[data-theme="win98"] .hexaclear-scoring-tab {
+  background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-highlight)
+    var(--w98-deep-shadow)
+    var(--w98-deep-shadow)
+    var(--w98-highlight) !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+  padding: 5px 10px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  cursor: default !important;
+}
+
+[data-theme="win98"] .hexaclear-scoring-tab.is-active {
+  background: var(--w98-surface) !important;
+  border-color:
+    var(--w98-deep-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-deep-shadow) !important;
+  box-shadow: inset 1px 1px 0 var(--w98-shadow) !important;
+}
+
+/* Piecetiary in Win98: trade the gradient cells for a sunken
+   minesweeper-well around each piece so the grid reads like the
+   surrounding chrome. */
+[data-theme="win98"] .hexaclear-piecetiary-cell {
+  background: var(--w98-surface) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+[data-theme="win98"] .hexaclear-piecetiary-name {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="win98"] .hexaclear-piecetiary-size {
+  color: var(--w98-text) !important;
+  font-family: inherit !important;
+  font-size: 10px !important;
+  opacity: 0.65 !important;
+}
+
 /* Header buttons: undo while in-play — same Win98 raised chrome. */
 [data-theme="win98"] .hexaclear-undo-button {
   background: var(--w98-surface) !important;

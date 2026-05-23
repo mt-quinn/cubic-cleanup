@@ -26,6 +26,7 @@ import {
 import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { BoardDefinition } from './game/hexTypes'
+import { ALL_PIECE_SHAPES, PIECE_SHAPE_NAMES } from './game/pieces'
 import {
   getAudioNeedsUnlock,
   getMasterVolume,
@@ -1885,6 +1886,15 @@ function App() {
     }>
   >([])
   const [showScoring, setShowScoring] = useState(false)
+  // Active tab within the How-to-Play overlay. "rules" shows the
+  // scoring rules / daily-puzzle rules (existing content); "pieces"
+  // shows the Piecetiary — a visual reference for every piece shape
+  // along with its name. Resets to "rules" every time the overlay
+  // re-opens so the player lands on the familiar content first.
+  const [scoringTab, setScoringTab] = useState<'rules' | 'pieces'>('rules')
+  useEffect(() => {
+    if (showScoring) setScoringTab('rules')
+  }, [showScoring])
   const [showHighScores, setShowHighScores] = useState(false)
   // Profile-level stats modal, reachable from the pause menu via a
   // dedicated "Stats" button. Lives next to highscores / scoring as
@@ -9606,9 +9616,75 @@ function App() {
               }}
             >
               <div className="hexaclear-overlay-card hexaclear-scoring-card">
-                {game.mode === 'daily' ? (
+                <div className="title">How to Play</div>
+                {/* Tab strip. The Rules tab keeps its mode-specific
+                    content (daily puzzle rules vs scoring numbers);
+                    the Piecetiary tab shows every piece in the
+                    rotation with its name so the player can build a
+                    vocabulary for talking about them. */}
+                <div
+                  className="hexaclear-scoring-tabs"
+                  role="tablist"
+                  aria-label="How to play tabs"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={scoringTab === 'rules'}
+                    className={[
+                      'hexaclear-scoring-tab',
+                      scoringTab === 'rules' ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      playUiClick()
+                      setScoringTab('rules')
+                    }}
+                  >
+                    {game.mode === 'daily' ? 'Daily Rules' : 'How to Score'}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={scoringTab === 'pieces'}
+                    className={[
+                      'hexaclear-scoring-tab',
+                      scoringTab === 'pieces' ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      playUiClick()
+                      setScoringTab('pieces')
+                    }}
+                  >
+                    Piecetiary
+                  </button>
+                </div>
+                {scoringTab === 'pieces' ? (
+                  <div className="hexaclear-piecetiary">
+                    <div className="hexaclear-piecetiary-grid">
+                      {ALL_PIECE_SHAPES.map((shape) => (
+                        <div
+                          key={shape.id}
+                          className="hexaclear-piecetiary-cell"
+                        >
+                          <div className="hexaclear-piecetiary-preview">
+                            <PiecePreview shape={shape} mode="board" />
+                          </div>
+                          <div className="hexaclear-piecetiary-name">
+                            {PIECE_SHAPE_NAMES[shape.id] ?? shape.id}
+                          </div>
+                          <div className="hexaclear-piecetiary-size">
+                            {shape.size}-cube
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : game.mode === 'daily' ? (
                   <>
-                    <div className="title">Daily Puzzles</div>
                     <div className="hexaclear-scoring-rules">
                       <div className="hexaclear-scoring-rule">
                         <span className="hexaclear-chip hexaclear-chip-goal">
@@ -9663,7 +9739,6 @@ function App() {
                     const rosetteSize = isBig ? 'nineteen-cube' : 'six-cube'
                     return (
                       <>
-                        <div className="title">How To Score</div>
                         <div className="hexaclear-scoring-rules">
                           <div className="hexaclear-scoring-rule">
                             <span className="hexaclear-chip hexaclear-chip-gold">
