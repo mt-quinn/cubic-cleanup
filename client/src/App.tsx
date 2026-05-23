@@ -26,7 +26,7 @@ import {
 import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { BoardDefinition } from './game/hexTypes'
-import { ALL_PIECE_SHAPES, PIECE_SHAPE_NAMES } from './game/pieces'
+import { ALL_PIECE_VARIANTS, PIECE_VARIANT_NAMES } from './game/pieces'
 import {
   getAudioNeedsUnlock,
   getMasterVolume,
@@ -55,6 +55,7 @@ import {
   foldRunIntoLifetime,
   formatDuration,
   formatFriendlyDate,
+  formatFriendlyDateTime,
   loadLifetimeStats,
   loadStatsSyncAccountId,
   loadStatsSyncBaseline,
@@ -9254,7 +9255,7 @@ function App() {
                         ? accountSyncState === 'syncing'
                           ? 'Syncing online stats and daily history...'
                           : 'Signed in'
-                        : 'Local only — sign in to sync stats and daily history'}
+                        : 'Local only - sign in to sync stats and daily history across devices!'}
                     </div>
                   </div>
                   <button
@@ -9465,7 +9466,7 @@ function App() {
             const lastSyncedLabel =
               statsSyncLastAt === null
                 ? null
-                : `Last synced ${formatFriendlyDate(statsSyncLastAt)}`
+                : `Last synced ${formatFriendlyDateTime(statsSyncLastAt)}`
 
             return (
               <div
@@ -9718,20 +9719,31 @@ function App() {
                 {scoringTab === 'pieces' ? (
                   <div className="hexaclear-piecetiary">
                     <div className="hexaclear-piecetiary-grid">
-                      {ALL_PIECE_SHAPES.map((shape) => (
+                      {ALL_PIECE_VARIANTS.map((variant) => (
                         <div
-                          key={shape.id}
+                          key={variant.id}
                           className="hexaclear-piecetiary-cell"
+                          data-piece-size={variant.size}
                         >
                           <div className="hexaclear-piecetiary-preview">
-                            <PiecePreview shape={shape} mode="board" />
+                            <PiecePreview
+                              shape={{
+                                id: variant.id,
+                                cells: variant.cells,
+                                size: variant.size,
+                              }}
+                              mode="hand"
+                            />
                           </div>
-                          <div className="hexaclear-piecetiary-name">
-                            {PIECE_SHAPE_NAMES[shape.id] ?? shape.id}
+                          <div className="hexaclear-piecetiary-notation">
+                            {variant.notation}
                           </div>
-                          <div className="hexaclear-piecetiary-size">
-                            {shape.size}-cube
-                          </div>
+                          {PIECE_VARIANT_NAMES[variant.id] && (
+                            <div className="hexaclear-piecetiary-name">
+                              &ldquo;{PIECE_VARIANT_NAMES[variant.id]}
+                              &rdquo;
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

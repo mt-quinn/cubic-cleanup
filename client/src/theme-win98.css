@@ -2529,16 +2529,33 @@
 /* How-to-Play tab strip: flatten to a row of toolbar-style buttons
    that follows Win98's inset/raised conventions. The active tab gets
    a sunken treatment so it reads as "this is the page you're on". */
+/* Tabs in Win98: the Wood theme uses a pill-capsule clone of the
+   header mode-toggle; in Win98 we instead match the header's
+   mode-toggle treatment (button-grouped raised/sunken tabs with
+   pressed = active). The selectors override the pill capsule
+   styling from index.css so the modal feels native. */
 [data-theme="win98"] .hexaclear-scoring-tabs {
-  border-bottom-color: var(--w98-deep-shadow) !important;
+  display: inline-flex !important;
+  align-self: center !important;
+  background: var(--w98-surface) !important;
+  border: 2px solid !important;
+  border-color:
+    var(--w98-shadow)
+    var(--w98-highlight)
+    var(--w98-highlight)
+    var(--w98-shadow) !important;
+  border-radius: 0 !important;
+  padding: 2px !important;
+  box-shadow: none !important;
   gap: 2px !important;
+  margin: 0 auto 8px !important;
 }
 
 [data-theme="win98"] .hexaclear-scoring-tab {
   background: var(--w98-surface) !important;
   color: var(--w98-text) !important;
   font-family: inherit !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
   border: 2px solid !important;
   border-color:
@@ -2546,9 +2563,8 @@
     var(--w98-deep-shadow)
     var(--w98-deep-shadow)
     var(--w98-highlight) !important;
-  border-bottom: none !important;
   border-radius: 0 !important;
-  padding: 5px 10px !important;
+  padding: 4px 12px !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   cursor: default !important;
@@ -2556,6 +2572,7 @@
 
 [data-theme="win98"] .hexaclear-scoring-tab.is-active {
   background: var(--w98-surface) !important;
+  color: var(--w98-text) !important;
   border-color:
     var(--w98-deep-shadow)
     var(--w98-highlight)
@@ -2579,18 +2596,21 @@
   border-radius: 0 !important;
 }
 
+[data-theme="win98"] .hexaclear-piecetiary-notation {
+  color: var(--w98-text) !important;
+  font-family: 'Courier New', ui-monospace, monospace !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
 [data-theme="win98"] .hexaclear-piecetiary-name {
   color: var(--w98-text) !important;
   font-family: inherit !important;
-  font-size: 13px !important;
-  font-weight: 700 !important;
-}
-
-[data-theme="win98"] .hexaclear-piecetiary-size {
-  color: var(--w98-text) !important;
-  font-family: inherit !important;
-  font-size: 10px !important;
-  opacity: 0.65 !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  font-style: italic !important;
+  opacity: 0.85 !important;
 }
 
 /* Header buttons: undo while in-play — same Win98 raised chrome. */

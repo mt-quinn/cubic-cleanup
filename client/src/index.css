@@ -2271,7 +2271,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -4726,112 +4726,139 @@ body {
 }
 
 /* --- Tab strip inside the How-to-Play card -------------------------- */
+/* --- "How to Play" tab strip ---------------------------------------
+   Visually identical to the main header's mode-toggle pill capsule
+   so the in-modal tabs share the affordance with the top-level
+   Endless/Daily/Multi selector. Container = dark capsule; children
+   = transparent pills that gain a warm gradient + dark text when
+   active. */
 .hexaclear-scoring-tabs {
-  display: flex;
-  flex-direction: row;
-  gap: 0.35rem;
-  border-bottom: 1px solid rgba(255, 205, 143, 0.18);
-  margin-bottom: 0.2rem;
+  display: inline-flex;
+  align-self: center;
+  border-radius: 999px;
+  padding: 0.18rem;
+  background: rgba(29, 10, 3, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 205, 143, 0.45);
+  margin: 0 auto 0.5rem;
 }
 
 .hexaclear-scoring-tab {
-  flex: 1 1 0;
-  background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0.55rem 0.4rem;
+  border-radius: 999px;
+  padding: 0.32rem 0.95rem;
   font-family: 'Nunito', system-ui, sans-serif;
-  font-size: 0.92rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #f0d4a8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   cursor: pointer;
+  background: transparent;
+  color: #ffddb1;
   transition:
     color 120ms ease,
-    border-color 120ms ease,
-    background-color 120ms ease;
+    background 120ms ease;
 }
 
 .hexaclear-scoring-tab:hover {
   color: #fff5dc;
-  background-color: rgba(255, 205, 143, 0.06);
 }
 
 .hexaclear-scoring-tab.is-active {
-  color: #ffe8a3;
-  border-bottom-color: #f7b35a;
-  background-color: rgba(255, 205, 143, 0.08);
+  background: linear-gradient(135deg, #f7b35a, #f37a3b);
+  color: #3a1204;
 }
 
 /* --- Piecetiary grid ----------------------------------------------- */
-/* Scrollable 3-up grid of every piece in the rotation, with its name
-   and size class. Capped to a reasonable max-height so the rest of
-   the modal chrome (title bar, tabs, back button) always stays in
-   the viewport on shorter phones; the grid takes the scroll. */
+/* Scrollable 3-up grid of every rotation variant of every piece, each
+   tagged with its q×r×s bounding-box notation. The grid is rigorously
+   square: every cell shares the same aspect ratio + size, and inside
+   each cell the piece SVG (rendered in PiecePreview "hand" mode, which
+   uses a fixed 5×5-hex viewport) is centred so a 1-cube and a 4-cube
+   line both sit dead-centre at the same visual scale.
+
+   The container is height-capped (clamp) so the rest of the modal
+   chrome (title bar, tab strip, Back button) always remains in the
+   viewport on shorter phones — the grid does the scrolling. */
 .hexaclear-piecetiary {
   max-height: clamp(18rem, 60vh, 30rem);
   overflow-y: auto;
   padding-right: 0.25rem;
-  /* Visual buffer so the bottom row doesn't sit flush against the
-     modal's Back button. */
   padding-bottom: 0.25rem;
 }
 
 .hexaclear-piecetiary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
+  gap: 0.55rem;
 }
 
 .hexaclear-piecetiary-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.7rem 0.45rem 0.55rem;
+  display: grid;
+  /* Three rows: the preview eats most of the cell, the q×r×s
+     notation strip sits below it, and the human nickname strip
+     finishes the stack. Using grid (vs flex) keeps each strip a
+     uniform height across the grid regardless of label length. */
+  grid-template-rows: 1fr auto auto;
+  /* Slightly taller than wide so there's room for both the
+     notation line and the name line under the centred piece — a
+     pure 1:1 square crowded the labels against the SVG. */
+  aspect-ratio: 1 / 1.25;
+  padding: 0.4rem 0.35rem 0.4rem;
   border-radius: 0.55rem;
   background: rgba(0, 0, 0, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(0, 0, 0, 0.55),
     inset 0 -1px 0 rgba(255, 197, 138, 0.08);
   border: 1px solid rgba(255, 197, 138, 0.18);
+  overflow: hidden;
 }
 
 .hexaclear-piecetiary-preview {
-  /* Fixed-aspect preview cell so every shape sits in the same
-     bounding box regardless of its dimensions. The piece SVG fills
-     this box via PiecePreview's board-mode sizing. */
-  width: 100%;
-  aspect-ratio: 1 / 1;
+  /* Fills the top row of the cell; PiecePreview's "hand" mode renders
+     into a fixed 5×5-hex viewBox, so the SVG is always the same
+     aspect and the piece is centred inside it. `width: 100%` on the
+     SVG plus `max-height: 100%` keeps the rendering crisp without
+     ever overflowing the cell. */
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem;
 }
 
 .hexaclear-piecetiary-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
   max-width: 100%;
   max-height: 100%;
 }
 
-.hexaclear-piecetiary-name {
-  font-family: 'Nunito', system-ui, sans-serif;
-  font-size: 0.86rem;
-  font-weight: 800;
-  color: #fff5dc;
-  letter-spacing: 0.02em;
+.hexaclear-piecetiary-notation {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace,
+    SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffe8a3;
+  letter-spacing: 0.04em;
   text-align: center;
-  line-height: 1.15;
+  line-height: 1;
+  padding-top: 0.2rem;
 }
 
-.hexaclear-piecetiary-size {
+/* Human nickname under the notation. Italic so it visually reads as
+   a "spoken alias" rather than another structural label, and a
+   softer cream colour so the q×r×s line above remains the primary
+   identifier. */
+.hexaclear-piecetiary-name {
   font-family: 'Nunito', system-ui, sans-serif;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 600;
+  font-style: italic;
   color: #f0d4a8;
-  opacity: 0.7;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-align: center;
+  line-height: 1;
+  padding-top: 0.18rem;
+  letter-spacing: 0.01em;
 }
 
 .hexaclear-scoring-rules {

@@ -613,3 +613,23 @@ export const formatFriendlyDate = (timestamp: number): string => {
   const year = d.getFullYear()
   return `${month} ${day}, ${year}`
 }
+
+/**
+ * Same as `formatFriendlyDate` but also appends the local-time
+ * hour:minute (12-hour clock, no seconds) so timestamps that name a
+ * specific event — e.g. "last synced at" — read precisely without
+ * forcing the user to guess "today vs yesterday". Uses the local
+ * timezone so the value lines up with the device clock.
+ */
+export const formatFriendlyDateTime = (timestamp: number): string => {
+  const d = new Date(timestamp)
+  const month = LONG_MONTH_NAMES[d.getMonth()]
+  const day = d.getDate()
+  const year = d.getFullYear()
+  const hours24 = d.getHours()
+  const minutes = d.getMinutes()
+  const suffix = hours24 >= 12 ? 'PM' : 'AM'
+  const hours12 = ((hours24 + 11) % 12) + 1
+  const mm = minutes.toString().padStart(2, '0')
+  return `${month} ${day}, ${year} at ${hours12}:${mm} ${suffix}`
+}
