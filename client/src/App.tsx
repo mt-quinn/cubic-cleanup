@@ -6413,6 +6413,19 @@ function App() {
                   className="hexaclear-menu-button"
                   onClick={() => {
                     playUiClick()
+                    /* Close every other overlay before raising the
+                       pause menu. Without this, opening the menu
+                       while e.g. the Daily History overlay is up
+                       would stack the menu *behind* the open
+                       overlay (both share `.hexaclear-overlay`'s
+                       z-index). Treat the menu button as "switch
+                       to the pause menu" rather than "additively
+                       open it on top of whatever is showing". */
+                    setShowDailyHistory(false)
+                    setShowHighScores(false)
+                    setShowStats(false)
+                    setShowAccount(false)
+                    setShowScoring(false)
                     setShowMenu(true)
                   }}
                 >
@@ -9176,7 +9189,17 @@ function App() {
           {showMenu && (
             <div
               className="hexaclear-overlay"
-              onPointerDown={(e) => {
+              /* Backdrop dismissal fires on click rather than pointer
+                 down so the overlay stays mounted through the entire
+                 down → up gesture. If we close on pointerdown the
+                 overlay unmounts mid-gesture and the synthesized
+                 pointerup / click bleeds through to the board cell
+                 underneath, letting the player accidentally place a
+                 piece or trigger a UI control they were trying to
+                 ignore. Click waits for the full tap to land on the
+                 backdrop before unmounting, so no event reaches the
+                 game state. */
+              onClick={(e) => {
                 if (e.target !== e.currentTarget) return
                 playUiClick()
                 setShowMenu(false)
@@ -9471,7 +9494,7 @@ function App() {
             return (
               <div
                 className="hexaclear-overlay"
-                onPointerDown={(e) => {
+                onClick={(e) => {
                   if (e.target !== e.currentTarget) return
                   playUiClick()
                   setShowAccount(false)
@@ -9662,7 +9685,7 @@ function App() {
           {showScoring && (
             <div
               className="hexaclear-overlay"
-              onPointerDown={(e) => {
+              onClick={(e) => {
                 if (e.target !== e.currentTarget) return
                 playUiClick()
                 setShowScoring(false)
@@ -10188,7 +10211,7 @@ function App() {
             return (
               <div
                 className="hexaclear-overlay"
-                onPointerDown={(e) => {
+                onClick={(e) => {
                   if (e.target !== e.currentTarget) return
                   playUiClick()
                   setShowStats(false)
@@ -10411,7 +10434,7 @@ function App() {
             return (
               <div
                 className="hexaclear-overlay"
-                onPointerDown={(e) => {
+                onClick={(e) => {
                   if (e.target !== e.currentTarget) return
                   playUiClick()
                   setShowDailyHistory(false)
@@ -10718,7 +10741,15 @@ function App() {
             const dailyPage = buildPageWindow(dailyEntriesForDay, 'daily')
             const coopPage = buildPageWindow(sortedCoop, 'coop')
             return (
-              <div className="hexaclear-overlay">
+              <div
+                className="hexaclear-overlay"
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  playUiClick()
+                  setShowHighScores(false)
+                  setShowMenu(true)
+                }}
+              >
                 <div className="hexaclear-overlay-card hexaclear-scores-card">
                   <div className="title">High Scores</div>
 
