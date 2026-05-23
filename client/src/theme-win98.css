@@ -1660,7 +1660,8 @@
    dashed border, but in deep-shadow black. Inset / size are
    inherited from the base rule so the visual and the JS hit-test
    stay in lock-step. */
-[data-theme="win98"] .hexaclear-piece-button .hexaclear-piece-cancel-mark {
+[data-theme="win98"] .hexaclear-piece-button .hexaclear-piece-cancel-mark,
+[data-theme="win98"] .hexaclear-hold .hexaclear-piece-cancel-mark {
   color: var(--w98-ruby-fill);
   border-color: var(--w98-deep-shadow);
   border-radius: 0;

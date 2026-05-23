@@ -2511,6 +2511,12 @@ function App() {
     startY: number
     endX: number
     endY: number
+    // Scale to settle at when the rescue lands — matches the pocket's
+    // computeHoldDisplayScale at the time the rescue fires, so the
+    // overlay's final frame coincides with the pocket piece's size.
+    // Without this the rescue used to crossfade to the much smaller
+    // pocket render and read as a hard "snap" at landing.
+    endScale: number
   } | null>(null)
   const handButtonRefs = useRef<(HTMLButtonElement | null)[]>([])
   // Live ref for the Hold slot button, used both as a drag drop-target
@@ -3057,6 +3063,22 @@ function App() {
       return
     }
 
+    // Parking the final hand piece into an empty hold triggers a fresh
+    // hand deal inside the reducer below, identical to playing the
+    // third piece. Hand-close-outs also close out the per-hand undo
+    // window, so clear it here before the swap commits — pressing Undo
+    // across that boundary would land on a hand the player can't get
+    // back to by gameplay (the freshly-dealt one would already have
+    // replaced it).
+    const swapWillDealNewHand =
+      target.kind === 'hold' &&
+      game.hold == null &&
+      game.hand.length === 1 &&
+      game.hand.some((p) => p.id === sourcePieceId)
+    if (swapWillDealNewHand) {
+      setUndoStack([])
+    }
+
     setGame((current) => {
       if (current.gameOver) return current
       const inHand = current.hand.find((p) => p.id === sourcePieceId)
@@ -3218,6 +3240,11 @@ function App() {
                 scale,
               endY:
                 (dstRect.top + dstRect.height / 2 - wrapperRect.top) / scale,
+              endScale: computeHoldDisplayScale(
+                rescuedShape.cells,
+                holdSizing.handSlotPx,
+                holdSizing.holdPocketPx,
+              ),
             })
             // Matches the 1200ms hexaclear-rescue-fly + flash keyframes
             // in index.css. Slightly long on purpose: an auto-rescue
@@ -3504,12 +3531,14 @@ function App() {
       // the player still has a real choice (which piece to bank),
       // so we let game-over stand unless they take that action
       // themselves.
+      let autoRescued = false
       if (
         gameOver &&
         newHand.length === 1 &&
         newHold == null &&
         !result.dailyCompleted
       ) {
+        autoRescued = true
         const rescuedPiece = newHand[0]
         const rescuedSlot = updatedSlots.indexOf(rescuedPiece.id)
         const sourceBtn =
@@ -3583,6 +3612,11 @@ function App() {
               (dstRect.left + dstRect.width / 2 - wrapperRect.left) / scale,
             endY:
               (dstRect.top + dstRect.height / 2 - wrapperRect.top) / scale,
+            endScale: computeHoldDisplayScale(
+              rescuedPiece.shape.cells,
+              holdSizing.handSlotPx,
+              holdSizing.holdPocketPx,
+            ),
           })
           // Matches the 1200ms hexaclear-rescue-fly + flash keyframes
           // in index.css. Slightly long on purpose: an auto-rescue
@@ -3590,11 +3624,11 @@ function App() {
           // read as deliberate rather than zipping by in a flash.
           setTimeout(() => setRescueAnimation(null), 1200)
         }
-        // Auto-rescue isn't a player choice and shouldn't be replayable
-        // by mashing redo — but the underlying placement still IS
-        // undoable. The pre-placement snapshot is appended below via
-        // the usual code path, which correctly reverts both the
-        // placement and the rescued hold/hand state.
+        // Auto-rescue closes the current hand the same way a third
+        // piece played or a manual park-into-hold would, so we treat
+        // the undo stack the same way and clear it — pressing Undo
+        // after a rescue would skip past the rescue itself and the
+        // ensuing fresh hand, which isn't a useful affordance.
         playError()
         triggerHaptics(true)
       }
@@ -4026,8 +4060,13 @@ function App() {
 
       // Update per-hand undo history: we only allow undoing moves within
       // the current 3-piece hand. We store snapshots of the pre-move
-      // state and clear the history once the third piece has been played.
-      if (!isThirdPieceThisHand) {
+      // state and clear the history once the third piece has been
+      // played OR an auto-rescue closed out the hand for them — both
+      // result in a brand-new hand, and undoing across that boundary
+      // would jump the player back into a state they can't reach by
+      // gameplay anymore.
+      const handClosedOut = isThirdPieceThisHand || autoRescued
+      if (!handClosedOut) {
         const capped =
           undoStack.length >= 2 ? undoStack.slice(1) : undoStack
         setUndoStack([...capped, before])
@@ -6623,6 +6662,16 @@ function App() {
             !(game.mode === 'daily' && game.dailyCompleted)
               ? 'game-over-active'
               : '',
+            // Daily wins, after the player dismisses the celebration
+            // modal: surface a persistent "Daily Cleared" badge so the
+            // half-interactible board doesn't read like an in-progress
+            // game the player just can't drop pieces into.
+            game.mode === 'daily' &&
+            game.dailyCompleted &&
+            game.gameOver &&
+            dailyGameOverDismissed
+              ? 'daily-cleared-dismissed'
+              : '',
           ]
             .filter(Boolean)
             .join(' ')}
@@ -7546,14 +7595,39 @@ function App() {
                 top: rescueAnimation.startY,
                 '--rescue-delta-x': `${rescueAnimation.endX - rescueAnimation.startX}px`,
                 '--rescue-delta-y': `${rescueAnimation.endY - rescueAnimation.startY}px`,
+                '--rescue-end-scale': String(rescueAnimation.endScale),
               } as React.CSSProperties & {
                 '--rescue-delta-x': string
                 '--rescue-delta-y': string
+                '--rescue-end-scale': string
               }}
             >
-              <PiecePreview shape={rescueAnimation.piece.shape} mode="board" />
+              {/* hand mode (not board) so the overlay starts at the same
+                  pixel size as the source hand slot and ends at the
+                  pocket scale (`--rescue-end-scale`). With board mode
+                  the overlay was several times bigger than the pocket
+                  render, so the swap at the end of the flight was a
+                  visible size jump. */}
+              <PiecePreview shape={rescueAnimation.piece.shape} mode="hand" />
             </div>
           )}
+          {game.mode === 'daily' &&
+            game.dailyCompleted &&
+            game.gameOver &&
+            dailyGameOverDismissed && (
+              <div
+                className="hexaclear-daily-cleared-badge"
+                role="status"
+                aria-label="Daily puzzle cleared"
+              >
+                <span className="hexaclear-daily-cleared-check" aria-hidden="true">
+                  ✓
+                </span>
+                <span className="hexaclear-daily-cleared-label">
+                  Daily Cleared
+                </span>
+              </div>
+            )}
           {scorePopup && game.mode !== 'daily' && (
             <div className="hexaclear-score-popup">{scorePopup}</div>
           )}
@@ -10828,6 +10902,16 @@ function App() {
           className={[
             'hexaclear-hand',
             gameOverWindingDown ? 'game-over-winding-down' : '',
+            // Once the daily celebration is dismissed, the hand pieces
+            // are still rendered but no longer interactible. Visually
+            // mark them as inert so the player isn't confused about
+            // why drags don't take.
+            game.mode === 'daily' &&
+            game.dailyCompleted &&
+            game.gameOver &&
+            dailyGameOverDismissed
+              ? 'is-daily-cleared-locked'
+              : '',
           ]
             .filter(Boolean)
             .join(' ')}

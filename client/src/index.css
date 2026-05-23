@@ -490,6 +490,102 @@ body {
   transition: filter 2800ms ease-out;
 }
 
+/* DAILY CLEARED (post-dismiss): once the win modal is dismissed, the
+   board sits in a half-interactible state — pieces still render but
+   nothing can be placed. Surface a persistent gold badge across the
+   board so the player can tell at a glance that this puzzle is done
+   and the next interaction (restart, History) is the way forward.
+   The hand also dims so unplayable pieces don't look live. */
+.hexaclear-board-wrapper.daily-cleared-dismissed > *:not(.hexaclear-overlay):not(.hexaclear-daily-cleared-badge) {
+  filter: saturate(0.62) brightness(0.78);
+  transition: filter 600ms ease-out;
+}
+
+.hexaclear-daily-cleared-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  pointer-events: none;
+  z-index: 12;
+  color: #ffeaa6;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.75),
+    0 2px 6px rgba(0, 0, 0, 0.55);
+  animation: hexaclear-daily-cleared-badge-in 380ms
+    cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.hexaclear-daily-cleared-check {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: clamp(3rem, 12vw, 5.4rem);
+  font-weight: 900;
+  line-height: 1;
+  color: #ffd97a;
+  filter:
+    drop-shadow(0 0 16px rgba(255, 207, 92, 0.7))
+    drop-shadow(0 0 32px rgba(255, 180, 60, 0.45));
+  animation: hexaclear-daily-cleared-pulse 2400ms ease-in-out infinite;
+}
+
+.hexaclear-daily-cleared-label {
+  font-family: 'Nunito', system-ui, sans-serif;
+  font-size: clamp(0.9rem, 3.2vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff4cf;
+  background: linear-gradient(
+    135deg,
+    rgba(94, 56, 12, 0.7),
+    rgba(160, 110, 30, 0.55)
+  );
+  padding: 0.4rem 1.05rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 215, 120, 0.65);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 245, 200, 0.25),
+    0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes hexaclear-daily-cleared-badge-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes hexaclear-daily-cleared-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter:
+      drop-shadow(0 0 16px rgba(255, 207, 92, 0.7))
+      drop-shadow(0 0 32px rgba(255, 180, 60, 0.45));
+  }
+  50% {
+    transform: scale(1.06);
+    filter:
+      drop-shadow(0 0 22px rgba(255, 220, 120, 0.85))
+      drop-shadow(0 0 44px rgba(255, 195, 80, 0.6));
+  }
+}
+
+/* Hand pieces become inert visuals (rendering only) once the puzzle
+   is done and the modal is dismissed. Soft desaturate + reduced
+   opacity reads as "these aren't usable anymore". */
+.hexaclear-hand.is-daily-cleared-locked .hexaclear-piece-button {
+  filter: saturate(0.4) brightness(0.7);
+  opacity: 0.7;
+}
+
 .hexaclear-hand.game-over-winding-down .hexaclear-piece-button {
   animation: hexaclear-game-over-shake 1080ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
@@ -3019,42 +3115,49 @@ body {
   pointer-events: none;
   z-index: 13;
   transform-origin: center;
-  filter:
-    drop-shadow(0 0 14px rgba(255, 70, 70, 0.95))
-    drop-shadow(0 0 28px rgba(255, 30, 30, 0.55));
-  animation: hexaclear-rescue-fly 1200ms cubic-bezier(0.3, 0.7, 0.3, 1) forwards;
+  animation: hexaclear-rescue-fly 1200ms cubic-bezier(0.22, 0.61, 0.36, 1)
+    forwards;
 }
 
+/* Simple direct-line glide: scale from hand-slot size (1.0) down to
+   the pocket's actual display scale (--rescue-end-scale), travel
+   straight to the pocket, and fade out in the last 20% so the
+   handoff to the static pocket render is a soft crossfade rather
+   than a hard pop. Glow softens in tandem with the fade. */
 @keyframes hexaclear-rescue-fly {
   0% {
-    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    transform: translate(-50%, -50%) scale(1);
     opacity: 1;
+    filter:
+      drop-shadow(0 0 12px rgba(255, 80, 80, 0.9))
+      drop-shadow(0 0 22px rgba(255, 30, 30, 0.5));
   }
-  35% {
+  80% {
     transform:
-      translate(
-        calc(var(--rescue-delta-x) * 0.35),
-        calc(var(--rescue-delta-y) * 0.35 - 14px)
-      )
+      translate(var(--rescue-delta-x), var(--rescue-delta-y))
       translate(-50%, -50%)
-      scale(1.05)
-      rotate(-6deg);
+      scale(var(--rescue-end-scale, 0.7));
     opacity: 1;
+    filter:
+      drop-shadow(0 0 10px rgba(255, 90, 90, 0.7))
+      drop-shadow(0 0 18px rgba(255, 50, 50, 0.35));
   }
   100% {
     transform:
       translate(var(--rescue-delta-x), var(--rescue-delta-y))
       translate(-50%, -50%)
-      scale(0.45)
-      rotate(2deg);
-    opacity: 0.95;
+      scale(var(--rescue-end-scale, 0.7));
+    opacity: 0;
+    filter:
+      drop-shadow(0 0 6px rgba(255, 100, 100, 0))
+      drop-shadow(0 0 12px rgba(255, 60, 60, 0));
   }
 }
 
 /* Hold pocket pulses red for the same window as the in-flight
-   overlay so the destination reads as "this is where the piece
-   was just parked". Layered on top of the regular pocket
-   background via a brighter inset shadow + outer glow. */
+   overlay. Peak is held until the overlay actually arrives (at 80%
+   of the flight), then fades together with the crossfade so the
+   final pocket render appears clean. */
 .hexaclear-hold.is-rescue-flash {
   animation: hexaclear-hold-rescue-flash 1200ms ease-out;
 }
@@ -3066,11 +3169,17 @@ body {
       0 0 0 0 rgba(255, 60, 60, 0);
     background-color: transparent;
   }
-  25% {
+  60% {
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 90, 90, 0.5),
+      0 0 14px 3px rgba(255, 40, 40, 0.3);
+    background-color: rgba(255, 60, 60, 0.06);
+  }
+  80% {
     box-shadow:
       inset 0 0 0 2px rgba(255, 90, 90, 0.95),
-      0 0 26px 6px rgba(255, 40, 40, 0.6);
-    background-color: rgba(255, 60, 60, 0.18);
+      0 0 26px 6px rgba(255, 40, 40, 0.65);
+    background-color: rgba(255, 60, 60, 0.2);
   }
   100% {
     box-shadow:
@@ -3486,13 +3595,17 @@ body {
 
 /* While dragging, the .selected highlight (slot-wide background +
    inset glow) is moved onto the × cancel marker so the highlight
-   wraps just the actual hit zone instead of the whole slot. */
-.hexaclear-piece-button.dragging.selected {
+   wraps just the actual hit zone instead of the whole slot. The
+   hold pocket gets the same treatment so the cancel affordance
+   reads as a real sub-region rather than a stray glyph. */
+.hexaclear-piece-button.dragging.selected,
+.hexaclear-hold.dragging.selected {
   background: transparent;
   box-shadow: none;
 }
 
-.hexaclear-piece-button.dragging.selected .hexaclear-piece-cancel-mark {
+.hexaclear-piece-button.dragging.selected .hexaclear-piece-cancel-mark,
+.hexaclear-hold.dragging.selected .hexaclear-piece-cancel-mark {
   background: rgba(255, 213, 123, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255, 213, 123, 0.55);
 }
@@ -3509,8 +3622,12 @@ body {
    the finger.
    pointer-events: none keeps the underlying button owning the
    gesture; the cancel detection runs against this node's rect
-   from the global pointer handlers, not via DOM event bubbling. */
-.hexaclear-piece-button .hexaclear-piece-cancel-mark {
+   from the global pointer handlers, not via DOM event bubbling.
+   Both hand pieces and the hold pocket share this affordance so a
+   hold-source drag returning to its origin reads identically to a
+   hand-source one. */
+.hexaclear-piece-button .hexaclear-piece-cancel-mark,
+.hexaclear-hold .hexaclear-piece-cancel-mark {
   position: absolute;
   inset: 25%;
   display: flex;
@@ -3525,6 +3642,16 @@ body {
   pointer-events: none;
   user-select: none;
   animation: hexaclear-cancel-mark-fade 140ms ease-out both;
+}
+
+/* The hold pocket is narrower than a hand slot, so the default
+   inset: 25% leaves a tiny cancel zone that's easy to overshoot.
+   Widen it to most of the pocket interior so a hold-source drag
+   returning anywhere inside the pocket reads as a return-to-source
+   (matching the player's mental model of "back to where I grabbed
+   it from"). */
+.hexaclear-hold .hexaclear-piece-cancel-mark {
+  inset: 8%;
 }
 
 @keyframes hexaclear-cancel-mark-fade {
