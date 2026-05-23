@@ -2236,6 +2236,13 @@ function App() {
   useEffect(() => {
     setDailyGameOverDismissed(false)
   }, [game.gameOver, game.mode, game.dailyDateKey])
+  // Transient "Copied!" feedback for the daily share button. We reset
+  // it on gameover/mode transitions so a stale flash doesn't carry
+  // over into the next puzzle's modal.
+  const [dailyShareCopied, setDailyShareCopied] = useState(false)
+  useEffect(() => {
+    setDailyShareCopied(false)
+  }, [game.gameOver, game.mode, game.dailyDateKey])
   // Per-device co-op high scores. Each unique playerIds-group has at
   // most one row (best score wins) so the local view is "all the
   // co-op partnerships I've ever scored with, deduped to each one's
@@ -2352,19 +2359,23 @@ function App() {
   // global toggle is on — passing 'skip' tears down the subscription
   // otherwise.
   //
-  // Daily date selection: the standalone High Scores card is
-  // hard-pinned to today (per product call — the daily list there
-  // is "today's competition"). The gameover modal, on the other
-  // hand, follows whichever puzzle the player actually finished:
-  // if they replayed an archive day, the leaderboard shown is for
-  // that historical day so the rankings line up with the moves
-  // count they just earned.
+  // Daily date selection:
+  //   * High Scores menu — follows the local `dailyScoresDateKey`
+  //     stepper. Opens at today (see the reset effect below) but
+  //     the player can step backwards through history to inspect
+  //     past days' global rankings, same way they already could
+  //     for the local list.
+  //   * Game-over modal — follows the puzzle the player actually
+  //     finished, so replays of an archive day show that day's
+  //     leaderboard right next to the moves count they just earned.
   const wantsGlobalSubscription =
     showGlobalLeaderboard && (showHighScores || game.gameOver)
   const globalDailyDateKey =
     game.gameOver && game.mode === 'daily'
       ? game.dailyDateKey ?? getTodayKey()
-      : getTodayKey()
+      : showHighScores
+        ? dailyScoresDateKey
+        : getTodayKey()
   const globalEndlessScores = useQuery(
     api.leaderboard.getTopEndlessScores,
     wantsGlobalSubscription ? {} : 'skip',
@@ -5617,6 +5628,109 @@ function App() {
         score: entry.score,
         savedAt: entry.date,
       }).catch(() => {})
+    }
+  }
+
+  // Construct the share text shown by the daily gameover's "Copy
+  // Share" affordance. Aim: brief, eye-catching, self-contained.
+  // Lines are intentionally short so the result reads cleanly in any
+  // text field / chat input / status update.
+  //
+  //   🧊 Cubekill Daily · May 22, 2026
+  //   ✓ Solved in 14 moves
+  //   🏆 New personal best!
+  //   https://cubekill.example
+  //
+  // Lost runs swap the second line for a cubes-remaining summary and
+  // drop the trophy line. The URL line is omitted in SSR / non-
+  // browser contexts.
+  const buildDailyShareText = (): string => {
+    const dateKey = game.dailyDateKey ?? getTodayKey()
+    // Parse the YYYY-MM-DD key into a UTC date so the local Date
+    // constructor doesn't reinterpret it in the player's tz and
+    // shift the month/day across DST or international date lines.
+    const [yyyy, mm, dd] = dateKey.split('-').map((p) => Number(p))
+    let dateLabel = dateKey
+    if (
+      Number.isFinite(yyyy) &&
+      Number.isFinite(mm) &&
+      Number.isFinite(dd)
+    ) {
+      const utc = new Date(Date.UTC(yyyy, mm - 1, dd))
+      try {
+        dateLabel = new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }).format(utc)
+      } catch {
+        dateLabel = dateKey
+      }
+    }
+
+    const lines: string[] = [`🧊 Cubekill Daily · ${dateLabel}`]
+    if (game.dailyCompleted) {
+      lines.push(`✓ Solved in ${game.moves} moves`)
+      // "Personal best" detection works pre- and post-save: prior to
+      // saving, currentDailyBestMoves is the old best (so a strictly
+      // better run satisfies game.moves < prev). Post-save the best
+      // has already moved down to game.moves, so game.moves <= best
+      // still holds. First-ever attempt: best is null → treated as a
+      // PB. Pure under-par runs (game.moves > old best) drop through
+      // and surface the best as a comparison instead.
+      const best = currentDailyBestMoves
+      if (best === null || game.moves <= best) {
+        lines.push('🏆 New personal best!')
+      } else {
+        lines.push(`(best: ${best} moves)`)
+      }
+    } else {
+      const remaining = dailyCubesRemaining
+      if (remaining > 0) {
+        lines.push(
+          `${remaining} ${remaining === 1 ? 'cube' : 'cubes'} remained after ${game.moves} moves`,
+        )
+      } else {
+        lines.push(`${game.moves} moves used`)
+      }
+    }
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      lines.push(window.location.origin)
+    }
+    return lines.join('\n')
+  }
+
+  // Copy the share text to the clipboard, with a soft "Copied!"
+  // confirmation that auto-clears so the same button can be used to
+  // re-copy (e.g. after switching to a different chat target). We
+  // swallow clipboard errors silently — the only failure mode is
+  // "no permission" and surfacing an error would be more noise than
+  // value here; the button just doesn't flip its label.
+  const handleCopyDailyShare = async () => {
+    try {
+      const text = buildDailyShareText()
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        // Fallback for clipboard-blocked contexts (older Safari, some
+        // PWA shells): drop into a hidden textarea + execCommand.
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        try {
+          document.execCommand('copy')
+        } finally {
+          document.body.removeChild(ta)
+        }
+      }
+      setDailyShareCopied(true)
+      window.setTimeout(() => setDailyShareCopied(false), 1800)
+    } catch {
+      // Silent fail — clipboard permissions denied or DOM unavailable.
     }
   }
 
@@ -8873,6 +8987,32 @@ function App() {
                     </button>
                   )}
 
+                {/* Copy Share — pasteable summary of the run.
+                    Lives right above the exit row so it's the last
+                    thing the player sees before deciding which exit
+                    to take, and works for both wins and losses
+                    (lost runs include "N cubes remained" instead of
+                    a personal-best line). The label flips to
+                    "Copied!" for ~1.8s after a successful copy as
+                    inline confirmation. */}
+                <button
+                  type="button"
+                  className={[
+                    'hexaclear-gameover-cta',
+                    'hexaclear-gameover-cta-share',
+                    dailyShareCopied ? 'is-copied' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    playUiClick()
+                    void handleCopyDailyShare()
+                  }}
+                  aria-live="polite"
+                >
+                  {dailyShareCopied ? '✓ Copied!' : 'Copy Share'}
+                </button>
+
                 {/* Two-button exit row: Done is the calm "I'm
                     satisfied, leave me alone" path; Retry is the
                     competitive "let me chase a better score" path.
@@ -10317,9 +10457,11 @@ function App() {
               (globalEndlessScores === undefined ||
                 globalDailyScores === undefined ||
                 globalCoopScores === undefined)
-            const dailyDateKeyForDisplay = showGlobalLeaderboard
-              ? todayKey
-              : dailyScoresDateKey
+            // Both local and global daily lists are now scoped by
+            // the same date stepper, so the displayed date matches
+            // whichever day the player has paged to regardless of
+            // toggle state.
+            const dailyDateKeyForDisplay = dailyScoresDateKey
             const rankClass = (rank: number) =>
               rank === 1
                 ? 'hexaclear-chip-trophy'
@@ -10526,9 +10668,11 @@ function App() {
                     <div className="hexaclear-scores-section">
                       <div className="hexaclear-scores-section-label">
                         Daily · fewest moves
-                        {showGlobalLeaderboard ? ' (global · today)' : ''}
+                        {showGlobalLeaderboard ? ' (global)' : ''}
                       </div>
-                      {!showGlobalLeaderboard && (
+                      {/* Date stepper now drives the global list too,
+                          so showing it unconditionally lets the player
+                          inspect any past day's global rankings. */}
                       <div className="hexaclear-scores-date-stepper">
                         <button
                           type="button"
@@ -10563,7 +10707,6 @@ function App() {
                           ›
                         </button>
                       </div>
-                      )}
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">Loading global scores…</p>
                       ) : dailyEntriesForDay.length === 0 ? (
@@ -10615,7 +10758,7 @@ function App() {
                           />
                         </>
                       )}
-                      {!showGlobalLeaderboard && dailyScoresDateKey !== todayKey && (
+                      {dailyScoresDateKey !== todayKey && (
                         <button
                           type="button"
                           className="hexaclear-menu-link hexaclear-scores-today-link"

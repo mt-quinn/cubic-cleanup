@@ -1722,6 +1722,10 @@
    the classic raised 3D button. The press-down state inverts the
    borders for the proper "click-down" feel. Sized for touch — 36px
    min height, 14px label — while keeping the Win98 chrome ratios. */
+/* The Copy Share button inherits the Win98 chrome from the generic
+   gameover CTA selector below; we don't override the .is-copied
+   gradient here because the label flip ("✓ Copied!") is loud enough
+   on its own in this minimal theme. */
 [data-theme="win98"] .hexaclear-overlay-card button:not(.title-control),
 [data-theme="win98"] button.hexaclear-reset,
 [data-theme="win98"] button.hexaclear-gameover-cta,

@@ -5458,6 +5458,44 @@ body {
   filter: brightness(1.12);
 }
 
+/* Copy Share button. Reuses the secondary's muted treatment as the
+   resting state so the primary gold CTA still wins the modal's
+   visual hierarchy, then flashes a green confirmation when the
+   copy lands. Lives outside the two-up exit row so it gets its
+   own full-width slot. */
+.hexaclear-overlay-card button.hexaclear-gameover-cta-share {
+  background: linear-gradient(
+    135deg,
+    rgba(54, 30, 18, 0.92),
+    rgba(34, 18, 10, 0.92)
+  );
+  color: #ffd9a3;
+  border-color: rgba(255, 205, 143, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+  align-self: stretch;
+  margin-top: 0.4rem;
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-cta-share:hover {
+  filter: brightness(1.12);
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-cta-share.is-copied {
+  background: linear-gradient(
+    135deg,
+    rgba(58, 138, 88, 0.95),
+    rgba(40, 100, 65, 0.95)
+  );
+  border-color: rgba(180, 240, 200, 0.6);
+  color: #f1ffea;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.45),
+    0 0 16px rgba(120, 220, 140, 0.35);
+}
+
 /* --- Reduced motion: kill animations & transitions ------------------- */
 .cubic-viewport.reduced-motion *,
 .cubic-viewport.reduced-motion *::before,
