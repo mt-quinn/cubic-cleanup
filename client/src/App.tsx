@@ -7738,13 +7738,24 @@ function App() {
             // `start = [{q:0, r:0}]`), so finding that cell's pixel
             // position inside the rendered SVG just requires
             // mirroring PiecePreview's board-mode layout math.
+            //
+            // Position is driven via `transform: translate3d(...)`
+            // (with left/top pinned to 0 via CSS) rather than
+            // `left`/`top` directly. The ghost has a stacked
+            // `filter: drop-shadow()` for the lifted-off-the-board
+            // shadow; moving an element with a non-trivial filter
+            // via left/top doesn't reliably invalidate the
+            // composited layer in Chromium, which leaves behind
+            // faint static shadow streaks at every previous
+            // position the ghost touched during a slow drag.
+            // translate3d() promotes the ghost to its own GPU
+            // layer and lets the browser invalidate the previous
+            // frame cleanly on each move.
             const isTouchGhost = ghost.pointerType === 'touch'
             let ghostStyle: React.CSSProperties
             if (isTouchGhost) {
               ghostStyle = {
-                left: ghost.x,
-                top: ghost.y,
-                transform: 'translate(-30%, -10%)',
+                transform: `translate3d(${ghost.x}px, ${ghost.y}px, 0) translate(-30%, -10%)`,
               }
             } else {
               const cells = ghost.piece.shape.cells
@@ -7764,8 +7775,7 @@ function App() {
                 HEX_SIZE
               const originSvgY = HEX_SIZE * (1.5 * originNR) + HEX_SIZE
               ghostStyle = {
-                left: ghost.x - originSvgX,
-                top: ghost.y - originSvgY,
+                transform: `translate3d(${ghost.x - originSvgX}px, ${ghost.y - originSvgY}px, 0)`,
               }
             }
             return (

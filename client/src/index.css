@@ -2752,6 +2752,17 @@ body {
 
 .hexaclear-ghost {
   position: absolute;
+  /* Anchor the ghost at (0,0) of the positioned ancestor; the JSX
+     drives its actual position via transform: translate3d(...).
+     Using transform for movement (instead of left/top) promotes
+     the ghost to its own compositing layer and gets the browser
+     to invalidate the previous frame cleanly — without that,
+     Chromium leaves behind faint static streaks of the
+     drop-shadow filter at every previous ghost position during
+     a slow drag. */
+  left: 0;
+  top: 0;
+  will-change: transform;
   pointer-events: none;
   z-index: 10;
   opacity: 0.85;
