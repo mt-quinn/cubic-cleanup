@@ -581,9 +581,29 @@ body {
 /* Hand pieces become inert visuals (rendering only) once the puzzle
    is done and the modal is dismissed. Soft desaturate + reduced
    opacity reads as "these aren't usable anymore". */
-.hexaclear-hand.is-daily-cleared-locked .hexaclear-piece-button {
+.hexaclear-hand.is-daily-cleared-locked .hexaclear-piece-button,
+.hexaclear-hand.is-daily-cleared-locked .hexaclear-hold {
   filter: saturate(0.4) brightness(0.7);
   opacity: 0.7;
+}
+
+/* Lock the entire tray once the daily celebration is dismissed so
+   the player can't accidentally pick up / drag / click any piece
+   (hand slot or hold pocket) on a cleared puzzle. The visual dim
+   above tells them the tray is inert; pointer-events: none makes
+   it actually inert. The board itself is locked further down. */
+.hexaclear-hand.is-daily-cleared-locked {
+  pointer-events: none;
+}
+
+/* Same idea on the board: once the daily celebration is dismissed,
+   board cells should ignore pointer input so a tap can't try to
+   "place a piece" on a cleared puzzle. We deliberately leave the
+   daily-cleared badge and any open overlays clickable — those live
+   alongside / on top of the board wrapper, not inside the board
+   itself. */
+.hexaclear-board-wrapper.daily-cleared-dismissed .hexaclear-board {
+  pointer-events: none;
 }
 
 .hexaclear-hand.game-over-winding-down .hexaclear-piece-button {
@@ -1870,16 +1890,21 @@ body {
 
 .hexaclear-hex.empty.preview-clear {
   /* For empty cells that will be cleared, keep the board background
-     visible and just add a subtle edge highlight. */
+     visible and just add a subtle edge highlight. The highlight
+     color is tier-aware (see --cube-inverse-bright in :root and
+     the .cubic-viewport tier overrides) so the about-to-clear
+     ring stays the visual complement of the current cube palette. */
   fill: transparent;
-  stroke: #ffe9a6;
+  stroke: var(--cube-inverse-bright);
   stroke-width: 3;
 }
 
 .hexaclear-hex.filled.preview-clear {
   /* For filled cells that will clear, restore the normal board edge stroke
-     so the hex boundary is visible behind the shrunk cube. */
-  stroke: #94633a;
+     so the hex boundary is visible behind the shrunk cube. The stroke
+     color is tier-aware (see --cube-inverse-dim) so it harmonises with
+     the bright empty-cell stroke above. */
+  stroke: var(--cube-inverse-dim);
 }
 
 /* JUST-PLACED IMPACT: the newly placed shape briefly "locks in" as a whole,
@@ -2319,6 +2344,17 @@ body {
      visually echoes the new piece coloring. Tier 0 is the wood
      baseline orange. */
   --score-tier-accent: #f9a23f;
+
+  /* Preview-clear "inverse" highlight palette: when the player
+     hovers a piece in a way that would clear cells, those cells
+     get tinted with these variables. They're picked to read as
+     the visual complement of the current tier's cube palette so
+     the about-to-clear region pops against the placed cubes. As
+     the tier shifts, both the cube palette AND its inverse here
+     shift in lockstep. Tier 0's pair is the original warm cream
+     + brown that shipped before tier escalation existed. */
+  --cube-inverse-bright: #ffe9a6;
+  --cube-inverse-dim: #94633a;
 }
 
 /* --- Score-tier palette escalation (Wood theme) --------------------
@@ -2336,6 +2372,9 @@ body {
   --cube-right: #ad3a26;
   --cube-left: #f57a55;
   --score-tier-accent: #f57a55;
+  /* Coral palette → cool teal inverse. */
+  --cube-inverse-bright: #a6f0ff;
+  --cube-inverse-dim: #3a8094;
 }
 
 .cubic-viewport[data-score-tier="2"] {
@@ -2343,6 +2382,9 @@ body {
   --cube-right: #983070;
   --cube-left: #e95cba;
   --score-tier-accent: #e95cba;
+  /* Hot-pink palette → spring-green inverse. */
+  --cube-inverse-bright: #b6ffc4;
+  --cube-inverse-dim: #3a8c50;
 }
 
 .cubic-viewport[data-score-tier="3"] {
@@ -2350,6 +2392,9 @@ body {
   --cube-right: #4a2078;
   --cube-left: #9460dc;
   --score-tier-accent: #9460dc;
+  /* Electric-purple palette → lime/olive inverse. */
+  --cube-inverse-bright: #e8ffa8;
+  --cube-inverse-dim: #637a30;
 }
 
 .cubic-viewport[data-score-tier="4"] {
@@ -2357,16 +2402,75 @@ body {
   --cube-right: #1c605a;
   --cube-left: #4ad0b7;
   --score-tier-accent: #4ad0b7;
+  /* Aurora-teal palette → warm pink/red inverse. */
+  --cube-inverse-bright: #ffc7d0;
+  --cube-inverse-dim: #94424f;
+}
+
+/* --- Score-tier transition: animatable colors -----------------------
+   Register the cube palette CSS variables as <color> custom properties
+   so the browser knows how to *interpolate* them. Without @property
+   the variables would jump instantly on a tier change; with @property
+   the transition declared on .cubic-viewport below lets the cubes,
+   inverse-preview tints, and HUD accent fade smoothly from one tier's
+   palette to the next over the same duration as the HUD pulse. */
+@property --cube-top {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffeaa3;
+}
+@property --cube-right {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #a04a18;
+}
+@property --cube-left {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f9a23f;
+}
+@property --cube-inverse-bright {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffe9a6;
+}
+@property --cube-inverse-dim {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #94633a;
+}
+@property --score-tier-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f9a23f;
+}
+
+/* The transition is applied on .cubic-viewport because that's where
+   the tier override rules set the cube palette. The duration is sized
+   to lean into the same beat as the HUD pulse below so the colors
+   visibly *travel* across the board while the ring is in flight. */
+.cubic-viewport {
+  transition:
+    --cube-top 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
+    --cube-right 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
+    --cube-left 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
+    --cube-inverse-bright 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
+    --cube-inverse-dim 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
+    --score-tier-accent 1600ms cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
 /* --- Score-tier HUD pulse ------------------------------------------
-   A large radial ring that emanates from the score readout when the
-   player crosses into a new tier. Anchored inside the live-stat /
-   LCD-score block via position: absolute (its parent gets a
-   `position: relative` modifier below). The expanding scale puts the
-   ring well beyond the HUD's bounding box — `overflow: visible` on
-   the parent is what lets it bleed out into the surrounding chrome
-   for the "obvious pulse" the player wants to notice. */
+   When the player crosses into a new tier we (a) grow + glow the
+   score HUD itself with a small celebration animation and (b) fire
+   a large clear-style radial ring that emanates from the HUD and
+   washes across the board while the palette is interpolating. The
+   ring is anchored inside the live-stat / LCD-score block via
+   position: absolute — its parent gets `position: relative` +
+   `overflow: visible` so the expanding ring can bleed out into the
+   surrounding chrome and across the board area.
+
+   The ring uses scale(60) at the tail so it covers the entire
+   viewport from any HUD position, regardless of layout. */
 .hexaclear-live-stat,
 .hexaclear-win98-lcd-score {
   position: relative;
@@ -2375,31 +2479,74 @@ body {
 
 .hexaclear-tier-pulse {
   position: absolute;
-  inset: -10%;
+  /* Compress the source ring to a small dot at the HUD's center
+     so the scale-up reads as a wave emanating from that one point
+     rather than a balloon inflating around the whole HUD box. */
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
   pointer-events: none;
   border-radius: 999px;
-  border: 3px solid var(--score-tier-accent, #f9a23f);
+  border: 4px solid var(--score-tier-accent, #f9a23f);
   box-shadow:
-    0 0 18px var(--score-tier-accent, #f9a23f),
-    inset 0 0 16px var(--score-tier-accent, #f9a23f);
+    0 0 28px var(--score-tier-accent, #f9a23f),
+    inset 0 0 18px var(--score-tier-accent, #f9a23f);
   opacity: 0;
-  z-index: 5;
-  animation: hexaclear-tier-pulse 1100ms cubic-bezier(0.18, 0.85, 0.3, 1)
+  z-index: 50;
+  animation: hexaclear-tier-pulse 1700ms cubic-bezier(0.16, 0.84, 0.36, 1)
     forwards;
 }
 
 @keyframes hexaclear-tier-pulse {
   0% {
     opacity: 0;
-    transform: scale(0.6);
+    transform: scale(0.4);
+    border-width: 6px;
   }
-  15% {
-    opacity: 0.9;
-    transform: scale(1.05);
+  10% {
+    opacity: 1;
+    transform: scale(2);
+    border-width: 5px;
   }
   100% {
     opacity: 0;
-    transform: scale(4.2);
+    transform: scale(60);
+    border-width: 1px;
+  }
+}
+
+/* HUD grow + glow that fires in lockstep with the ring expansion.
+   Lives on .hexaclear-live-stat .value (Wood) and
+   .hexaclear-win98-lcd-score .lcd-digits (Win98); both honour the
+   same `is-tier-pulsing` flag on their parent. */
+.hexaclear-live-stat.is-tier-pulsing .value,
+.hexaclear-win98-lcd-score.is-tier-pulsing .lcd-digits {
+  animation: hexaclear-tier-hud-glow 1700ms cubic-bezier(0.16, 0.84, 0.36, 1);
+  transform-origin: center;
+}
+
+@keyframes hexaclear-tier-hud-glow {
+  0% {
+    transform: scale(1);
+    filter: none;
+  }
+  18% {
+    transform: scale(1.45);
+    filter:
+      drop-shadow(0 0 18px var(--score-tier-accent, #f9a23f))
+      drop-shadow(0 0 6px var(--score-tier-accent, #f9a23f));
+  }
+  40% {
+    transform: scale(1.15);
+    filter:
+      drop-shadow(0 0 10px var(--score-tier-accent, #f9a23f));
+  }
+  100% {
+    transform: scale(1);
+    filter: none;
   }
 }
 
@@ -3643,7 +3790,15 @@ body {
 /* Fly-in animation for fresh hands. Delay is set per-button via the
    inline --hexaclear-fly-in-delay variable so the three pieces stagger
    in left-to-right. The animation plays once on mount and is harmless
-   on the very first render. */
+   on the very first render.
+
+   Target opacity is parameterized via --hexaclear-piece-target-opacity
+   so unplayable pieces can fade *in* to their dimmed state instead of
+   popping from full brightness to dim once the animation ends. Without
+   the variable the keyframes hardcoded `opacity: 1` and the animation
+   (with `fill: both`) clobbered `.unplayable { opacity: 0.45 }` until
+   the flyin class was cleared, at which point the opacity snapped
+   down by ~half — a very visible "darker pop". */
 .hexaclear-piece-flyin {
   animation: hexaclear-hand-flyin 900ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   animation-delay: var(--hexaclear-fly-in-delay, 0ms);
@@ -3655,11 +3810,11 @@ body {
     transform: translateY(28px) scale(0.78);
   }
   60% {
-    opacity: 1;
+    opacity: var(--hexaclear-piece-target-opacity, 1);
     transform: translateY(-4px) scale(1.04);
   }
   100% {
-    opacity: 1;
+    opacity: var(--hexaclear-piece-target-opacity, 1);
     transform: translateY(0) scale(1);
   }
 }
@@ -3670,6 +3825,7 @@ body {
 }
 
 .hexaclear-piece-button.unplayable {
+  --hexaclear-piece-target-opacity: 0.45;
   opacity: 0.45;
 }
 
@@ -5721,6 +5877,7 @@ body {
 }
 
 /* --- Reduced motion: kill animations & transitions ------------------- */
+.cubic-viewport.reduced-motion,
 .cubic-viewport.reduced-motion *,
 .cubic-viewport.reduced-motion *::before,
 .cubic-viewport.reduced-motion *::after {

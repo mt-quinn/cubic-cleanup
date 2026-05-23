@@ -2229,12 +2229,31 @@ function App() {
   // because those aren't level-ups — they shouldn't fire a
   // congratulatory pulse.
   const [tierPulseToken, setTierPulseToken] = useState(0)
+  // While the radial pulse + HUD grow animation are in flight, the
+  // parent live-stat / LCD-score elements get this flag so their
+  // inner score readout (`.value` / `.lcd-digits`) plays a coordinated
+  // scale-up + drop-shadow glow. The flag auto-clears after the
+  // longest animation finishes (the 1700ms expanding ring). Keeping
+  // the flag derived from a token + timeout — rather than just
+  // mounting the inner animation by key — means we can target the
+  // existing inner spans without having to remount them on each
+  // tier crossing.
+  const [tierPulseActive, setTierPulseActive] = useState(false)
   useEffect(() => {
     if (scoreTier > prevScoreTierRef.current) {
       setTierPulseToken((t) => t + 1)
+      setTierPulseActive(true)
     }
     prevScoreTierRef.current = scoreTier
   }, [scoreTier])
+  useEffect(() => {
+    if (!tierPulseActive) return
+    // Match the longer of the two animations (radial ring = 1700ms).
+    // A small slack avoids the HUD snap-back landing exactly on the
+    // animation's last frame.
+    const id = window.setTimeout(() => setTierPulseActive(false), 1750)
+    return () => window.clearTimeout(id)
+  }, [tierPulseActive, tierPulseToken])
   // Joke "ad previews" preview-mode. When on, a parody banner-ad
   // image gets stamped between the header chrome and the board so we
   // can mock up what a freemium / monetized build of Cubekill might
@@ -6560,7 +6579,16 @@ function App() {
                 />
               )}
               {showLiveStat ? (
-                <div className="hexaclear-live-stat">
+                <div
+                  className={[
+                    'hexaclear-live-stat',
+                    tierPulseActive && game.mode !== 'daily'
+                      ? 'is-tier-pulsing'
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
                   <span className="label">{liveStatLabel}</span>
                   <span className="value">{liveStatValue}</span>
                   {tierPulseToken > 0 && game.mode !== 'daily' && (
@@ -6632,7 +6660,15 @@ function App() {
               <span className="lcd-label">{bestLabel}</span>
             </div>
             <div
-              className="hexaclear-win98-lcd hexaclear-win98-lcd-score"
+              className={[
+                'hexaclear-win98-lcd',
+                'hexaclear-win98-lcd-score',
+                tierPulseActive && game.mode !== 'daily'
+                  ? 'is-tier-pulsing'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               aria-hidden="true"
             >
               <span className="lcd-label">{liveStatLabel}</span>

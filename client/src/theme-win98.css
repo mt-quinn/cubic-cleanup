@@ -64,6 +64,14 @@
      a glance without breaking the flat sunken-tile look. */
   --w98-cube-fill-partner: #6fbcbc;
 
+  /* "Inverse" fill used by preview-clear cells (the cells about to
+     pop when the player drops a piece). Defaults to magenta —
+     the original complement of teal that shipped before tier
+     escalation. Each cubic-viewport tier override below picks a
+     different complement so the about-to-clear cluster keeps a
+     strong contrast against the current cube palette. */
+  --w98-inverse-fill: #ff0081;
+
   /* Rosette etched groove. We mark each rosette as its own
      button group by carving a Win98-style 2-tone etched line
      into the cells along the rosette outer boundary. The line
@@ -1361,7 +1369,11 @@
    inset bevels so the cluster reads as a row of half-pressed
    buttons telegraphing the placement. */
 [data-theme="win98"] .hexaclear-hex.preview-valid {
-  fill: rgba(0, 128, 128, 0.45);
+  /* Follow the active tier's cube fill at 45% alpha so the
+     translucent "finger pushing the tile in" silhouette shifts
+     palette with the placed cubes. Without color-mix this was
+     hardcoded teal and stayed teal forever, even at tier 4. */
+  fill: color-mix(in srgb, var(--w98-cube-fill) 45%, transparent);
   stroke: var(--w98-deep-shadow);
   stroke-width: 1;
 }
@@ -1406,7 +1418,11 @@
    frame. We disable the animation here so the tile stays full
    size. */
 [data-theme="win98"] .hexaclear-hex.preview-clear {
-  fill: var(--w98-magenta);
+  /* Tier-aware "inverse" of the cube fill — magenta at tier 0,
+     shifting to yellow / blue / green / cyan as the player
+     escalates through the score tiers. See --w98-inverse-fill
+     in :root + the cubic-viewport tier overrides. */
+  fill: var(--w98-inverse-fill);
   stroke: var(--w98-deep-shadow);
   stroke-width: 1;
   animation: none;
@@ -1440,7 +1456,9 @@
    the bare `.preview-clear` rule above, so it wins for cells
    that carry both classes. */
 [data-theme="win98"] .hexaclear-hex.preview-valid.preview-clear {
-  fill: rgba(255, 0, 129, 0.45);
+  /* Translucent tier-aware inverse (matches the bare
+     .preview-clear rule above, just held-piece-translucent). */
+  fill: color-mix(in srgb, var(--w98-inverse-fill) 45%, transparent);
   stroke: var(--w98-deep-shadow);
   stroke-width: 1;
   animation: none;
@@ -1573,6 +1591,10 @@
   --cube-left: #7030a0;
   --cube-right: #3e1764;
   --score-tier-accent: #b07ac4;
+  /* Purple cubes → bright yellow about-to-clear. */
+  --w98-inverse-fill: #c0c000;
+  --cube-inverse-bright: #f8ff80;
+  --cube-inverse-dim: #6a7000;
 }
 
 [data-theme="win98"] .cubic-viewport[data-score-tier="2"] {
@@ -1581,6 +1603,10 @@
   --cube-left: #a08000;
   --cube-right: #5c4500;
   --score-tier-accent: #c8a230;
+  /* Olive cubes → cool blue/purple about-to-clear. */
+  --w98-inverse-fill: #0040c0;
+  --cube-inverse-bright: #80a0ff;
+  --cube-inverse-dim: #003088;
 }
 
 [data-theme="win98"] .cubic-viewport[data-score-tier="3"] {
@@ -1589,6 +1615,10 @@
   --cube-left: #c000a0;
   --cube-right: #6d0058;
   --score-tier-accent: #e560c0;
+  /* Magenta cubes → green about-to-clear. */
+  --w98-inverse-fill: #00a040;
+  --cube-inverse-bright: #80ffa0;
+  --cube-inverse-dim: #006028;
 }
 
 [data-theme="win98"] .cubic-viewport[data-score-tier="4"] {
@@ -1597,6 +1627,10 @@
   --cube-left: #c01010;
   --cube-right: #6d0506;
   --score-tier-accent: #e0494a;
+  /* Crimson cubes → cyan about-to-clear. */
+  --w98-inverse-fill: #00b0c0;
+  --cube-inverse-bright: #80e8ff;
+  --cube-inverse-dim: #006a80;
 }
 [data-theme="win98"] .hexaclear-hex-bevels.piece .hexaclear-hex-bevel {
   stroke-width: 3;
