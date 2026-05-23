@@ -2202,6 +2202,38 @@ function App() {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('cubic-reduced-motion') === 'true'
   })
+  // Score-tier color escalation. Pieces (and recently-placed cubes)
+  // shift palette at every 1,000-point boundary up to a cap at 4k+,
+  // giving the run a visible "levelling up" momentum without ever
+  // turning the board into a unreadable mess. Tier 0 is the theme's
+  // default look — both Wood and Win98 define cube-color overrides
+  // for tiers 1–4 in their respective stylesheets.
+  //
+  // Daily mode is scored in moves, not points, so the tier is pinned
+  // to 0 there. Endless and Big share the same thresholds; Big mode
+  // scores faster, which the user accepted as intentional — bigger
+  // scores get bigger rewards. Co-op / PvP follow the local player's
+  // current score.
+  const scoreTier = useMemo<0 | 1 | 2 | 3 | 4>(() => {
+    if (game.mode === 'daily') return 0
+    const t = Math.floor(game.score / 1000)
+    if (t <= 0) return 0
+    if (t >= 4) return 4
+    return t as 1 | 2 | 3
+  }, [game.score, game.mode])
+  const prevScoreTierRef = useRef<0 | 1 | 2 | 3 | 4>(scoreTier)
+  // Token bumped every time the player crosses INTO a higher tier so
+  // the HUD-pulse overlay's `key` changes and React remounts the
+  // animation. Token doesn't bump on tier drops (mode swaps, resets)
+  // because those aren't level-ups — they shouldn't fire a
+  // congratulatory pulse.
+  const [tierPulseToken, setTierPulseToken] = useState(0)
+  useEffect(() => {
+    if (scoreTier > prevScoreTierRef.current) {
+      setTierPulseToken((t) => t + 1)
+    }
+    prevScoreTierRef.current = scoreTier
+  }, [scoreTier])
   // Joke "ad previews" preview-mode. When on, a parody banner-ad
   // image gets stamped between the header chrome and the board so we
   // can mock up what a freemium / monetized build of Cubekill might
@@ -6286,6 +6318,7 @@ function App() {
       ]
         .filter(Boolean)
         .join(' ')}
+      data-score-tier={scoreTier}
       onDragStart={(e) => {
         e.preventDefault()
       }}
@@ -6516,6 +6549,19 @@ function App() {
                 <div className="hexaclear-live-stat">
                   <span className="label">{liveStatLabel}</span>
                   <span className="value">{liveStatValue}</span>
+                  {tierPulseToken > 0 && game.mode !== 'daily' && (
+                    // Score-tier transition pulse. Keyed on the
+                    // monotonic token so each crossing remounts a
+                    // fresh animation; positioned absolutely inside
+                    // the live-stat block so the ring radiates out
+                    // from the score number specifically. Hidden in
+                    // daily mode (which doesn't tier on score).
+                    <span
+                      key={tierPulseToken}
+                      className="hexaclear-tier-pulse"
+                      aria-hidden="true"
+                    />
+                  )}
                 </div>
               ) : (
                 <span className="hexaclear-live-stat-placeholder" />
@@ -6580,6 +6626,13 @@ function App() {
                 <span className="lcd-digits-off">{'8'.repeat(liveDigits.length)}</span>
                 <span className="lcd-digits">{liveDigits}</span>
               </span>
+              {tierPulseToken > 0 && game.mode !== 'daily' && (
+                <span
+                  key={tierPulseToken}
+                  className="hexaclear-tier-pulse"
+                  aria-hidden="true"
+                />
+              )}
             </div>
             {/* Win98 smiley row + emote panel. Sits centered between
                 the two LCDs (Minesweeper layout). Conditional on

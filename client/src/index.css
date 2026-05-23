@@ -2313,6 +2313,94 @@ body {
   --cube-golden-right: #b01232;
   --cube-golden-left: #e23c5c;
 
+  /* Color tier accent the HUD-pulse animation draws with on a
+     successful score-tier crossing. Each tier overrides this with
+     the dominant face color from that tier's palette so the burst
+     visually echoes the new piece coloring. Tier 0 is the wood
+     baseline orange. */
+  --score-tier-accent: #f9a23f;
+}
+
+/* --- Score-tier palette escalation (Wood theme) --------------------
+   Each tier shifts the cube color trio to a distinct, harmonious set
+   that still reads as "Cubekill" — same isometric construction, same
+   stroke, same brightness ramp on the three faces. The progression
+   trades warm earth → hot coral → magenta → electric purple →
+   aurora teal so a long endless run visibly cycles through a
+   coordinated, increasingly punchy palette.
+
+   Daily mode pins the tier to 0, so these overrides only fire in
+   the modes where the score is actually a thing. */
+.cubic-viewport[data-score-tier="1"] {
+  --cube-top: #ffd2bf;
+  --cube-right: #ad3a26;
+  --cube-left: #f57a55;
+  --score-tier-accent: #f57a55;
+}
+
+.cubic-viewport[data-score-tier="2"] {
+  --cube-top: #ffc3e5;
+  --cube-right: #983070;
+  --cube-left: #e95cba;
+  --score-tier-accent: #e95cba;
+}
+
+.cubic-viewport[data-score-tier="3"] {
+  --cube-top: #d6c5ff;
+  --cube-right: #4a2078;
+  --cube-left: #9460dc;
+  --score-tier-accent: #9460dc;
+}
+
+.cubic-viewport[data-score-tier="4"] {
+  --cube-top: #b7f3e8;
+  --cube-right: #1c605a;
+  --cube-left: #4ad0b7;
+  --score-tier-accent: #4ad0b7;
+}
+
+/* --- Score-tier HUD pulse ------------------------------------------
+   A large radial ring that emanates from the score readout when the
+   player crosses into a new tier. Anchored inside the live-stat /
+   LCD-score block via position: absolute (its parent gets a
+   `position: relative` modifier below). The expanding scale puts the
+   ring well beyond the HUD's bounding box — `overflow: visible` on
+   the parent is what lets it bleed out into the surrounding chrome
+   for the "obvious pulse" the player wants to notice. */
+.hexaclear-live-stat,
+.hexaclear-win98-lcd-score {
+  position: relative;
+  overflow: visible;
+}
+
+.hexaclear-tier-pulse {
+  position: absolute;
+  inset: -10%;
+  pointer-events: none;
+  border-radius: 999px;
+  border: 3px solid var(--score-tier-accent, #f9a23f);
+  box-shadow:
+    0 0 18px var(--score-tier-accent, #f9a23f),
+    inset 0 0 16px var(--score-tier-accent, #f9a23f);
+  opacity: 0;
+  z-index: 5;
+  animation: hexaclear-tier-pulse 1100ms cubic-bezier(0.18, 0.85, 0.3, 1)
+    forwards;
+}
+
+@keyframes hexaclear-tier-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  15% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(4.2);
+  }
 }
 
 .hexaclear-hex-cube line {

@@ -1556,6 +1556,48 @@
   stroke: var(--w98-deep-shadow) !important;
   stroke-width: 1 !important;
 }
+
+/* --- Score-tier palette escalation (Win98 theme) -------------------
+   The cube graphics are flat in Win98 (only --w98-cube-fill is
+   doing the work), so each tier just nudges that one color. We
+   stick to a tight DOS-palette progression: teal → royal purple →
+   olive → magenta → crimson, each easily distinguishable from the
+   others at a glance.
+
+   The `--cube-*` variables are also re-aliased on Win98 so any
+   downstream rule (e.g. partner-tint hue-rotate falls back to
+   `var(--cube-top)`) gets a tier-appropriate base color. */
+[data-theme="win98"] .cubic-viewport[data-score-tier="1"] {
+  --w98-cube-fill: #7030a0;
+  --cube-top: #b07ac4;
+  --cube-left: #7030a0;
+  --cube-right: #3e1764;
+  --score-tier-accent: #b07ac4;
+}
+
+[data-theme="win98"] .cubic-viewport[data-score-tier="2"] {
+  --w98-cube-fill: #a08000;
+  --cube-top: #c8a230;
+  --cube-left: #a08000;
+  --cube-right: #5c4500;
+  --score-tier-accent: #c8a230;
+}
+
+[data-theme="win98"] .cubic-viewport[data-score-tier="3"] {
+  --w98-cube-fill: #c000a0;
+  --cube-top: #e560c0;
+  --cube-left: #c000a0;
+  --cube-right: #6d0058;
+  --score-tier-accent: #e560c0;
+}
+
+[data-theme="win98"] .cubic-viewport[data-score-tier="4"] {
+  --w98-cube-fill: #c01010;
+  --cube-top: #e0494a;
+  --cube-left: #c01010;
+  --cube-right: #6d0506;
+  --score-tier-accent: #e0494a;
+}
 [data-theme="win98"] .hexaclear-hex-bevels.piece .hexaclear-hex-bevel {
   stroke-width: 3;
 }
