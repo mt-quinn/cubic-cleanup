@@ -247,14 +247,32 @@ export const createEmptyBoard = (mode: GameMode = 'endless'): BoardState => {
 }
 
 // Choose a new ruby/golden cube position for the given mode.
-// Same rules as before:
-// - if it lands on an empty cell, it sets that cell to 'filled' but never
-//   in a way that would immediately complete a scoring pattern;
-// - if no safe empty slot exists, fall back to any filled cell;
-// - cells in `forbiddenFlowers` are skipped (used to avoid respawning the
-//   same ruby into the rosette it just cleared) and cells in
-//   `forbiddenCellIds` are skipped (used to keep multiple rubies from
-//   colliding on the same tile).
+//
+// Selection order:
+// 1. PREFER FILLED: if any non-forbidden cell is currently `filled`,
+//    take that one. This is the dominant case for ruby respawns —
+//    the board still has player pieces standing, and dropping the
+//    new ruby on top of one of those reads as a "replacement"
+//    rather than slipping a new ruby into some unrelated empty
+//    hex elsewhere on the board. Per design: as long as even one
+//    player piece is on the board, a respawned ruby must land on
+//    a player-filled hex. We're not changing occupancy so this is
+//    always safe (can't trip a new clear just by recoloring).
+// 2. SAFE EMPTY: otherwise mark an empty cell `filled` (which
+//    becomes the ruby's new home), provided that flip wouldn't
+//    immediately complete a scoring pattern. This is the path
+//    used by initial spawns on a fresh board and by edge-case
+//    respawns where every player-filled cell was just cleared
+//    out from under us.
+// 3. Returns null only if every candidate is forbidden or empties
+//    would all trip immediate clears — the caller treats null as
+//    "no ruby this round" and moves on.
+//
+// Cells in `forbiddenFlowers` are skipped (used to avoid
+// respawning the same ruby into the rosette it just cleared) and
+// cells in `forbiddenCellIds` are skipped (used to keep multiple
+// rubies from colliding on the same tile and to avoid respawning
+// onto another ruby).
 const spawnGoldenCell = (
   board: BoardState,
   mode: GameMode,
@@ -273,63 +291,46 @@ const spawnGoldenCell = (
     ;[cells[i], cells[j]] = [cells[j]!, cells[i]!]
   }
 
-  let fallbackFilled: CellId | null = null
-
-  cellLoop: for (const cell of cells) {
-    const id = cell.id
-    if (forbiddenCellIds && forbiddenCellIds.has(id)) continue
+  const isForbidden = (id: CellId): boolean => {
+    if (forbiddenCellIds && forbiddenCellIds.has(id)) return true
     if (forbiddenFlowers && forbiddenFlowers.size > 0) {
       for (const pattern of flowerPatterns) {
         if (
           forbiddenFlowers.has(pattern.id) &&
           pattern.cellIds.includes(id)
         ) {
-          // Skip any cells that live inside a forbidden flower.
-          continue cellLoop
+          return true
         }
       }
     }
+    return false
+  }
 
-    const state = board[id]
-    if (state === 'filled') {
-      // Always safe: we're not changing occupancy so we can't create a
-      // new clear just by marking it golden.
+  // Pass 1: filled non-forbidden cell wins. Marking it golden doesn't
+  // change occupancy, so no clear-trigger check needed.
+  for (const cell of cells) {
+    const id = cell.id
+    if (isForbidden(id)) continue
+    if (board[id] === 'filled') {
       return id
     }
+  }
 
-    // Try treating this empty cell as filled and see if it would
-    // immediately complete any scoring pattern. If not, accept it and
-    // lock it in as filled.
+  // Pass 2: pick a safe empty cell. Flip it filled (becomes the
+  // ruby's home) only if doing so doesn't trip an immediate clear.
+  for (const cell of cells) {
+    const id = cell.id
+    if (isForbidden(id)) continue
+    if (board[id] !== 'empty') continue
     board[id] = 'filled'
     const { clearedPatterns } = findClears(board, mode)
     if (clearedPatterns.length === 0) {
       return id
     }
-    // Revert and keep looking.
     board[id] = 'empty'
   }
 
-  // If we couldn't find a safe empty slot, fall back to *any* filled
-  // cell (so we always have a golden cube somewhere).
-  cellLoopFallback: for (const cell of cells) {
-    const id = cell.id
-    if (forbiddenCellIds && forbiddenCellIds.has(id)) continue
-    if (forbiddenFlowers && forbiddenFlowers.size > 0) {
-      for (const pattern of flowerPatterns) {
-        if (
-          forbiddenFlowers.has(pattern.id) &&
-          pattern.cellIds.includes(id)
-        ) {
-          continue cellLoopFallback
-        }
-      }
-    }
-    if (board[id] === 'filled') {
-      fallbackFilled = id
-      break
-    }
-  }
-  return fallbackFilled
+  return null
 }
 
 // Spawn N rubies into a fresh board, each one in a different flower
