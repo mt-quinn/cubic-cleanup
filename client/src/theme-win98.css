@@ -1248,16 +1248,21 @@
 }
 
 /* CLEARING ANIMATION: cells about to clear were already raised
-   (outset bevels) AND already painted magenta during the
-   preview-clear state, so the clear itself only needs to fade
-   the magenta fill back to flat surface gray — no bevel flip,
-   no color snap. Anchoring the keyframe's 0% explicitly to
-   magenta keeps the transition smooth out of preview-clear
-   (magenta → magenta → surface), which is the dominant code
-   path. Cells that enter clearing without going through
-   preview-clear first (rare — daily-mode auto-clears, etc.)
-   will see a single-frame snap from teal/ruby to magenta as
-   the animation engages, which is acceptable given the
+   (outset bevels) AND already painted with the tier's inverse
+   fill during the preview-clear state, so the clear itself only
+   needs to fade that inverse fill back to flat surface gray —
+   no bevel flip, no color snap. Anchoring the keyframe's 0%
+   explicitly to --w98-inverse-fill (magenta at tier 0, shifting
+   per tier above) keeps the transition smooth out of
+   preview-clear, which is the dominant code path. Without that,
+   the clear used to snap back to the *default* magenta at
+   tier 1+ even though preview-clear had just painted the cells
+   yellow / blue / etc.
+
+   Cells that enter clearing without going through preview-clear
+   first (rare — daily-mode auto-clears, etc.) will see a
+   single-frame snap from teal/ruby to the tier's inverse fill
+   as the animation engages, which is acceptable given the
    animation runs immediately and the clear visual is the
    rapid color drain anyway.
 
@@ -1272,7 +1277,7 @@
    cells don't pop from sunken to raised when the clear begins —
    they were already raised in preview-clear. */
 @keyframes hexaclear-w98-cell-unpress {
-  0%   { fill: var(--w98-magenta); }
+  0%   { fill: var(--w98-inverse-fill); }
   100% { fill: var(--w98-surface); }
 }
 

@@ -2296,7 +2296,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -2457,6 +2457,20 @@ body {
     --cube-inverse-bright 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
     --cube-inverse-dim 1600ms cubic-bezier(0.4, 0.0, 0.2, 1),
     --score-tier-accent 1600ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Arriving back at tier 0 should be instantaneous, not a slow fade.
+   The dominant case is "player just started a new endless run" —
+   game.score drops to 0, scoreTier drops to 0, and without this
+   override the old tier's palette would linger on the new hand for
+   1600ms while the fresh game tries to feel fresh. Per the CSS
+   Transitions spec, the transition-* properties read for an
+   in-flight change come from the *new* computed style; setting
+   `transition: none` here means tier-N → 0 snaps. Going 0 → 1
+   later still transitions, because that change reads tier 1's
+   style which leaves the .cubic-viewport transition intact. */
+.cubic-viewport[data-score-tier="0"] {
+  transition: none;
 }
 
 /* --- Score-tier HUD pulse ------------------------------------------
@@ -3165,6 +3179,22 @@ body {
   align-items: center;
   gap: 0.4rem;
 }
+/* When a perfected past month carries a moves summary we stack
+   the month name + check on top and the medal + total on the
+   bottom so neither line crowds the other. The default inline
+   layout (used everywhere else) is preserved when the summary
+   isn't present. */
+.hexaclear-history-nav-label-with-summary {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  line-height: 1.1;
+}
+.hexaclear-history-nav-label-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
 /* Month-level "perfected" indicator. Inherits the cleared-day
    palette (forest green / mint check) so the calendar's two
    "you cleared this" surfaces — single day and whole month —
@@ -3182,6 +3212,34 @@ body {
 }
 .hexaclear-history-nav-label-perfected {
   color: #d8f5d8;
+}
+/* Sub-line shown only on perfected past months: medal emoji
+   reflecting average moves/day plus the month's total moves.
+   Sized below the month name so the achievement reads as a
+   sub-stat rather than competing with the title. */
+.hexaclear-history-month-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ffe6c2;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+.hexaclear-history-month-medal {
+  font-size: 1.05rem;
+  line-height: 1;
+  /* Default emoji rendering reserves a chunk of width and a
+     baseline that drags the surrounding text down. Treating it
+     as inline-flex with explicit centering keeps the medal
+     visually aligned with the moves count next to it. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.hexaclear-history-month-total {
+  white-space: nowrap;
 }
 .hexaclear-history-nav-step {
   appearance: none;
@@ -5847,6 +5905,99 @@ body {
 
 .hexaclear-overlay-card button.hexaclear-gameover-cta-secondary:hover {
   filter: brightness(1.12);
+}
+
+/* Daily-win-only nav row: pair of "Previous day" / "Next day"
+   buttons that jump straight to the prev/next unfinished daily
+   puzzle. Lives directly above Copy Share + the Done/Retry
+   exit row so the player sees the option to chain into another
+   puzzle before they commit to either staying or leaving. Either
+   button can be missing (no unfinished puzzle in that direction),
+   in which case its slot collapses to a spacer so the remaining
+   button doesn't fall flush-left and the row's visual rhythm is
+   preserved. */
+.hexaclear-gameover-daily-nav-row {
+  display: flex;
+  gap: 0.55rem;
+  width: 100%;
+  margin-top: 0.4rem;
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-daily-nav,
+.hexaclear-gameover-daily-nav-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-daily-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.95rem;
+  text-align: left;
+  line-height: 1.05;
+}
+
+.hexaclear-gameover-daily-nav-arrow {
+  font-size: 1.4rem;
+  line-height: 1;
+  font-weight: 700;
+  opacity: 0.85;
+  flex: 0 0 auto;
+}
+
+.hexaclear-gameover-daily-nav-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.05rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  /* When the row hosts a "Next day" button, the arrow sits on
+     the right side of the stack. Default alignment is fine for
+     both — labels read left-aligned and the arrow keeps its own
+     slot. */
+}
+
+/* Next-day button renders <stack><arrow›>, so the stack is the
+   button's first child and should hug the arrow on its right.
+   Prev-day button renders <‹arrow><stack>, where the stack is
+   the second child and defaults to left-aligned (matching the
+   reading flow off the arrow on its left). Anchoring this rule
+   to `:first-child` keeps each variant aligned the way the
+   eye would expect without needing a dedicated class per
+   variant. */
+.hexaclear-overlay-card
+  button.hexaclear-gameover-daily-nav
+  > .hexaclear-gameover-daily-nav-stack:first-child {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.hexaclear-gameover-daily-nav-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.hexaclear-gameover-daily-nav-date {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.hexaclear-gameover-daily-nav-spacer {
+  /* Hold the empty slot's width so the lone visible button stays
+     in its half of the row. Pointer-events off so accidental
+     taps in this region don't register. */
+  pointer-events: none;
 }
 
 /* Copy Share button. Reuses the secondary's muted treatment as the

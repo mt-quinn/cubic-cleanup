@@ -3844,9 +3844,16 @@ function App() {
                   }
                 })
               })
-              
-              // Don't update score yet - wait for particle to arrive
-              finalScore = current.score
+              // NOTE: we intentionally do NOT reset `finalScore` to
+              // `current.score` here. The delayed setGame above reads
+              // `currentGame.score + totalScore` directly, so leaving
+              // `finalScore` as the true post-placement total is what
+              // lets the best-score check below recognise that a
+              // clear pushed the run past the previous best. The
+              // immediate `setGame` further down respects
+              // `shouldDelayScoreUpdate` and uses `current.score`
+              // independently, so nothing else relies on
+              // `finalScore` being rewound.
             }
           } else {
             // Fallback to old popup if we can't get positions
@@ -6236,12 +6243,18 @@ function App() {
         label: 'Clears',
         value: String(runStats.patternsCleared),
       },
-      {
+    ]
+    // Rubies aren't a thing in daily mode (there's no ruby spawn /
+    // capture loop on the fixed numbered-cube board), so hide the
+    // "0 rubies" stat there — it just reads as a missing feature
+    // rather than a meaningful zero.
+    if (game.mode !== 'daily') {
+      baselineStats.push({
         key: 'rubies',
         label: 'Rubies',
         value: String(runStats.rubiesCleared),
-      },
-    ]
+      })
+    }
     const moments: StatDatum[] = []
     if (runStats.boardClears > 0) {
       moments.push({
@@ -9110,6 +9123,146 @@ function App() {
                     </button>
                   )}
 
+                {/* Daily-win-only jump-to-another-day row. After a
+                    cleared puzzle, the most useful follow-up is
+                    often "show me the next unsolved daily" — this
+                    row offers exactly that for both directions,
+                    preferring unfinished puzzles in each direction
+                    so the player can chain through their backlog
+                    without bouncing back into the calendar grid.
+                    Either side disappears entirely when no
+                    unfinished day exists in that direction within
+                    the launch..today range, so the buttons only
+                    appear when they'd actually do something. */}
+                {game.dailyCompleted &&
+                  (() => {
+                    const currentDailyKey =
+                      game.dailyDateKey ?? getTodayKey()
+                    const todayKey = getTodayKey()
+                    const isCleared = (dateKey: string): boolean => {
+                      // Mirrors the bestMoves lookup used by the
+                      // calendar grid: synced map first, then the
+                      // per-day localStorage best, then the runs
+                      // list as a last resort.
+                      const synced =
+                        lifetimeStats.dailyBestMovesByDate[dateKey]
+                      if (
+                        typeof synced === 'number' &&
+                        Number.isFinite(synced) &&
+                        synced > 0
+                      ) {
+                        return true
+                      }
+                      try {
+                        if (typeof window !== 'undefined') {
+                          const raw = window.localStorage.getItem(
+                            `cubic-daily-best-${dateKey}`,
+                          )
+                          const parsed = raw ? Number.parseInt(raw, 10) : NaN
+                          if (Number.isFinite(parsed) && parsed > 0) {
+                            return true
+                          }
+                          const runs = loadDailyRunsForDateKey(dateKey)
+                          if (runs.length > 0) return true
+                        }
+                      } catch {
+                        // Treat storage errors as "not cleared" so the
+                        // button still works even if localStorage is
+                        // unavailable.
+                      }
+                      return false
+                    }
+                    const findNeighbor = (
+                      delta: -1 | 1,
+                    ): string | null => {
+                      // Safety bound: walk at most a few years of
+                      // calendar days so a logic bug can never spin
+                      // here forever. The real terminating condition
+                      // is the launch / today boundary.
+                      let cursor = shiftDateKey(currentDailyKey, delta)
+                      for (let i = 0; i < 4000; i++) {
+                        if (
+                          delta < 0 &&
+                          isDateKeyBefore(
+                            cursor,
+                            DAILY_HISTORY_LAUNCH_DATE_KEY,
+                          )
+                        ) {
+                          return null
+                        }
+                        if (delta > 0 && isDateKeyAfter(cursor, todayKey)) {
+                          return null
+                        }
+                        if (!isCleared(cursor)) return cursor
+                        cursor = shiftDateKey(cursor, delta)
+                      }
+                      return null
+                    }
+                    const prevKey = findNeighbor(-1)
+                    const nextKey = findNeighbor(1)
+                    if (!prevKey && !nextKey) return null
+                    return (
+                      <div className="hexaclear-gameover-daily-nav-row">
+                        {prevKey ? (
+                          <button
+                            type="button"
+                            className="hexaclear-gameover-cta hexaclear-gameover-cta-secondary hexaclear-gameover-daily-nav"
+                            onClick={() => {
+                              playUiClick()
+                              if (pendingDailyHighScore) {
+                                handleSaveDailyHighScore()
+                              }
+                              handleStartDailyForDateKey(prevKey)
+                              setDailyGameOverDismissed(true)
+                            }}
+                          >
+                            <span className="hexaclear-gameover-daily-nav-arrow">
+                              ‹
+                            </span>
+                            <span className="hexaclear-gameover-daily-nav-stack">
+                              <span className="hexaclear-gameover-daily-nav-label">
+                                Previous day
+                              </span>
+                              <span className="hexaclear-gameover-daily-nav-date">
+                                {formatFriendlyDateKey(prevKey)}
+                              </span>
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="hexaclear-gameover-daily-nav-spacer" />
+                        )}
+                        {nextKey ? (
+                          <button
+                            type="button"
+                            className="hexaclear-gameover-cta hexaclear-gameover-cta-secondary hexaclear-gameover-daily-nav"
+                            onClick={() => {
+                              playUiClick()
+                              if (pendingDailyHighScore) {
+                                handleSaveDailyHighScore()
+                              }
+                              handleStartDailyForDateKey(nextKey)
+                              setDailyGameOverDismissed(true)
+                            }}
+                          >
+                            <span className="hexaclear-gameover-daily-nav-stack">
+                              <span className="hexaclear-gameover-daily-nav-label">
+                                Next day
+                              </span>
+                              <span className="hexaclear-gameover-daily-nav-date">
+                                {formatFriendlyDateKey(nextKey)}
+                              </span>
+                            </span>
+                            <span className="hexaclear-gameover-daily-nav-arrow">
+                              ›
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="hexaclear-gameover-daily-nav-spacer" />
+                        )}
+                      </div>
+                    )
+                  })()}
+
                 {/* Copy Share — pasteable summary of the run.
                     Lives right above the exit row so it's the last
                     thing the player sees before deciding which exit
@@ -10468,6 +10621,51 @@ function App() {
                 if (c.isPreLaunch) return true
                 return c.bestMoves !== null
               })
+            // Sum of best moves across the played days of this month
+            // plus the medal tier this player has earned for it.
+            // We only surface this once the month is *both* past and
+            // perfected: the player needs every playable day cleared
+            // before the moves total reads as a final score, and the
+            // current month (even fully-cleared) is excluded so the
+            // medal can't flip mid-month as the player chips away at
+            // a tougher day. Thresholds per product:
+            //   gold   — avg ≤ 35 moves/day
+            //   silver — avg 36..60 moves/day
+            //   bronze — avg > 60 moves/day
+            const monthBestMovesList: number[] = cells.flatMap((c) => {
+              if (c.kind !== 'day') return []
+              if (c.bestMoves === null || !Number.isFinite(c.bestMoves)) {
+                return []
+              }
+              return [c.bestMoves]
+            })
+            const monthTotalMoves = monthBestMovesList.reduce(
+              (acc, n) => acc + n,
+              0,
+            )
+            const monthClearedDayCount = monthBestMovesList.length
+            const monthAvgMoves =
+              monthClearedDayCount > 0
+                ? monthTotalMoves / monthClearedDayCount
+                : null
+            const monthMedalEmoji =
+              monthAvgMoves === null
+                ? ''
+                : monthAvgMoves <= 35
+                  ? '🥇'
+                  : monthAvgMoves <= 60
+                    ? '🥈'
+                    : '🥉'
+            const monthMedalLabel =
+              monthAvgMoves === null
+                ? ''
+                : monthAvgMoves <= 35
+                  ? 'Gold medal'
+                  : monthAvgMoves <= 60
+                    ? 'Silver medal'
+                    : 'Bronze medal'
+            const showMonthSummary =
+              monthPerfected && isPastMonth && monthClearedDayCount > 0
             const stepMonth = (delta: number) => {
               setHistoryMonth(({ year: y, month: m }) => {
                 const date = new Date(y, m - 1 + delta, 1)
@@ -10507,18 +10705,44 @@ function App() {
                         monthPerfected
                           ? 'hexaclear-history-nav-label-perfected'
                           : '',
+                        showMonthSummary
+                          ? 'hexaclear-history-nav-label-with-summary'
+                          : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
                     >
-                      {monthLabel}
-                      {monthPerfected && (
+                      <span className="hexaclear-history-nav-label-top">
+                        {monthLabel}
+                        {monthPerfected && (
+                          <span
+                            className="hexaclear-history-month-check"
+                            aria-label="every day this month cleared"
+                            title="Every day this month cleared"
+                          >
+                            ✓
+                          </span>
+                        )}
+                      </span>
+                      {showMonthSummary && (
                         <span
-                          className="hexaclear-history-month-check"
-                          aria-label="every day this month cleared"
-                          title="Every day this month cleared"
+                          className="hexaclear-history-month-summary"
+                          aria-label={`${monthMedalLabel} · ${monthTotalMoves} total moves across ${monthClearedDayCount} ${
+                            monthClearedDayCount === 1 ? 'day' : 'days'
+                          }`}
+                          title={`${monthMedalLabel} · average ${
+                            monthAvgMoves !== null
+                              ? Math.round(monthAvgMoves * 10) / 10
+                              : '—'
+                          } moves/day`}
                         >
-                          ✓
+                          <span className="hexaclear-history-month-medal">
+                            {monthMedalEmoji}
+                          </span>
+                          <span className="hexaclear-history-month-total">
+                            {monthTotalMoves}{' '}
+                            {monthTotalMoves === 1 ? 'move' : 'moves'}
+                          </span>
                         </span>
                       )}
                     </span>
