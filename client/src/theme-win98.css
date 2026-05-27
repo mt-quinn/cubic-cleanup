@@ -1581,61 +1581,64 @@
 }
 
 /* --- Score-tier palette escalation (Win98 theme) -------------------
-   The cube graphics are flat in Win98 (only --w98-cube-fill is
-   doing the work), so each tier just nudges that one color. We
-   stick to a tight DOS-palette progression: teal → royal purple →
-   olive → magenta → crimson, each easily distinguishable from the
-   others at a glance.
+   The tier > 0 palette is now computed in JS (see `paletteForTier`
+   in App.tsx) and pushed onto the viewport as inline CSS custom
+   properties — same Win98-tuned saturation / lightness band that
+   the hardcoded ramp used, just generated procedurally for every
+   1000-point tier rather than capping at 4.
 
-   The `--cube-*` variables are also re-aliased on Win98 so any
-   downstream rule (e.g. partner-tint hue-rotate falls back to
-   `var(--cube-top)`) gets a tier-appropriate base color. */
-[data-theme="win98"] .cubic-viewport[data-score-tier="1"] {
-  --w98-cube-fill: #7030a0;
-  --cube-top: #b07ac4;
-  --cube-left: #7030a0;
-  --cube-right: #3e1764;
-  --score-tier-accent: #b07ac4;
-  /* Purple cubes → bright yellow about-to-clear. */
-  --w98-inverse-fill: #c0c000;
-  --cube-inverse-bright: #f8ff80;
-  --cube-inverse-dim: #6a7000;
+   Tier 0 still falls through to the :root + Win98 baseline vars
+   (`--w98-cube-fill: #008080;` teal) defined elsewhere in this
+   file, so daily mode and fresh runs render exactly as before. */
+
+/* --- Octave layer overrides (Win98) --------------------------------
+   The wood `.cubic-viewport.octave-N` rules in index.css mostly
+   work for Win98 because they read theme-aware CSS variables (the
+   bg-wash + bg-pattern colors come from `--score-tier-accent`,
+   which is set procedurally per tier in both themes). Two
+   layers need Win98-flavored overrides:
+
+     - octave-2 empty-cell stroke: the wood rule blends the accent
+       with `#94633a` (warm brown), which clashes with Win98's
+       deep-shadow neutral. Re-blend against `var(--w98-deep-shadow)`
+       so the grid lines stay on-theme.
+     - octave-3 cube edges: Win98 hides `.cube-face` entirely
+       (the cube reads as a flat teal tile, not an isometric trio).
+       So the wood octave-3 outline has no effect here, and we
+       tint the bevel polylines on filled cells instead so the
+       octave still has a Win98 manifestation. The bevel highlight
+       / shadow defaults are dark navy + bright white; we shift
+       the highlight toward the accent so the tile's pressed bevel
+       picks up the tier color.
+     - octave-5 bg-pattern: re-tile with a coarser system-stipple
+       feel using `repeating-linear-gradient` (DOS-era dither)
+       rather than the soft repeating-conic gradient wood uses. */
+[data-theme="win98"] .cubic-viewport.octave-2 .hexaclear-hex.empty {
+  stroke: color-mix(
+    in srgb,
+    var(--score-tier-accent, #008080) 42%,
+    var(--w98-deep-shadow, #404040)
+  );
 }
 
-[data-theme="win98"] .cubic-viewport[data-score-tier="2"] {
-  --w98-cube-fill: #a08000;
-  --cube-top: #c8a230;
-  --cube-left: #a08000;
-  --cube-right: #5c4500;
-  --score-tier-accent: #c8a230;
-  /* Olive cubes → cool blue/purple about-to-clear. */
-  --w98-inverse-fill: #0040c0;
-  --cube-inverse-bright: #80a0ff;
-  --cube-inverse-dim: #003088;
+[data-theme="win98"] .cubic-viewport.octave-3 .hexaclear-hex-bevels.filled
+  .hexaclear-hex-bevel-highlight {
+  stroke: color-mix(
+    in srgb,
+    var(--score-tier-accent, #008080) 55%,
+    var(--w98-highlight, #ffffff)
+  );
 }
 
-[data-theme="win98"] .cubic-viewport[data-score-tier="3"] {
-  --w98-cube-fill: #c000a0;
-  --cube-top: #e560c0;
-  --cube-left: #c000a0;
-  --cube-right: #6d0058;
-  --score-tier-accent: #e560c0;
-  /* Magenta cubes → green about-to-clear. */
-  --w98-inverse-fill: #00a040;
-  --cube-inverse-bright: #80ffa0;
-  --cube-inverse-dim: #006028;
-}
-
-[data-theme="win98"] .cubic-viewport[data-score-tier="4"] {
-  --w98-cube-fill: #c01010;
-  --cube-top: #e0494a;
-  --cube-left: #c01010;
-  --cube-right: #6d0506;
-  --score-tier-accent: #e0494a;
-  /* Crimson cubes → cyan about-to-clear. */
-  --w98-inverse-fill: #00b0c0;
-  --cube-inverse-bright: #80e8ff;
-  --cube-inverse-dim: #006a80;
+[data-theme="win98"] .cubic-viewport.octave-5::after {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--score-tier-accent, #008080) 18%, transparent)
+      0 4px,
+    transparent 4px 14px
+  );
+  background-size: 48px 48px;
+  animation-duration: 80s;
 }
 [data-theme="win98"] .hexaclear-hex-bevels.piece .hexaclear-hex-bevel {
   stroke-width: 3;

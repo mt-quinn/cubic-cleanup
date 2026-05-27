@@ -94,6 +94,102 @@ const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
   { id: 'win98', label: 'Windows 98' },
 ]
 
+// === Procedural score-tier palette =================================
+// The cube color palette used to be a four-step lookup table in CSS
+// (`.cubic-viewport[data-score-tier="1..4"]`), which capped the
+// progression at 4000 points. Players are now reaching 15k+, so the
+// system is now computed in JS off the integer tier index and pushed
+// onto the viewport as inline CSS custom properties. Tier 0 still
+// falls through to the `:root` defaults — that path is preserved so
+// daily mode and fresh runs look exactly like before.
+//
+// Recipe:
+//   - hue = (tier * GOLDEN_ANGLE) mod 360. The golden angle gives
+//     maximum visual distance between adjacent tiers, so no two
+//     consecutive tiers ever land in the same color family.
+//   - A small saturation oscillator keyed off (tier % 3) keeps each
+//     tier's energy level slightly different even when the wheel
+//     eventually loops around to a nearby hue.
+//   - From octave 4 onward (tier ≥ 15), the top/right faces fan out
+//     slightly from the base hue (top +6°, right -6°) so the cubes
+//     pick up a subtle chromatic shading without any glow, halo, or
+//     bloom — purely an in-fill recoloring.
+//
+// Per-theme tuning: wood lives in the soft 70-80% saturation /
+// 60-85% lightness band so the cubes still feel painterly; win98
+// pushes saturation to 90%+ and uses a darker lightness ramp to
+// keep its punchy "system color" feel.
+
+const TIER_HUE_STEP_DEG = 137.5
+const FACE_HUE_SPREAD_OCTAVE_START = 4
+
+const computeTierHue = (tier: number): number => {
+  if (tier <= 0) return 0
+  const raw = (tier * TIER_HUE_STEP_DEG) % 360
+  return raw < 0 ? raw + 360 : raw
+}
+
+// Octave numbering matches the design plan:
+//   tier 0          → octave 0 (default amber, no extras)
+//   tiers 1–4       → octave 1 (hue + outline tint + bg wash drift)
+//   tiers 5–9       → octave 2 (+ empty-grid stroke tint)
+//   tiers 10–14     → octave 3 (+ cube edge stroke tint)
+//   tiers 15–19     → octave 4 (+ per-face hue spread on cubes)
+//   tiers 20–24     → octave 5 (+ drifting background pattern)
+//   tier 25+        → octave 6+ (hue keeps rotating; no new layer)
+const computeScoreOctave = (tier: number): number => {
+  if (tier <= 0) return 0
+  return Math.floor(tier / 5) + 1
+}
+
+// Returns a React-friendly CSS-properties object full of `--cube-*`
+// + `--score-tier-accent` + theme-specific overrides. Tier 0 returns
+// an empty object so the `:root` defaults win.
+const paletteForTier = (
+  tier: number,
+  octave: number,
+  theme: ThemeId,
+): React.CSSProperties => {
+  if (tier <= 0) return {}
+  const baseHue = computeTierHue(tier)
+  const inverseHue = (baseHue + 180) % 360
+  // Octave 4+ fans the face hues out from the base hue so each face
+  // catches a slightly different chromatic tint. Octaves below this
+  // keep all three faces locked to the base hue.
+  const spreadOn = octave >= FACE_HUE_SPREAD_OCTAVE_START
+  const topHue = spreadOn ? (baseHue + 6) % 360 : baseHue
+  const rightHue = spreadOn ? (baseHue + 354) % 360 : baseHue
+  // Light per-tier energy modulation: cycles through three slightly
+  // different saturation amounts so adjacent tiers don't read as a
+  // pure hue rotation. tier 1 → +0, tier 2 → +4, tier 3 → +8, repeat.
+  const satBump = (tier % 3) * 4
+  if (theme === 'win98') {
+    const baseSat = 92 + (tier % 2) * 6
+    const sat = Math.min(100, baseSat + satBump)
+    return {
+      '--cube-top': `hsl(${topHue}, ${sat}%, 60%)`,
+      '--cube-left': `hsl(${baseHue}, ${sat}%, 40%)`,
+      '--cube-right': `hsl(${rightHue}, ${Math.max(60, sat - 5)}%, 22%)`,
+      '--score-tier-accent': `hsl(${baseHue}, ${sat}%, 55%)`,
+      '--cube-inverse-bright': `hsl(${inverseHue}, ${sat}%, 76%)`,
+      '--cube-inverse-dim': `hsl(${inverseHue}, ${Math.max(50, sat - 25)}%, 38%)`,
+      '--w98-cube-fill': `hsl(${baseHue}, ${sat}%, 38%)`,
+      '--w98-inverse-fill': `hsl(${inverseHue}, ${Math.min(100, sat + 3)}%, 40%)`,
+    } as React.CSSProperties
+  }
+  // Wood theme: softer saturation, brighter top face for the
+  // painterly "ambient light" cube look.
+  const baseSat = 78 + satBump
+  return {
+    '--cube-top': `hsl(${topHue}, ${baseSat}%, 84%)`,
+    '--cube-left': `hsl(${baseHue}, ${baseSat - 4}%, 62%)`,
+    '--cube-right': `hsl(${rightHue}, ${baseSat - 10}%, 38%)`,
+    '--score-tier-accent': `hsl(${baseHue}, ${baseSat}%, 58%)`,
+    '--cube-inverse-bright': `hsl(${inverseHue}, ${baseSat - 5}%, 82%)`,
+    '--cube-inverse-dim': `hsl(${inverseHue}, ${Math.max(40, baseSat - 28)}%, 40%)`,
+  } as React.CSSProperties
+}
+
 const HEX_SIZE = 32
 const SQRT3 = Math.sqrt(3)
 
@@ -1772,6 +1868,21 @@ function App() {
   const copyLinkTimerRef = useRef<number | null>(null)
 
   const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
+  // Dev-only: support `?devScore=N` in the URL to seed the current
+  // game's `score` field on load. Lets us visually scrub through
+  // every score-tier / octave milestone without grinding to 25k in
+  // real gameplay. Only fires in `import.meta.env.DEV` so it's a
+  // strict no-op in production builds. Reads once on mount.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const raw = params.get('devScore')
+    if (raw === null) return
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0) return
+    setGame((current) => ({ ...current, score: Math.floor(n) }))
+  }, [])
   // All board-shape data (cell positions, layout dimensions, rosette
   // boundaries, etc.) is precomputed once per mode at module load and
   // re-pointed at when the active mode changes. Everything below uses
@@ -2215,45 +2326,70 @@ function App() {
   // scores faster, which the user accepted as intentional — bigger
   // scores get bigger rewards. Co-op / PvP follow the local player's
   // current score.
-  const scoreTier = useMemo<0 | 1 | 2 | 3 | 4>(() => {
+  // Score tier is now uncapped — every 1000 points produces a new
+  // tier index, and the palette + octave system handles each one
+  // procedurally. Daily mode (and any score below 1000) stays at 0
+  // so the default amber palette wins there.
+  const scoreTier = useMemo<number>(() => {
     if (game.mode === 'daily') return 0
     const t = Math.floor(game.score / 1000)
-    if (t <= 0) return 0
-    if (t >= 4) return 4
-    return t as 1 | 2 | 3
+    return t <= 0 ? 0 : t
   }, [game.score, game.mode])
-  const prevScoreTierRef = useRef<0 | 1 | 2 | 3 | 4>(scoreTier)
+  // Octave = which "layer milestone" the tier belongs to. See
+  // `computeScoreOctave` for the boundary table.
+  const scoreOctave = useMemo<number>(
+    () => computeScoreOctave(scoreTier),
+    [scoreTier],
+  )
+  const prevScoreTierRef = useRef<number>(scoreTier)
+  const prevScoreOctaveRef = useRef<number>(scoreOctave)
   // Token bumped every time the player crosses INTO a higher tier so
   // the HUD-pulse overlay's `key` changes and React remounts the
   // animation. Token doesn't bump on tier drops (mode swaps, resets)
   // because those aren't level-ups — they shouldn't fire a
   // congratulatory pulse.
   const [tierPulseToken, setTierPulseToken] = useState(0)
+  // Tier crossings come in two flavors: a "tier-up" (every 1000pts)
+  // and a louder "octave-up" (every 5000pts, when a new visual
+  // layer also locks in). The pulse element reads this to decide
+  // whether to render the standard ring or the bigger / longer
+  // octave variant.
+  const [tierPulseVariant, setTierPulseVariant] =
+    useState<'tier' | 'octave'>('tier')
   // While the radial pulse + HUD grow animation are in flight, the
   // parent live-stat / LCD-score elements get this flag so their
   // inner score readout (`.value` / `.lcd-digits`) plays a coordinated
   // scale-up + drop-shadow glow. The flag auto-clears after the
-  // longest animation finishes (the 1700ms expanding ring). Keeping
-  // the flag derived from a token + timeout — rather than just
-  // mounting the inner animation by key — means we can target the
-  // existing inner spans without having to remount them on each
-  // tier crossing.
+  // longest animation finishes (the 1700ms expanding ring, or the
+  // 2300ms octave variant). Keeping the flag derived from a token +
+  // timeout — rather than just mounting the inner animation by
+  // key — means we can target the existing inner spans without
+  // having to remount them on each tier crossing.
   const [tierPulseActive, setTierPulseActive] = useState(false)
   useEffect(() => {
-    if (scoreTier > prevScoreTierRef.current) {
+    const tierUp = scoreTier > prevScoreTierRef.current
+    const octaveUp = scoreOctave > prevScoreOctaveRef.current
+    if (tierUp || octaveUp) {
       setTierPulseToken((t) => t + 1)
       setTierPulseActive(true)
+      // Octave crossings out-rank tier crossings — when both fire
+      // on the same step (which happens at tiers 5/10/15/…) we
+      // want the louder variant.
+      setTierPulseVariant(octaveUp ? 'octave' : 'tier')
     }
     prevScoreTierRef.current = scoreTier
-  }, [scoreTier])
+    prevScoreOctaveRef.current = scoreOctave
+  }, [scoreTier, scoreOctave])
   useEffect(() => {
     if (!tierPulseActive) return
-    // Match the longer of the two animations (radial ring = 1700ms).
-    // A small slack avoids the HUD snap-back landing exactly on the
-    // animation's last frame.
-    const id = window.setTimeout(() => setTierPulseActive(false), 1750)
+    // Hold the HUD glow long enough to cover the longer of the two
+    // animations: tier ring is 1700ms; octave ring is staggered
+    // and tail-extended to ~2300ms. The small slack avoids the
+    // HUD snap-back landing on the animation's final frame.
+    const duration = tierPulseVariant === 'octave' ? 2400 : 1750
+    const id = window.setTimeout(() => setTierPulseActive(false), duration)
     return () => window.clearTimeout(id)
-  }, [tierPulseActive, tierPulseToken])
+  }, [tierPulseActive, tierPulseToken, tierPulseVariant])
   // Joke "ad previews" preview-mode. When on, a parody banner-ad
   // image gets stamped between the header chrome and the board so we
   // can mock up what a freemium / monetized build of Cubekill might
@@ -6342,16 +6478,31 @@ function App() {
     showDailyHistory ||
     gameOverModalOpen
 
+  // Octave classes are additive: at scoreOctave 3, the viewport
+  // carries `octave-1 octave-2 octave-3`. This keeps the earlier
+  // octaves' layers in place once they unlock.
+  const octaveClasses: string[] = []
+  for (let i = 1; i <= scoreOctave; i++) {
+    octaveClasses.push(`octave-${i}`)
+  }
+  // Inline palette: tier > 0 pushes computed --cube-* / accent vars
+  // onto the viewport so they cascade down through every cube,
+  // preview, and partner-tint child. Tier 0 falls through to the
+  // :root defaults (no inline style needed).
+  const tierPaletteStyle = paletteForTier(scoreTier, scoreOctave, theme)
   return (
     <div
       className={[
         'cubic-viewport',
         hitstop ? 'hitstop' : '',
         reducedMotion ? 'reduced-motion' : '',
+        ...octaveClasses,
       ]
         .filter(Boolean)
         .join(' ')}
       data-score-tier={scoreTier}
+      data-score-octave={scoreOctave}
+      style={tierPaletteStyle}
       onDragStart={(e) => {
         e.preventDefault()
       }}
@@ -6611,9 +6762,19 @@ function App() {
                     // the live-stat block so the ring radiates out
                     // from the score number specifically. Hidden in
                     // daily mode (which doesn't tier on score).
+                    // Carries `is-octave-pulse` when the crossing
+                    // is a 5000-point octave milestone so the CSS
+                    // can switch to a larger, longer variant.
                     <span
                       key={tierPulseToken}
-                      className="hexaclear-tier-pulse"
+                      className={[
+                        'hexaclear-tier-pulse',
+                        tierPulseVariant === 'octave'
+                          ? 'is-octave-pulse'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                       aria-hidden="true"
                     />
                   )}
@@ -6692,7 +6853,12 @@ function App() {
               {tierPulseToken > 0 && game.mode !== 'daily' && (
                 <span
                   key={tierPulseToken}
-                  className="hexaclear-tier-pulse"
+                  className={[
+                    'hexaclear-tier-pulse',
+                    tierPulseVariant === 'octave' ? 'is-octave-pulse' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   aria-hidden="true"
                 />
               )}

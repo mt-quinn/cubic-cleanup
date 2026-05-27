@@ -45,6 +45,13 @@ body {
   justify-content: center;
   align-items: flex-start;
   overflow: hidden;
+  /* `position: relative` + `isolation: isolate` make the
+     viewport a stacking context, so the octave-N pseudo layers
+     (background wash, background pattern) can use `z-index: -1`
+     to sit behind the play surface without bleeding under any
+     ancestor UI. */
+  position: relative;
+  isolation: isolate;
 }
 
 .hexaclear-root {
@@ -1850,11 +1857,15 @@ body {
 }
 
 .hexaclear-board-outline-front {
-  stroke: #008762;
+  /* Stroke follows the score-tier accent so the board outline picks
+     up each tier's signature color from the procedural palette. Tier
+     0 falls through to the original cubekill green. */
+  stroke: var(--score-tier-accent, #008762);
   stroke-width: 4;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.65));
+  transition: stroke 1600ms cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
 .hexaclear-hex.preview-valid {
@@ -2358,54 +2369,18 @@ body {
 }
 
 /* --- Score-tier palette escalation (Wood theme) --------------------
-   Each tier shifts the cube color trio to a distinct, harmonious set
-   that still reads as "Cubekill" — same isometric construction, same
-   stroke, same brightness ramp on the three faces. The progression
-   trades warm earth → hot coral → magenta → electric purple →
-   aurora teal so a long endless run visibly cycles through a
-   coordinated, increasingly punchy palette.
+   The tier > 0 palette is now computed in JS (see
+   `paletteForTier` in App.tsx) and pushed onto the viewport as
+   inline CSS custom properties. The hardcoded four-step ramp that
+   used to live here capped progression at 4000 points; the
+   procedural recipe produces a new, distinct palette every 1000
+   points indefinitely.
 
-   Daily mode pins the tier to 0, so these overrides only fire in
-   the modes where the score is actually a thing. */
-.cubic-viewport[data-score-tier="1"] {
-  --cube-top: #ffd2bf;
-  --cube-right: #ad3a26;
-  --cube-left: #f57a55;
-  --score-tier-accent: #f57a55;
-  /* Coral palette → cool teal inverse. */
-  --cube-inverse-bright: #a6f0ff;
-  --cube-inverse-dim: #3a8094;
-}
-
-.cubic-viewport[data-score-tier="2"] {
-  --cube-top: #ffc3e5;
-  --cube-right: #983070;
-  --cube-left: #e95cba;
-  --score-tier-accent: #e95cba;
-  /* Hot-pink palette → spring-green inverse. */
-  --cube-inverse-bright: #b6ffc4;
-  --cube-inverse-dim: #3a8c50;
-}
-
-.cubic-viewport[data-score-tier="3"] {
-  --cube-top: #d6c5ff;
-  --cube-right: #4a2078;
-  --cube-left: #9460dc;
-  --score-tier-accent: #9460dc;
-  /* Electric-purple palette → lime/olive inverse. */
-  --cube-inverse-bright: #e8ffa8;
-  --cube-inverse-dim: #637a30;
-}
-
-.cubic-viewport[data-score-tier="4"] {
-  --cube-top: #b7f3e8;
-  --cube-right: #1c605a;
-  --cube-left: #4ad0b7;
-  --score-tier-accent: #4ad0b7;
-  /* Aurora-teal palette → warm pink/red inverse. */
-  --cube-inverse-bright: #ffc7d0;
-  --cube-inverse-dim: #94424f;
-}
+   The `data-score-tier="0"` snap rule below is preserved so
+   resetting to tier 0 (game-over → new game, daily mode, etc.)
+   reverts the palette instantly instead of crossfading through
+   the @property color transitions. Daily mode pins the tier to 0
+   so it always lands on the :root defaults. */
 
 /* --- Score-tier transition: animatable colors -----------------------
    Register the cube palette CSS variables as <color> custom properties
@@ -2562,6 +2537,254 @@ body {
     transform: scale(1);
     filter: none;
   }
+}
+
+/* --- Score-tier pulse: octave variant -------------------------------
+   Every 5000 points (an "octave" — also when a new visual layer
+   locks in) the same HUD pulse element gets the `is-octave-pulse`
+   class. The variant scales further, lingers ~600ms longer, and
+   uses a thicker initial ring + a stronger initial border-width so
+   it reads as a clearly bigger event than the standard tier-up
+   ring. */
+.hexaclear-tier-pulse.is-octave-pulse {
+  animation: hexaclear-octave-pulse 2300ms cubic-bezier(0.16, 0.84, 0.36, 1)
+    forwards;
+}
+
+@keyframes hexaclear-octave-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+    border-width: 8px;
+  }
+  8% {
+    opacity: 1;
+    transform: scale(2.4);
+    border-width: 7px;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(85);
+    border-width: 1px;
+  }
+}
+
+/* === OCTAVE LAYERS ===================================================
+   Each octave class adds a board-wide visual treatment that locks
+   in permanently for the rest of the run. Classes are additive: at
+   scoreOctave = 3 the viewport carries octave-1, octave-2, AND
+   octave-3 simultaneously.
+
+   None of these layers use glow or bloom. Each one targets:
+     1. the viewport background (washes / patterns underneath the
+        play surface), or
+     2. the empty-grid stroke (.hexaclear-hex.empty), or
+     3. the cube edge stroke (.hexaclear-hex-cube line)
+   so the cubes themselves stay flat-shaded — what changes is the
+   ambient context around them, not a halo around each piece.
+
+   Layer table:
+     octave-1 (tiers 1–4)   → tinted radial background wash +
+                              outline tint (board-outline-front
+                              follows --score-tier-accent already)
+     octave-2 (tiers 5–9)   → empty-cell stroke tinted by the
+                              current accent
+     octave-3 (tiers 10–14) → cube edge strokes tinted by the
+                              current accent
+     octave-4 (tiers 15–19) → per-face hue spread on the cubes
+                              (handled by paletteForTier; no CSS
+                              needed beyond the inline vars)
+     octave-5 (tiers 20–24) → drifting low-contrast hex pattern in
+                              the viewport background
+
+   Octaves 6+ don't unlock new layers — the hue rotation per tier
+   alone keeps producing distinct palettes. */
+
+/* OCTAVE 1 — slowly drifting tinted radial background wash.
+   The ::before lays a soft accent-tinted radial gradient behind
+   the play surface; the orbit transform gives it gentle ambient
+   motion so the board feels alive without distracting from the
+   gameplay. */
+.cubic-viewport.octave-1::before {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    55% 55% at 50% 50%,
+    color-mix(in srgb, var(--score-tier-accent, #f9a23f) 28%, transparent),
+    transparent 72%
+  );
+  opacity: 0;
+  transform: translate(-3%, -2%) scale(1.02);
+  animation:
+    hexaclear-bg-wash-intro 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards,
+    hexaclear-bg-wash-drift 32s ease-in-out 900ms infinite;
+}
+
+@keyframes hexaclear-bg-wash-intro {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hexaclear-bg-wash-drift {
+  0% {
+    transform: translate(-3%, -2%) scale(1.02);
+  }
+  35% {
+    transform: translate(2%, -1%) scale(1.0);
+  }
+  68% {
+    transform: translate(1%, 2%) scale(1.04);
+  }
+  100% {
+    transform: translate(-3%, -2%) scale(1.02);
+  }
+}
+
+/* OCTAVE 2 — empty-cell stroke tint. The default mid-brown
+   (#94633a) gets replaced by a tier-tinted neutral so the empty
+   playing grid shifts color with the tier. A `transition: stroke`
+   on the octave-2 rule itself fades the color change in smoothly
+   on unlock; the hue drift then ±10° over 14s gives the grid a
+   subtle breathing quality. */
+.cubic-viewport.octave-2 .hexaclear-hex.empty {
+  stroke: color-mix(
+    in srgb,
+    var(--score-tier-accent, #f9a23f) 38%,
+    #94633a
+  );
+  transition: stroke 900ms cubic-bezier(0.4, 0, 0.2, 1);
+  animation: hexaclear-grid-tint-drift 14s ease-in-out infinite;
+}
+
+@keyframes hexaclear-grid-tint-drift {
+  0%, 100% {
+    filter: hue-rotate(0deg);
+  }
+  50% {
+    filter: hue-rotate(10deg);
+  }
+}
+
+/* OCTAVE 3 — cube edge stroke tint. Each cube face polygon picks
+   up a thin tier-tinted outline so the cube structure reads with
+   an outlined "comic" feel. The stroke color blends the current
+   accent with the neutral cube-stroke so the cubes still feel
+   like Cubekill cubes, not flat tier-colored blobs. A gentle
+   stroke-opacity pulse gives the outline an ambient breathing
+   quality without touching `filter` (which is reserved for the
+   preview-invalid dim effect on neighboring cube-faces). */
+.cubic-viewport.octave-3 .hexaclear-hex-cube .cube-face {
+  stroke: color-mix(
+    in srgb,
+    var(--score-tier-accent, #f9a23f) 55%,
+    var(--cube-stroke, rgba(40, 20, 10, 0.95))
+  );
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  animation:
+    hexaclear-cube-edge-intro 900ms cubic-bezier(0.4, 0, 0.2, 1) both,
+    hexaclear-cube-edge-pulse 10s ease-in-out 900ms infinite;
+}
+
+@keyframes hexaclear-cube-edge-intro {
+  from {
+    stroke-opacity: 0;
+  }
+  to {
+    stroke-opacity: 1;
+  }
+}
+
+@keyframes hexaclear-cube-edge-pulse {
+  0%, 100% {
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-opacity: 0.7;
+  }
+}
+
+/* OCTAVE 4 — per-face cube hue spread.
+   Driven entirely by `paletteForTier(tier, octave, theme)`, which
+   from octave 4 on fans the top/right face hues out by ±6° from
+   the base hue. No additional CSS rule is needed; the existing
+   cube faces just pick up the spread when the inline vars change. */
+
+/* OCTAVE 5 — drifting low-contrast hex pattern in the background.
+   A repeating conic gradient renders a faint pattern of light/dark
+   wedges under the play surface, tinted with the current accent so
+   it reads as part of the tier's color story. Slowly drifts via
+   background-position animation. */
+.cubic-viewport.octave-5::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background-image: repeating-conic-gradient(
+    from 30deg,
+    color-mix(in srgb, var(--score-tier-accent, #f9a23f) 7%, transparent)
+      0deg 6deg,
+    transparent 6deg 30deg
+  );
+  background-size: 56px 56px;
+  background-position: 0 0;
+  animation:
+    hexaclear-bg-pattern-intro 1200ms cubic-bezier(0.4, 0, 0.2, 1) forwards,
+    hexaclear-bg-pattern-drift 60s linear 1200ms infinite;
+}
+
+@keyframes hexaclear-bg-pattern-intro {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hexaclear-bg-pattern-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 56px 56px;
+  }
+}
+
+/* Reduced-motion: freeze all octave drift / intro loops but keep
+   the layer colors visible. Players who opt out of motion still
+   get the visual richness of higher tiers — just without the
+   ambient travel or fade-in. The bg-wash and bg-pattern pseudos
+   would otherwise sit at opacity 0 forever (their intro
+   animations are what bring them up to opacity 1), so they get
+   an explicit opacity:1 override here. The cube-face stroke from
+   octave-3 similarly gets pinned at full stroke-opacity since
+   the breathing animation handles that property. */
+.cubic-viewport.reduced-motion.octave-1::before,
+.cubic-viewport.reduced-motion.octave-2 .hexaclear-hex.empty,
+.cubic-viewport.reduced-motion.octave-3 .hexaclear-hex-cube .cube-face,
+.cubic-viewport.reduced-motion.octave-5::after {
+  animation: none !important;
+}
+.cubic-viewport.reduced-motion.octave-1::before {
+  opacity: 1;
+  transform: none;
+}
+.cubic-viewport.reduced-motion.octave-3 .hexaclear-hex-cube .cube-face {
+  stroke-opacity: 1;
+}
+.cubic-viewport.reduced-motion.octave-5::after {
+  opacity: 1;
 }
 
 .hexaclear-hex-cube line {
