@@ -11,7 +11,7 @@ import { rotateAxial } from './hexTypes'
 
 export type GameMode = 'endless' | 'daily' | 'big'
 
-export type CellState = 'empty' | 'filled'
+type CellState = 'empty' | 'filled'
 
 export type BoardState = Record<CellId, CellState>
 
@@ -20,7 +20,7 @@ export type ActivePiece = {
   shape: PieceShape
 }
 
-export type Hand = ActivePiece[]
+type Hand = ActivePiece[]
 
 // How many bonus rubies (a.k.a. golden cubes) a given mode keeps live on
 // the board. Endless has the classic single ruby; big mode plays with
@@ -62,7 +62,7 @@ const SCORING_BY_MODE: Record<GameMode, ModeScoring> = {
   },
 }
 
-export type PlacementResult = {
+type PlacementResult = {
   board: BoardState
   clearedCellIds: CellId[]
   clearedPatterns: Pattern[]
@@ -198,7 +198,7 @@ const normalizeDateKeyForSeed = (dateKey: string): string => {
 // `normalizeDateKeyForSeed` strips the padding before hashing so the
 // resulting seed still matches the legacy unpadded form, which means
 // existing players' "today" puzzle is unchanged.
-export const getTodayDateKey = (): string => {
+const getTodayDateKey = (): string => {
   const now = new Date()
   const y = now.getFullYear()
   const m = now.getMonth() + 1
@@ -208,10 +208,7 @@ export const getTodayDateKey = (): string => {
   return `${y}-${mm}-${dd}`
 }
 
-export const getDailySeedForDateKey = (dateKey: string): number =>
-  hashDateKey(normalizeDateKeyForSeed(dateKey))
-
-export const findClears = (
+const findClears = (
   board: BoardState,
   mode: GameMode = 'endless',
 ): { clearedPatterns: Pattern[]; clearedCellIds: CellId[] } => {
@@ -360,7 +357,7 @@ export const spawnInitialRubies = (
   return rubyCellIds
 }
 
-export const dealHand = (random: () => number = Math.random): Hand => {
+const dealHand = (random: () => number = Math.random): Hand => {
   const hand: Hand = []
   let totalCells = 0
   for (let i = 0; i < 3; i++) {

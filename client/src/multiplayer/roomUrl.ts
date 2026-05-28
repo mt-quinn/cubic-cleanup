@@ -18,7 +18,7 @@ const sanitizeMode = (raw: string | null): RoomMode | null => {
   return null
 }
 
-export type ReadRoomFromUrlResult = {
+type ReadRoomFromUrlResult = {
   code: string | null
   mode: RoomMode | null
 }
@@ -40,10 +40,6 @@ export const readRoomFromUrl = (): ReadRoomFromUrlResult => {
     return { code: null, mode: null }
   }
 }
-
-// Legacy code-only accessor preserved so existing call sites compile
-// untouched. New code that needs the mode should use readRoomFromUrl().
-export const readRoomCodeFromUrl = (): string | null => readRoomFromUrl().code
 
 export const setRoomCodeInUrl = (
   code: string | null,

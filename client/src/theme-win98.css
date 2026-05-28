@@ -1516,10 +1516,7 @@
    (titlebar color) for the bright ring on clears, and a
    dimmer surface-darker for the soft ring on plain placements,
    so each ripple still has the bright-vs-soft contrast Wood
-   provided. (The unused `.ripple-active` / `.bounce-wave`
-   keyframes that previously lived here were not actually the
-   ripple visible on the board — they targeted the cell's own
-   polygon, which we don't want to flicker.) */
+   provided. */
 [data-theme="win98"] .hexaclear-board-ripple-overlay .hexaclear-hex.ripple-overlay {
   stroke: var(--w98-titlebar);
   stroke-width: 3.4;
@@ -1656,16 +1653,6 @@
 [data-theme="win98"] .hexaclear-board > rect:first-of-type {
   fill: var(--w98-surface);
 }
-
-/* (Removed: a previous rule forced stroke / stroke-width to
-   `!important` on `.bounce-wave .hexaclear-hex` and
-   `.ripple-active .hexaclear-hex` to overwrite Wood's warm-brown
-   stroke during ripples — but `!important` author rules beat
-   animation declarations in the CSS cascade, so that override
-   silently killed the ripple keyframe entirely. The ripple now
-   plays again with Wood's stroke values; a Win98-specific ripple
-   keyframe is layered on top below to recolor it without
-   blocking the animation.) */
 
 /* The slot-fill inner-hex dimple gets in the way of the raised
    tile read — hide it in Win98 so each empty cell looks like a
@@ -2876,14 +2863,12 @@
   font-family: inherit !important;
   text-shadow: none !important;
 }
-[data-theme="win98"] .hexaclear-run-moment,
 [data-theme="win98"] .hexaclear-record-row {
   border-color: var(--w98-shadow) !important;
   background: var(--w98-surface) !important;
   border-radius: 0 !important;
 }
 [data-theme="win98"] .hexaclear-run-stat-label,
-[data-theme="win98"] .hexaclear-run-moment-label,
 [data-theme="win98"] .hexaclear-profile-summary-label,
 [data-theme="win98"] .hexaclear-profile-summary-line span,
 [data-theme="win98"] .hexaclear-performance-feature-label,

@@ -3,14 +3,14 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../convex/_generated/api'
 import type { ActivePiece, GameState } from '../game/gameLogic'
 
-export type MultiplayerStatus =
+type MultiplayerStatus =
   | 'connecting'
   | 'not-found'
   | 'waiting'
   | 'playing'
   | 'gameover'
 
-export type MultiplayerPlayer = {
+type MultiplayerPlayer = {
   playerId: string
   name: string
   slot: number
@@ -22,28 +22,28 @@ export type MultiplayerPlayer = {
   isSelf: boolean
 }
 
-export type MultiplayerLastPlacement = NonNullable<
+type MultiplayerLastPlacement = NonNullable<
   NonNullable<ReturnType<typeof useQuery<typeof api.rooms.getRoom>>>['lastPlacement']
 >
 
-export type UseMultiplayerGameArgs = {
+type UseMultiplayerGameArgs = {
   code: string | null
   playerId: string
   name: string
 }
 
-export type RoomMode = 'coop' | 'pvp'
+type RoomMode = 'coop' | 'pvp'
 
 // Per-player share of the PvP territory. `count` is the raw cell count
 // owned (last clear attribution), `ratio` is count / totalCells. The
 // HUD reads these directly to size race-bar segments and show %s.
-export type PvpStandingsEntry = {
+type PvpStandingsEntry = {
   playerId: string
   count: number
   ratio: number
 }
 
-export type MultiplayerEmote = {
+type MultiplayerEmote = {
   emoji: string
   ts: number
 }
@@ -52,13 +52,13 @@ export type MultiplayerEmote = {
 // just what the renderer needs to draw a ghost: which piece, which
 // origin cell. We carry the timestamp so the consumer can fade out
 // stale entries without coordinating with the server.
-export type MultiplayerHover = {
+type MultiplayerHover = {
   pieceId: string
   cellId: string
   ts: number
 }
 
-export type UseMultiplayerGameResult = {
+type UseMultiplayerGameResult = {
   status: MultiplayerStatus
   code: string | null
   game: GameState | null
@@ -168,7 +168,7 @@ const HEARTBEAT_INTERVAL_MS = 8_000
 // a 3s grace window means you only need to land one update inside
 // that window to keep the ghost alive — and crash-quit / tab-close
 // scenarios flush within 3s without any explicit teardown.
-export const HOVER_STALE_MS = 3_000
+const HOVER_STALE_MS = 3_000
 
 // Per-step hue rotation (degrees) for partner cube tinting.
 // Self renders at 0; the first partner at HUE_STEP_DEG, the second at
@@ -179,7 +179,7 @@ export const HOVER_STALE_MS = 3_000
 // seats land at 0/15/30/45/60/75/90/105°, keeping every partner in
 // the same warm half of the wheel as self instead of jumping into
 // alien blues/greens.
-export const HUE_STEP_DEG = 15
+const HUE_STEP_DEG = 15
 
 // Synthesize a GameState off the live room snapshot so the rest of the app
 // can keep reading from a single shape regardless of mode. Only the

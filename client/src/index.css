@@ -1906,35 +1906,6 @@ body {
 
 /* Ruby uses the same clear animation as other cubes; only +10 popup is special. */
 
-/* BOARD RIPPLE: colored pulse that propagates from the placement cluster out
-   across the board. Only the hex grid lines are affected; slots and cubes stay
-   fixed in place. */
-.hexaclear-cell.ripple-active .hexaclear-hex {
-  animation-name: hexaclear-board-ripple;
-  animation-duration: 260ms;
-  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
-  animation-fill-mode: both;
-}
-
-@keyframes hexaclear-board-ripple {
-  0% {
-    stroke: #94633a;
-    stroke-width: 2.6;
-  }
-  35% {
-    stroke: #ffcf73;
-    stroke-width: 2.9;
-  }
-  75% {
-    stroke: #d9a45c;
-    stroke-width: 2.7;
-  }
-  100% {
-    stroke: #94633a;
-    stroke-width: 2.6;
-  }
-}
-
 /* INVALID DROP FEEDBACK: when a piece is released over an illegal cell,
    briefly flash that cell and shake the hand card so the failure feels
    physical rather than silent. Apply at multiple levels so the glow is
@@ -2904,8 +2875,6 @@ body {
     drop-shadow(-0.7px -0.9px 0 rgba(255, 250, 232, 0.8));
 }
 
-/* Legacy flip-clear kept for reference; no longer used for active clears. */
-
 .hexaclear-ghost {
   position: absolute;
   /* Anchor the ghost at (0,0) of the positioned ancestor; the JSX
@@ -3047,42 +3016,6 @@ body {
   text-transform: uppercase;
   color: rgba(255, 232, 163, 0.66);
 }
-/* Moments ribbon (.hexaclear-run-moments / .hexaclear-run-moment*)
-   was removed in the gameover compaction pass — the moments now
-   live inline in the .hexaclear-run-strip ribbon alongside the
-   baseline stats. The unused selectors below are kept as no-ops
-   for one release in case a stale tab is open against the new
-   bundle; they will be removed in a follow-up. */
-.hexaclear-run-moments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-.hexaclear-run-moment {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.28rem;
-  padding: 0.22rem 0.48rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 141, 79, 0.34);
-  background:
-    radial-gradient(circle at 20% 0%, rgba(255, 207, 115, 0.22), transparent 60%),
-    rgba(255, 141, 79, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 232, 163, 0.12);
-}
-.hexaclear-run-moment-value {
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: #ffcf73;
-}
-.hexaclear-run-moment-label {
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: rgba(255, 232, 163, 0.78);
-}
-
 /* Profile stats modal layout. The profile screen is a record book,
    not a wall of cards: a summary masthead, a performance panel, a
    mode ledger, and record rows. Different patterns give the page
@@ -4141,21 +4074,6 @@ body {
 }
 
 
-@keyframes hexaclear-flip-clear {
-  0% {
-    transform: scaleX(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scaleX(0);
-    opacity: 0.9;
-  }
-  100% {
-    transform: scaleX(1);
-    opacity: 0;
-  }
-}
-
 @keyframes hexaclear-score-popup-fade {
   0% {
     opacity: 0;
@@ -4315,28 +4233,6 @@ body {
   stroke-linecap: round;
 }
 
-
-/* Reflected clear ripple: dimmer, thinner inward wave that bounces back from
-   the board hull. This is a per-cell edge effect, seeded at the hull cells
-   when the main clear ring reaches them, then propagated inward via BFS. */
-.hexaclear-cell.bounce-wave .hexaclear-hex {
-  animation: hexaclear-bounce-ripple 260ms ease-out both;
-}
-
-@keyframes hexaclear-bounce-ripple {
-  0% {
-    stroke: #d3b26f;
-    stroke-width: 2.3;
-  }
-  45% {
-    stroke: #f0cc7c;
-    stroke-width: 2.5;
-  }
-  100% {
-    stroke: #94633a;
-    stroke-width: 2.6;
-  }
-}
 
 .hexaclear-invalid-ghost {
   position: absolute;

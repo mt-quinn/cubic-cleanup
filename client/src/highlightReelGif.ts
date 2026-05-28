@@ -124,12 +124,12 @@ export type CaptureProgress = {
   label: 'recording' | 'encoding' | 'done'
 }
 
-export type CaptureGifArgs = {
+type CaptureGifArgs = {
   snapshot: RunHighlightSnapshot
   onProgress?: (progress: CaptureProgress) => void
 }
 
-export type CaptureMultiGifArgs = {
+type CaptureMultiGifArgs = {
   // Ordered list of placements to encode into a single GIF, oldest
   // → newest. Mirrors the on-screen `<MultiHighlightReel>` preview.
   // Every snapshot is rendered with the same canvas geometry, so

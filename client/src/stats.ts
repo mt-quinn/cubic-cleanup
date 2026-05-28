@@ -12,7 +12,7 @@ import {
   loadPieceStatsSyncBaseline,
 } from './pieceStats'
 
-export type GameModeId = 'endless' | 'daily' | 'big'
+type GameModeId = 'endless' | 'daily' | 'big'
 
 export type RunStats = {
   // ms timestamp the run started; used as the t0 for the wall-clock
@@ -93,9 +93,9 @@ export type LifetimeStats = {
   pieceStats?: PieceStatsMap
 }
 
-export const STATS_KEY = 'cubic-stats-v1'
-export const STATS_SYNC_ACCOUNT_KEY = 'cubic-stats-sync-account-id'
-export const STATS_SYNC_LAST_AT_KEY = 'cubic-stats-sync-last-at'
+const STATS_KEY = 'cubic-stats-v1'
+const STATS_SYNC_ACCOUNT_KEY = 'cubic-stats-sync-account-id'
+const STATS_SYNC_LAST_AT_KEY = 'cubic-stats-sync-last-at'
 
 const statsSyncBaselineKey = (accountId: string) =>
   `cubic-stats-sync-baseline-${accountId}`
@@ -442,7 +442,7 @@ export const buildPieceStatsDelta = (
   return calculatePieceStatsSyncDelta(current, baseline)
 }
 
-export type ApplyPlacementToRunStatsArgs = {
+type ApplyPlacementToRunStatsArgs = {
   // Number of cells the placed piece occupies (= piece size).
   piecePlacedCellsCount: number
   patternsClearedCount: number
@@ -473,9 +473,9 @@ export const applyPlacementToRunStats = (
   topPlacementPoints: Math.max(prev.topPlacementPoints, args.pointsGained),
 })
 
-export type MultiplayerMode = 'coop' | 'pvp'
+type MultiplayerMode = 'coop' | 'pvp'
 
-export type FoldRunIntoLifetimeArgs = {
+type FoldRunIntoLifetimeArgs = {
   mode: GameModeId
   isMultiplayer: boolean
   // Which multiplayer variant this finished run was. Null in solo

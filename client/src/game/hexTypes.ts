@@ -5,12 +5,12 @@ export type Axial = {
 
 export type CellId = string
 
-export type Cell = {
+type Cell = {
   id: CellId
   coord: Axial
 }
 
-export type PatternType = 'line' | 'flower'
+type PatternType = 'line' | 'flower'
 
 export type Pattern = {
   id: string

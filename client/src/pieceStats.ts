@@ -49,9 +49,9 @@ export type PieceVariantStats = {
 
 export type PieceStatsMap = Record<string, PieceVariantStats>
 
-export const PIECE_STATS_STORAGE_KEY = 'cubic-piece-stats-v1'
+const PIECE_STATS_STORAGE_KEY = 'cubic-piece-stats-v1'
 
-export const emptyPieceVariantStats = (): PieceVariantStats => ({
+const emptyPieceVariantStats = (): PieceVariantStats => ({
   timesPlayed: 0,
   clearsCaused: 0,
   combosJoined: 0,
@@ -148,7 +148,7 @@ const upsert = (
   }
 }
 
-export type ApplyPiecePlacementArgs = {
+type ApplyPiecePlacementArgs = {
   variantId: string
   pointsGained: number
   patternsClearedCount: number
@@ -308,30 +308,3 @@ export const calculatePieceStatsSyncDelta = (
   return out
 }
 
-// Server-side merge contract, mirrored locally so a successful
-// sync returning the post-merge totals can be applied to local
-// state and used as the new baseline in one step. The server
-// implementation in `convex/accountStats.ts` MUST match this
-// shape — additive for counters, max for `bestClear`.
-export const mergePieceStatsMaps = (
-  a: PieceStatsMap,
-  b: PieceStatsMap,
-): PieceStatsMap => {
-  const out: PieceStatsMap = {}
-  const ids = new Set([...Object.keys(a), ...Object.keys(b)])
-  for (const id of ids) {
-    const left = a[id] ?? emptyPieceVariantStats()
-    const right = b[id] ?? emptyPieceVariantStats()
-    out[id] = {
-      timesPlayed: left.timesPlayed + right.timesPlayed,
-      clearsCaused: left.clearsCaused + right.clearsCaused,
-      combosJoined: left.combosJoined + right.combosJoined,
-      boardClears: left.boardClears + right.boardClears,
-      rubiesCaptured: left.rubiesCaptured + right.rubiesCaptured,
-      totalPointsGained: left.totalPointsGained + right.totalPointsGained,
-      bestClear: Math.max(left.bestClear, right.bestClear),
-      killingHands: left.killingHands + right.killingHands,
-    }
-  }
-  return out
-}

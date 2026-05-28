@@ -47,13 +47,7 @@ const axialDistance = (a: Axial, b: Axial): number => {
 }
 
 // Shared list of cells inside the radius-r hex region around a center.
-// Used by board geometry, but also by App.tsx-side render helpers that
-// iterate over the cells of a single rosette (boundary segments,
-// etched-groove loops, etc.).
-export const cellsInRosette = (
-  center: Axial,
-  flowerRadius: number,
-): Axial[] => {
+const cellsInRosette = (center: Axial, flowerRadius: number): Axial[] => {
   const out: Axial[] = []
   for (let dq = -flowerRadius; dq <= flowerRadius; dq++) {
     const drMin = Math.max(-flowerRadius, -dq - flowerRadius)
@@ -65,12 +59,12 @@ export const cellsInRosette = (
   return out
 }
 
-export type BuildBoardOptions = {
+type BuildBoardOptions = {
   flowerRadius: number
   flowerCenters: Axial[]
 }
 
-export const buildBoardDefinition = ({
+const buildBoardDefinition = ({
   flowerRadius,
   flowerCenters,
 }: BuildBoardOptions): BoardDefinition => {
@@ -220,7 +214,7 @@ export const BIG_BOARD_DEFINITION: BoardDefinition = buildBoardDefinition({
 // working unchanged and resolve to the standard 49-cell layout.
 export const BOARD_DEFINITION = STANDARD_BOARD_DEFINITION
 
-export type GameModeId = 'endless' | 'daily' | 'big'
+type GameModeId = 'endless' | 'daily' | 'big'
 
 export const getBoardDefinitionForMode = (
   mode: GameModeId,

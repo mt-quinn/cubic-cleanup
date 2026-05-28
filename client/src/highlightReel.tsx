@@ -116,11 +116,8 @@ export const createHighlightSnapshot = (args: {
 // frame timeline from the exact same numbers the live reel uses;
 // drifting them would make exported GIFs feel different from the
 // on-screen replay.
-// eslint-disable-next-line react-refresh/only-export-components
 export const PHASE_PLACE_MS = 350
-// eslint-disable-next-line react-refresh/only-export-components
-export const PHASE_CLEAR_MS = 720
-// eslint-disable-next-line react-refresh/only-export-components
+const PHASE_CLEAR_MS = 720
 export const PHASE_TOTAL_MS = PHASE_PLACE_MS + PHASE_CLEAR_MS + 280
 // The React effect that drives the on-screen phase progression
 // uses this delay before flipping to "placed". The GIF exporter
@@ -131,7 +128,6 @@ export const PHASE_PLACE_TRIGGER_MS = Math.max(40, PHASE_PLACE_MS * 0.4)
 
 type ReelPhase = 'idle' | 'before' | 'placed' | 'cleared'
 
-// eslint-disable-next-line react-refresh/only-export-components
 export type ReelLayout = ReturnType<typeof layoutForMode>
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -462,21 +458,12 @@ export const HighlightReel = ({
   )
 }
 
-// Total reel runtime in ms, exported so the host can decide how
-// long to keep an auto-advance hold (e.g. spectator carousel) before
-// moving on. The MVP modal doesn't auto-advance — it just shows the
-// reel inline and lets the player tap "Watch again" — but we keep
-// this exported so future spectator UIs don't have to guess.
-// eslint-disable-next-line react-refresh/only-export-components
-export const HIGHLIGHT_REEL_DURATION_MS = PHASE_TOTAL_MS
-
 // Used by the host: when computing whether to capture a new
 // snapshot from a placement, this constant defines the minimum
 // pointsGained worth considering. Below this it's not really a
 // "best moment" — it's just a tiny clear. Default 1: any
 // scoring placement is eligible at first, then the host's
 // monotonic max keeps the snapshot's bar rising.
-// eslint-disable-next-line react-refresh/only-export-components
 export const HIGHLIGHT_REEL_MIN_POINTS = 1
 
 // Cap on the rolling per-run move history kept for the pause-menu
@@ -485,7 +472,6 @@ export const HIGHLIGHT_REEL_MIN_POINTS = 1
 // chosen N) without growing without bound during a long endless
 // session. Each entry is a RunHighlightSnapshot, a few hundred
 // bytes of cell ids + a board copy.
-// eslint-disable-next-line react-refresh/only-export-components
 export const RUN_HISTORY_MAX = 25
 
 // Stepper ceiling for the "Export recent moves as GIF" modal.
@@ -493,7 +479,6 @@ export const RUN_HISTORY_MAX = 25
 // × ~600px the 10-snapshot export tops out around 4–5MB before
 // the global-palette pass compresses it. Going higher inflates
 // the file faster than the visual payoff justifies.
-// eslint-disable-next-line react-refresh/only-export-components
 export const RUN_HISTORY_EXPORT_MAX = 10
 
 // Beat between consecutive snapshots in the multi-reel preview.
