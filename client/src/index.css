@@ -2677,6 +2677,32 @@ body {
   opacity: 1;
 }
 
+/* Same end-state pinning under the OS-level preference. The wildcard
+   `animation-duration: 0.001ms + iteration-count: 1` rule above lands
+   on whichever keyframe is at 100%, but these four layers either loop
+   continuously (octave-2 hex empty, octave-3 cube edge) or use a
+   non-final keyframe as their resting state. Force their visible final
+   state directly so an OS-preference viewer sees the same "no motion
+   but full color" outcome as the in-app toggle path. */
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport.octave-1::before,
+  .cubic-viewport.octave-2 .hexaclear-hex.empty,
+  .cubic-viewport.octave-3 .hexaclear-hex-cube .cube-face,
+  .cubic-viewport.octave-5::after {
+    animation: none !important;
+  }
+  .cubic-viewport.octave-1::before {
+    opacity: 1;
+    transform: none;
+  }
+  .cubic-viewport.octave-3 .hexaclear-hex-cube .cube-face {
+    stroke-opacity: 1;
+  }
+  .cubic-viewport.octave-5::after {
+    opacity: 1;
+  }
+}
+
 .hexaclear-hex-cube line {
   stroke: var(--cube-stroke);
   stroke-width: 2.2;
@@ -6269,7 +6295,31 @@ body {
     0 0 16px rgba(120, 220, 140, 0.35);
 }
 
-/* --- Reduced motion: kill animations & transitions ------------------- */
+/* --- Reduced motion: kill animations & transitions -------------------
+
+   Two triggers on the same rule set so we honor BOTH the OS-level
+   `prefers-reduced-motion: reduce` preference (per WCAG 2.3.3 and
+   the long-standing web platform consensus) AND the in-app toggle.
+   The in-app toggle remains as a manual override for users without
+   an OS-level preference. The rules below use the well-known
+   `iteration-count: 1` + near-zero-duration pattern (web.dev /
+   A11y Project guidance) so any animation that targets its final
+   keyframe still lands there — explicit `animation: none` pins
+   live in the per-animation overrides below for the few loops
+   where that pattern would land on a non-final keyframe (cube
+   wiggle, tutorial pulse, octave drift). */
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport,
+  .cubic-viewport *,
+  .cubic-viewport *::before,
+  .cubic-viewport *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+  }
+}
 .cubic-viewport.reduced-motion,
 .cubic-viewport.reduced-motion *,
 .cubic-viewport.reduced-motion *::before,
@@ -6289,6 +6339,15 @@ body {
    flicker. Disable the animations entirely and snap the cubes to their
    static "shrunk" preview state so the player still sees which cells
    are about to be cleared. */
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube,
+  .cubic-viewport .hexaclear-hex.preview-clear.preview-valid {
+    animation: none !important;
+    transform: scale(0.8) !important;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+}
 .cubic-viewport.reduced-motion .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube,
 .cubic-viewport.reduced-motion .hexaclear-hex.preview-clear.preview-valid {
   animation: none !important;
@@ -6356,6 +6415,14 @@ body {
   animation: none;
   opacity: 0.95;
   stroke-width: 2.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport .hexaclear-tutorial-pulse {
+    animation: none;
+    opacity: 0.95;
+    stroke-width: 2.6;
+  }
 }
 
 /* Floating overlay that hosts the prompt, skip link, and exit
@@ -6516,6 +6583,12 @@ body {
 
 .cubic-viewport.reduced-motion .hexaclear-spectator-pill {
   animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport .hexaclear-spectator-pill {
+    animation: none;
+  }
 }
 
 /* ============================================================
@@ -6922,6 +6995,16 @@ body {
   animation: none;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube,
+  .cubic-viewport .hexaclear-reel-points,
+  .cubic-viewport .hexaclear-reel-cell.clearing-line .hexaclear-reel-cube,
+  .cubic-viewport .hexaclear-reel-cell.clearing-flower-center .hexaclear-reel-cube,
+  .cubic-viewport .hexaclear-reel-cell.clearing-flower-ring .hexaclear-reel-cube {
+    animation: none;
+  }
+}
+
 
 /* ============================================================
    Piece detail card (Piecetiary tap-through)
@@ -7172,6 +7255,12 @@ body {
   animation: none;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport .hexaclear-pvp-delta-chip {
+    animation: none;
+  }
+}
+
 /* ============================================================
    Colorblind support layer (opt-in)
    ------------------------------------------------------------
@@ -7201,6 +7290,44 @@ body {
 }
 
 .cubic-viewport.is-colorblind .hexaclear-ruby-glyph {
+  opacity: 1;
+}
+
+/* Per-player identity glyph on every multiplayer cube and PvP
+   territory tint. The SVG `<text>` is always present in the DOM
+   when the cell carries a glyph (so flipping the toggle is paint-
+   only), but rendered fully transparent until `.is-colorblind` is
+   active. Two-color paint order (dark glyph stroked with a light
+   halo, via `paint-order: stroke fill`) keeps the marker readable
+   on top of any partner-hue tint without needing a per-tint
+   contrast calculation. */
+.hexaclear-player-glyph {
+  font-size: 14px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: rgba(0, 0, 0, 0.85);
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 0.9;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+/* Territory-tint variant lifts the glyph color so it reads as an
+   "owned-but-empty" marker rather than a cube marker. The empty
+   cell underneath is just a tinted overlay (semi-transparent in
+   wood, outlined-only in Win98) so a light-on-dark glyph competes
+   with the cube glyphs above; we pull the alpha down on the halo
+   to keep the marker quieter against the dimmer surface. */
+.hexaclear-player-glyph-tint {
+  font-size: 12px;
+  fill: rgba(0, 0, 0, 0.7);
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 0.7;
+}
+
+.cubic-viewport.is-colorblind .hexaclear-player-glyph {
   opacity: 1;
 }
 

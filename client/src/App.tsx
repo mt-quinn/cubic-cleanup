@@ -816,6 +816,7 @@ const CubeLines = ({
   dailyHits,
   extraClasses = [],
   style,
+  playerGlyph,
 }: {
   cx: number
   cy: number
@@ -823,6 +824,12 @@ const CubeLines = ({
   dailyHits?: number
   extraClasses?: string[]
   style?: React.CSSProperties
+  // Colorblind-mode identity glyph (one character, e.g. ★ / ● / ▲).
+  // Always rendered to the SVG when present; visibility is gated
+  // entirely by CSS on `.cubic-viewport.is-colorblind` so the toggle
+  // never re-renders the board. Omitted in single-player and on
+  // ruby / daily-target cubes (those carry their own glyphs).
+  playerGlyph?: string
 }) => {
   const vertices: { x: number; y: number }[] = []
   const radius = HEX_SIZE
@@ -889,6 +896,25 @@ const CubeLines = ({
           </text>
         )}
       </g>
+      {/* Colorblind identity glyph. Sits OUTSIDE the wiggle wrap so
+          the per-player marker stays rock-steady while the cube
+          itself does its preview-clear scale. Always present in the
+          DOM (hidden via CSS unless `.is-colorblind` is on) so the
+          accessibility toggle doesn't force a board re-render. Not
+          rendered for daily-target or golden variants — those cells
+          already carry their own glyph (the hits counter / "+10")
+          and stacking a player marker on top would compete with the
+          existing identity. */}
+      {playerGlyph && variant === 'normal' && (
+        <text
+          x={cx}
+          y={cy + 4}
+          className="hexaclear-player-glyph"
+          aria-hidden="true"
+        >
+          {playerGlyph}
+        </text>
+      )}
     </g>
   )
 }
@@ -1755,6 +1781,25 @@ function App() {
     return out
   }, [isMultiplayer, mp.cellOwners, mp.selfPlayer])
 
+  // Colorblind-mode identity glyph per cell. Maps every owned cell
+  // (including self's own placements) to the placer's glyph so the
+  // viewer sees a consistent per-seat marker on every cube once the
+  // `.is-colorblind` class is on. Skipped entirely in single-player
+  // because there's only one "owner" and adding glyphs to every cube
+  // would be visual noise without any disambiguation benefit. The
+  // map is consulted at render time but the glyph elements
+  // themselves are always rendered (gated by CSS) — see CubeLines.
+  const cellGlyphByCellId = useMemo<Record<string, string>>(() => {
+    if (!isMultiplayer) return {}
+    const out: Record<string, string> = {}
+    for (const [cellId, ownerId] of Object.entries(mp.cellOwners)) {
+      if (!ownerId) continue
+      const glyph = mp.glyphByPlayerId[ownerId]
+      if (glyph) out[cellId] = glyph
+    }
+    return out
+  }, [isMultiplayer, mp.cellOwners, mp.glyphByPlayerId])
+
   // PvP territory tints: persistent per-cell "last clearer" map.
   // `cellTintHueByCellId` maps each tinted cell to the hue rotation
   // to apply for THIS viewer (self → 0°, so tints owned by self
@@ -1794,6 +1839,23 @@ function App() {
     }
     return out
   }, [isMultiplayer, mp.mode, mp.cellTints, mp.selfPlayer])
+
+  // Colorblind-mode glyph for PvP territory tints. Every tinted cell
+  // (self OR partner) gets its owner's glyph so an empty owned cell
+  // carries an explicit non-color identity marker — partner hues can
+  // collapse for CVD viewers, so the territory race needs a shape
+  // anchor. Co-op rooms have no persistent tints, so this is scoped
+  // to PvP only.
+  const cellTintGlyphByCellId = useMemo<Record<string, string>>(() => {
+    if (!isMultiplayer || mp.mode !== 'pvp') return {}
+    const out: Record<string, string> = {}
+    for (const [cellId, tintId] of Object.entries(mp.cellTints)) {
+      if (!tintId) continue
+      const glyph = mp.glyphByPlayerId[tintId]
+      if (glyph) out[cellId] = glyph
+    }
+    return out
+  }, [isMultiplayer, mp.mode, mp.cellTints, mp.glyphByPlayerId])
   // Cells where the current occupant (cellOwners) and the tint
   // (cellTints) belong to different players — render a colored ring
   // around the cell in the tinter's color so the conflict reads.
@@ -2790,9 +2852,28 @@ function App() {
     }
     return false
   }, [])
+  // Reduced motion has two triggers and we want the toggle UI to
+  // reflect reality regardless of which one fired:
+  //   1. Explicit in-app preference saved to localStorage. Wins
+  //      whenever the user has touched the toggle in this app.
+  //   2. OS-level `prefers-reduced-motion: reduce`. Honored on first
+  //      visit (and treated as the default if the user hasn't yet
+  //      saved an in-app preference) so we don't silently override
+  //      a system-wide accessibility setting.
+  // The CSS also listens for `@media (prefers-reduced-motion)`
+  // independently, so the reduced-motion behavior applies even if
+  // this state is somehow out of sync — the JS-side default just
+  // keeps the toggle from lying about what the player sees.
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
-    return window.localStorage.getItem('cubic-reduced-motion') === 'true'
+    const stored = window.localStorage.getItem('cubic-reduced-motion')
+    if (stored === 'true') return true
+    if (stored === 'false') return false
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    } catch {
+      return false
+    }
   })
   // Colorblind support: opt-in. When on, the viewport carries an
   // `is-colorblind` class that lets CSS surface extra non-color
@@ -8297,6 +8378,27 @@ function App() {
                     {!isFilledVisible && !inPreview && !willClearInPreview && (
                       <SlotGeometry cx={cx} cy={cy} />
                     )}
+                    {/* Colorblind-mode territory glyph on empty PvP-
+                        tinted cells. Always rendered (cheap) and
+                        hidden via CSS unless `.is-colorblind` is on,
+                        so the toggle is a paint-only change. The
+                        cell-glyph for FILLED cubes lives inside
+                        CubeLines below; this branch handles the
+                        empty-but-owned territory case so an empty
+                        cell can still announce who claimed it. */}
+                    {!isFilledVisible &&
+                      !inPreview &&
+                      !willClearInPreview &&
+                      cellTintGlyphByCellId[cell.id] && (
+                        <text
+                          x={cx}
+                          y={cy + 4}
+                          className="hexaclear-player-glyph hexaclear-player-glyph-tint"
+                          aria-hidden="true"
+                        >
+                          {cellTintGlyphByCellId[cell.id]}
+                        </text>
+                      )}
                     {(isFilled || (isDailyTarget && isDailyHitPulsing)) && !isRecentlyPlaced && (
                       <CubeLines
                         cx={cx}
@@ -8319,6 +8421,7 @@ function App() {
                           isPartnerOwned ? 'partner-piece' : '',
                         ].filter(Boolean)}
                         style={partnerHueStyle}
+                        playerGlyph={cellGlyphByCellId[cell.id]}
                       />
                     )}
                     {(game.mode === 'endless' || game.mode === 'big') &&
@@ -8632,6 +8735,7 @@ function App() {
                             : 'normal'
                         }
                         dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                        playerGlyph={cellGlyphByCellId[cell.id]}
                       />
                     )
                   })

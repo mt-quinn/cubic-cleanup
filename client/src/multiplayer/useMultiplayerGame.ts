@@ -132,6 +132,12 @@ type UseMultiplayerGameResult = {
   // maps to (i + 1) * HUE_STEP_DEG. Drives the per-player cube
   // tinting in App.
   hueShiftByPlayerId: Record<string, number>
+  // Per-player identity glyph keyed by playerId. Self gets a star;
+  // partners get one entry from PARTNER_GLYPH_SEQUENCE in seat order
+  // (so the first partner past self is always the same shape for
+  // this viewer). Consumed by the colorblind-mode cube + PvP-tint
+  // overlay so each seat carries a non-color identity.
+  glyphByPlayerId: Record<string, string>
   placePiece: (
     pieceId: string,
     cellId: string,
@@ -180,6 +186,21 @@ const HOVER_STALE_MS = 3_000
 // the same warm half of the wheel as self instead of jumping into
 // alien blues/greens.
 const HUE_STEP_DEG = 15
+
+// Per-player identity glyphs for colorblind support. The renderer
+// overlays one of these on every placed cube and on every PvP
+// territory tint when `.is-colorblind` is on, giving each seat a
+// pattern-based identity that doesn't rely on the partner-hue
+// rotation alone (15° steps can collapse to indistinguishable for
+// players with red-green or blue-yellow CVD). Self always gets a
+// star so empty-vs-self-tinted cells stay distinguishable in PvP;
+// partners cycle through visually distinct primitives so any two
+// adjacent seats read as obviously different glyphs even before
+// color is considered. ◆ is reserved as the ruby glyph elsewhere
+// and intentionally not used here so a ruby cell can't be confused
+// with a player's territory.
+const PLAYER_GLYPH_SELF = '★'
+const PARTNER_GLYPH_SEQUENCE = ['●', '▲', '■', '✚'] as const
 
 // Synthesize a GameState off the live room snapshot so the rest of the app
 // can keep reading from a single shape regardless of mode. Only the
@@ -317,6 +338,21 @@ export const useMultiplayerGame = ({
     })
     return out
   }, [selfPlayer, otherPlayers, mode])
+
+  // Glyph table keyed by playerId, mirroring `hueShiftByPlayerId`'s
+  // ordering: self → star, otherPlayers[i] → PARTNER_GLYPH_SEQUENCE[i].
+  // If a room ever exceeds the sequence length we wrap (modulo) so
+  // we always return a glyph for every seat; in practice the seat cap
+  // is well below the sequence length so the wrap is defensive.
+  const glyphByPlayerId = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {}
+    if (selfPlayer) out[selfPlayer.playerId] = PLAYER_GLYPH_SELF
+    otherPlayers.forEach((p, i) => {
+      out[p.playerId] =
+        PARTNER_GLYPH_SEQUENCE[i % PARTNER_GLYPH_SEQUENCE.length]
+    })
+    return out
+  }, [selfPlayer, otherPlayers])
 
   // Spectator detection. A viewer is a spectator when the room exists,
   // self isn't seated, AND self appears in the room's spectator
@@ -559,6 +595,7 @@ export const useMultiplayerGame = ({
     emoteByPlayerId,
     hoverByPlayerId,
     hueShiftByPlayerId,
+    glyphByPlayerId,
     placePiece,
     holdSwap,
     sendEmote,
