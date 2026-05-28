@@ -163,6 +163,7 @@ const buildTimestamp = (): string =>
 
 // Force-trigger a browser download for a Blob. The `<a>` element
 // is created on the fly and removed immediately — no DOM litter.
+// Used as the desktop / non-share fallback below.
 const triggerDownload = (blob: Blob, filename: string): void => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -173,6 +174,63 @@ const triggerDownload = (blob: Blob, filename: string): void => {
   a.click()
   document.body.removeChild(a)
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+// Save or share a GIF blob.
+//
+// On platforms that support sharing files via the Web Share API
+// (iOS Safari and Android Chrome being the main targets), open
+// the system share sheet — which exposes "Save Image" / "Save to
+// Photos" / Messages / AirDrop / etc. as first-class targets. On
+// mobile this lets the player drop the GIF straight into their
+// camera roll with one tap instead of fishing through Downloads.
+// On desktop or any browser without file-share support, fall
+// back to the classic <a download> anchor click so the user
+// always gets the file one way or the other.
+//
+// Notes:
+//   • The web platform has no direct write-to-Photos API; the
+//     share sheet's "Save Image" target is as close as we get.
+//   • navigator.share() rejects with AbortError when the user
+//     dismisses the sheet — that's not a failure, so we don't
+//     fall back to a download in that case.
+//   • Any other rejection from share() (DataError, NotAllowed,
+//     unsupported file type, etc.) falls through to the anchor
+//     download so the user still gets the file.
+const saveOrShareGif = async (
+  blob: Blob,
+  filename: string,
+  shareTitle: string,
+): Promise<void> => {
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    let file: File | null = null
+    try {
+      file = new File([blob], filename, {
+        type: blob.type || 'image/gif',
+      })
+    } catch {
+      file = null
+    }
+    const canShareFiles =
+      file !== null &&
+      typeof navigator.canShare === 'function' &&
+      navigator.canShare({ files: [file] })
+    if (file && canShareFiles) {
+      try {
+        await navigator.share({ files: [file], title: shareTitle })
+        return
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // User dismissed the share sheet on purpose — respect
+          // that and don't double-fire a download under them.
+          return
+        }
+        // Any other failure falls through to the anchor
+        // download so the user still ends up with the file.
+      }
+    }
+  }
+  triggerDownload(blob, filename)
 }
 
 // ────────────────────────────────────────────────────────────
@@ -791,7 +849,12 @@ export const captureHighlightReelAsGif = async ({
   gif.finish()
   const bytes = gif.bytes()
   const blob = new Blob([bytes as unknown as BlobPart], { type: 'image/gif' })
-  triggerDownload(blob, buildFilename(snapshot))
+  const points = Math.max(0, Math.floor(snapshot.pointsGained))
+  await saveOrShareGif(
+    blob,
+    buildFilename(snapshot),
+    `Cubekill — Play of the Game (+${points})`,
+  )
   if (onProgress) {
     onProgress({ ratio: 1, label: 'done' })
   }
@@ -970,7 +1033,11 @@ export const captureMultiHighlightReelAsGif = async ({
   gif.finish()
   const bytes = gif.bytes()
   const blob = new Blob([bytes as unknown as BlobPart], { type: 'image/gif' })
-  triggerDownload(blob, buildMultiFilename(snapshots))
+  await saveOrShareGif(
+    blob,
+    buildMultiFilename(snapshots),
+    `Cubekill — Last ${snapshots.length} moves`,
+  )
   if (onProgress) {
     onProgress({ ratio: 1, label: 'done' })
   }
