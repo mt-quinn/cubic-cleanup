@@ -15,6 +15,9 @@ dist-ssr
 # Convex CLI scratch (binaries, local backend state)
 .convex/
 
+# Dev-only artifacts (test GIFs, captured frames, scratch assets)
+public/_dev/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

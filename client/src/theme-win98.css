@@ -1810,7 +1810,7 @@
    gameover CTA selector below; we don't override the .is-copied
    gradient here because the label flip ("✓ Copied!") is loud enough
    on its own in this minimal theme. */
-[data-theme="win98"] .hexaclear-overlay-card button:not(.title-control),
+[data-theme="win98"] .hexaclear-overlay-card button:not(.title-control):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download),
 [data-theme="win98"] button.hexaclear-reset,
 [data-theme="win98"] button.hexaclear-gameover-cta,
 [data-theme="win98"] button.hexaclear-gameover-save-button,
@@ -1839,7 +1839,7 @@
   cursor: default;
 }
 
-[data-theme="win98"] .hexaclear-overlay-card button:not(.title-control):active,
+[data-theme="win98"] .hexaclear-overlay-card button:not(.title-control):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):active,
 [data-theme="win98"] button.hexaclear-reset:active,
 [data-theme="win98"] button.hexaclear-gameover-cta:active,
 [data-theme="win98"] button.hexaclear-gameover-save-button:active,
@@ -3062,4 +3062,270 @@
 [data-theme="win98"] .hexaclear-history-legend {
   color: var(--w98-text) !important;
   font-style: normal !important;
+}
+
+/* ============================================================
+   First-launch tutorial overrides (Win98 theme)
+   ------------------------------------------------------------
+   Same overlay structure as the Wood theme, repainted with the
+   Win98 palette: navy/teal text, sharp beveled cards, and the
+   target pulse rendered in the system magenta accent so it
+   reads against the flat teal/gray board.
+   ============================================================ */
+
+[data-theme="win98"] .hexaclear-tutorial-pulse {
+  stroke: var(--w98-inverse-fill, #ff0081);
+  filter: none;
+}
+
+[data-theme="win98"] .hexaclear-tutorial-prompt {
+  background: var(--w98-surface, #c3c3c3);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: #fff;
+  border-left-color: #fff;
+  border-radius: 0;
+  color: var(--w98-text, #000);
+  box-shadow: 1px 1px 0 var(--w98-text, #000),
+    2px 2px 0 rgba(0, 0, 0, 0.35);
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+[data-theme="win98"] .hexaclear-tutorial-toast {
+  background: var(--w98-titlebar, #010081);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: #fff;
+  border-left-color: #fff;
+  border-radius: 0;
+  color: #fff;
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 2px 2px 0 var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-tutorial-skip {
+  color: var(--w98-text, #000);
+  text-decoration: underline;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid transparent;
+}
+
+[data-theme="win98"] .hexaclear-tutorial-skip:hover,
+[data-theme="win98"] .hexaclear-tutorial-skip:focus-visible {
+  background: var(--w98-titlebar, #010081);
+  color: #fff;
+  border-color: var(--w98-text, #000);
+  outline: 1px dotted #fff;
+  outline-offset: -3px;
+}
+
+/* ============================================================
+   Spectator pill (Win98 theme)
+   ------------------------------------------------------------
+   Inset-bevel pill matching the surrounding chrome. Keeps the
+   eye glyph at its native scale and pins the digit count in
+   the LCD red so it visually rhymes with the score readouts.
+   ============================================================ */
+
+[data-theme="win98"] .hexaclear-spectator-pill {
+  background: var(--w98-surface, #c3c3c3);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: rgba(0, 0, 0, 0.5);
+  border-left-color: rgba(0, 0, 0, 0.5);
+  border-bottom-color: #fff;
+  border-right-color: #fff;
+  border-radius: 0;
+  color: var(--w98-text, #000);
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-weight: 700;
+}
+
+[data-theme="win98"] .hexaclear-spectator-pill-eye {
+  filter: none;
+}
+
+[data-theme="win98"] .hexaclear-spectator-pill-count {
+  color: var(--w98-lcd, #ff0000);
+  font-family: 'DSEG7-Classic', 'Consolas', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+}
+
+[data-theme="win98"] .hexaclear-spectator-pill {
+  /* Win98 doesn't pulse — the brightness flash reads as a
+     rendering glitch against the flat palette. The flat chrome
+     does the announcing on its own. */
+  animation: none;
+}
+
+/* ============================================================
+   Highlight reel (Win98 theme)
+   ------------------------------------------------------------
+   Reskin to the inset-bevel chrome and teal cube palette. The
+   stamp loses its CRT glow; the cube uses the Win98 teal so
+   the replay is visually contiguous with the live board.
+   ============================================================ */
+
+[data-theme="win98"] .hexaclear-reel {
+  background: var(--w98-surface, #c3c3c3);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: rgba(0, 0, 0, 0.5);
+  border-left-color: rgba(0, 0, 0, 0.5);
+  border-bottom-color: #fff;
+  border-right-color: #fff;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-reel-svg {
+  filter: none;
+}
+
+[data-theme="win98"] .hexaclear-reel-hex {
+  fill: #ffffff;
+  stroke: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-reel-cube {
+  fill: var(--w98-cube-fill, #008080);
+  stroke: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube {
+  fill: var(--w98-cube-highlight, #20a0a0);
+}
+
+[data-theme="win98"] .hexaclear-reel-caption {
+  color: var(--w98-text, #000);
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-weight: 700;
+}
+
+[data-theme="win98"] .hexaclear-reel-points {
+  color: var(--w98-lcd, #ff0000);
+  font-family: 'DSEG7-Classic', 'Consolas', monospace;
+  text-shadow: 0 0 6px rgba(255, 0, 0, 0.6);
+}
+
+[data-theme="win98"] .hexaclear-reel-replay,
+[data-theme="win98"] .hexaclear-reel-download {
+  background: var(--w98-surface, #c3c3c3);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: #fff;
+  border-left-color: #fff;
+  border-bottom-color: rgba(0, 0, 0, 0.5);
+  border-right-color: rgba(0, 0, 0, 0.5);
+  border-radius: 0;
+  color: var(--w98-text, #000);
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  font-weight: 700;
+  padding: 0.2rem 0.8rem;
+}
+
+[data-theme="win98"] .hexaclear-reel-replay:active,
+[data-theme="win98"] .hexaclear-reel-download:active {
+  border-top-color: rgba(0, 0, 0, 0.5);
+  border-left-color: rgba(0, 0, 0, 0.5);
+  border-bottom-color: #fff;
+  border-right-color: #fff;
+  transform: none;
+}
+
+/* ============================================================
+   Piece detail card (Win98 theme)
+   ============================================================ */
+
+[data-theme="win98"] .hexaclear-piecetiary-cell {
+  background: var(--w98-surface, #c3c3c3);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: #fff;
+  border-left-color: #fff;
+  border-bottom-color: rgba(0, 0, 0, 0.5);
+  border-right-color: rgba(0, 0, 0, 0.5);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-piecetiary-cell:hover,
+[data-theme="win98"] .hexaclear-piecetiary-cell:focus-visible {
+  background: var(--w98-surface, #c3c3c3);
+  border-color: var(--w98-text, #000);
+  outline: 1px dotted var(--w98-text, #000);
+  outline-offset: -3px;
+}
+
+[data-theme="win98"] .hexaclear-piecetiary-cell:active,
+[data-theme="win98"] .hexaclear-piecetiary-cell.has-history {
+  border-top-color: rgba(0, 0, 0, 0.5);
+  border-left-color: rgba(0, 0, 0, 0.5);
+  border-bottom-color: #fff;
+  border-right-color: #fff;
+  box-shadow: none;
+}
+
+[data-theme="win98"] .hexaclear-piece-detail-card {
+  background: var(--w98-surface, #c3c3c3);
+  color: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-piece-detail-head {
+  border-bottom-color: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-piece-detail-preview {
+  background: #fff;
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: rgba(0, 0, 0, 0.5);
+  border-left-color: rgba(0, 0, 0, 0.5);
+  border-bottom-color: #fff;
+  border-right-color: #fff;
+  border-radius: 0;
+}
+
+[data-theme="win98"] .hexaclear-piece-detail-nickname,
+[data-theme="win98"] .hexaclear-piece-detail-notation,
+[data-theme="win98"] .hexaclear-piece-detail-flavor,
+[data-theme="win98"] .hexaclear-piece-detail-stat dt,
+[data-theme="win98"] .hexaclear-piece-detail-stat dd,
+[data-theme="win98"] .hexaclear-piece-detail-empty {
+  color: var(--w98-text, #000);
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+}
+
+/* ============================================================
+   PvP territory delta chip (Win98 theme)
+   ============================================================ */
+
+[data-theme="win98"] .hexaclear-pvp-delta-chip {
+  background: var(--w98-surface, #c3c3c3);
+  border: 2px solid var(--w98-text, #000);
+  border-top-color: #fff;
+  border-left-color: #fff;
+  border-bottom-color: rgba(0, 0, 0, 0.5);
+  border-right-color: rgba(0, 0, 0, 0.5);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--w98-text, #000);
+  font-family: 'MS Sans Serif', Tahoma, sans-serif;
+  animation: none;
+}
+
+[data-theme="win98"] .hexaclear-pvp-delta-chip-label {
+  color: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-pvp-delta-entry.is-self .hexaclear-pvp-delta-name {
+  color: var(--w98-titlebar, #010081);
+}
+
+[data-theme="win98"] .hexaclear-pvp-delta-amount {
+  color: var(--w98-text, #000);
+}
+
+[data-theme="win98"] .hexaclear-pvp-delta-sep {
+  color: var(--w98-text, #000);
 }

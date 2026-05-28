@@ -29,6 +29,77 @@ const sanitizeDailyBestMap = (
   return out
 }
 
+type PieceVariantStats = LifetimeStats['pieceStats'] extends
+  | Record<string, infer V>
+  | undefined
+  ? V
+  : never
+
+const emptyPieceVariantStats = (): PieceVariantStats => ({
+  timesPlayed: 0,
+  clearsCaused: 0,
+  combosJoined: 0,
+  boardClears: 0,
+  rubiesCaptured: 0,
+  totalPointsGained: 0,
+  bestClear: 0,
+  killingHands: 0,
+})
+
+const sanitizePieceVariantStats = (
+  raw: PieceVariantStats | undefined,
+): PieceVariantStats => {
+  if (!raw || typeof raw !== 'object') return emptyPieceVariantStats()
+  return {
+    timesPlayed: nonNegative(raw.timesPlayed),
+    clearsCaused: nonNegative(raw.clearsCaused),
+    combosJoined: nonNegative(raw.combosJoined),
+    boardClears: nonNegative(raw.boardClears),
+    rubiesCaptured: nonNegative(raw.rubiesCaptured),
+    totalPointsGained: nonNegative(raw.totalPointsGained),
+    bestClear: nonNegative(raw.bestClear),
+    killingHands: nonNegative(raw.killingHands),
+  }
+}
+
+const sanitizePieceStatsMap = (
+  raw: Record<string, PieceVariantStats> | undefined,
+): Record<string, PieceVariantStats> => {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, PieceVariantStats> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof key !== 'string' || key.length === 0) continue
+    out[key] = sanitizePieceVariantStats(value)
+  }
+  return out
+}
+
+// Per-variant merge: counters add, `bestClear` takes max.
+// Matches the client-side `mergePieceStatsMaps` so a sync round-
+// trip returns the same totals the client would compute locally.
+const mergePieceStatsMaps = (
+  a: Record<string, PieceVariantStats>,
+  b: Record<string, PieceVariantStats>,
+): Record<string, PieceVariantStats> => {
+  const out: Record<string, PieceVariantStats> = {}
+  const ids = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const id of ids) {
+    const left = a[id] ?? emptyPieceVariantStats()
+    const right = b[id] ?? emptyPieceVariantStats()
+    out[id] = {
+      timesPlayed: left.timesPlayed + right.timesPlayed,
+      clearsCaused: left.clearsCaused + right.clearsCaused,
+      combosJoined: left.combosJoined + right.combosJoined,
+      boardClears: left.boardClears + right.boardClears,
+      rubiesCaptured: left.rubiesCaptured + right.rubiesCaptured,
+      totalPointsGained: left.totalPointsGained + right.totalPointsGained,
+      bestClear: Math.max(left.bestClear, right.bestClear),
+      killingHands: left.killingHands + right.killingHands,
+    }
+  }
+  return out
+}
+
 const sanitizeStats = (stats: LifetimeStats): LifetimeStats => ({
   startedTrackingAt: saneTimestamp(stats.startedTrackingAt),
   totalActivePlayMs: nonNegative(stats.totalActivePlayMs),
@@ -57,6 +128,7 @@ const sanitizeStats = (stats: LifetimeStats): LifetimeStats => ({
   dailyDaysPlayed: uniqueStrings(stats.dailyDaysPlayed),
   coopPartnerIds: uniqueStrings(stats.coopPartnerIds),
   dailyBestMovesByDate: sanitizeDailyBestMap(stats.dailyBestMovesByDate),
+  pieceStats: sanitizePieceStatsMap(stats.pieceStats),
 })
 
 const mergeStats = (server: LifetimeStats, delta: LifetimeStats): LifetimeStats => {
@@ -133,6 +205,10 @@ const mergeStats = (server: LifetimeStats, delta: LifetimeStats): LifetimeStats 
       }
       return out
     })(),
+    pieceStats: mergePieceStatsMaps(
+      cleanServer.pieceStats ?? {},
+      cleanDelta.pieceStats ?? {},
+    ),
   }
 }
 
@@ -163,6 +239,7 @@ const emptyStats = (timestamp: number): LifetimeStats => ({
   dailyDaysPlayed: [],
   coopPartnerIds: [],
   dailyBestMovesByDate: {},
+  pieceStats: {},
 })
 
 export const getMyStats = query({

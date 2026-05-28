@@ -14,6 +14,7 @@
     "@auth/core": "^0.37.0",
     "@convex-dev/auth": "^0.0.92",
     "convex": "^1.39.1",
+    "gifenc": "^1.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "web-haptics": "^0.0.6"

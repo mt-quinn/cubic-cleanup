@@ -2307,7 +2307,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -5259,6 +5259,38 @@ body {
     inset 0 -1px 0 rgba(255, 197, 138, 0.08);
   border: 1px solid rgba(255, 197, 138, 0.18);
   overflow: hidden;
+  /* Now also a button — strip browser defaults and add a subtle
+     hover state so players know they can tap a tile to open its
+     history sheet. */
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease,
+    background 120ms ease;
+}
+
+.hexaclear-piecetiary-cell:hover,
+.hexaclear-piecetiary-cell:focus-visible {
+  border-color: rgba(255, 232, 163, 0.4);
+  background: rgba(0, 0, 0, 0.18);
+  outline: none;
+}
+
+.hexaclear-piecetiary-cell:active {
+  transform: translateY(1px);
+}
+
+/* Tiles with personal history get a subtle warm rim so the eye is
+   drawn to "pieces you've met" before unfamiliar ones, without
+   making blank tiles feel diminished. */
+.hexaclear-piecetiary-cell.has-history {
+  border-color: rgba(255, 213, 138, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 197, 138, 0.12),
+    0 0 0 1px rgba(255, 197, 138, 0.12);
 }
 
 .hexaclear-piecetiary-preview {
@@ -6287,5 +6319,760 @@ body {
   transform: scale(0.8) !important;
   transform-box: fill-box;
   transform-origin: center;
+}
+
+/* ============================================================
+   First-launch micro-tutorial
+   ------------------------------------------------------------
+   Two-stage guided opening that fires once for brand-new
+   players. Stage 1 teaches "drag a piece to clear a line";
+   stage 2 is a one-shot huge combo as the payoff. The CSS here
+   covers the in-board target pulse, the floating prompt + skip
+   link, and the exit toast, plus a chrome-hiding pass on the
+   viewport-root level when a stage is active.
+   ============================================================ */
+
+.cubic-viewport.is-tutorial-active .hexaclear-menu-button,
+.cubic-viewport.is-tutorial-active .hexaclear-mode-toggle,
+.cubic-viewport.is-tutorial-active .hexaclear-best-banner,
+.cubic-viewport.is-tutorial-active .hexaclear-live-stat,
+.cubic-viewport.is-tutorial-active .hexaclear-live-stat-placeholder,
+.cubic-viewport.is-tutorial-active .hexaclear-board-hud,
+.cubic-viewport.is-tutorial-active .hexaclear-banner-ad,
+.cubic-viewport.is-tutorial-active .hexaclear-banner-ad-side-frame,
+.cubic-viewport.is-tutorial-active .hexaclear-undo-button,
+.cubic-viewport.is-tutorial-active .hexaclear-hold {
+  visibility: hidden;
+}
+
+/* Target pulse rendered inside the board SVG. Stroke-only so the
+   cell underneath is still visible; the soft breathing animation
+   makes the target inviting without screaming. */
+.hexaclear-tutorial-pulse {
+  fill: none;
+  stroke: #ffe5a8;
+  stroke-width: 2.4;
+  opacity: 0.85;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-tutorial-pulse 1500ms ease-in-out infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(255, 229, 168, 0.65));
+}
+
+@keyframes hexaclear-tutorial-pulse {
+  0% {
+    opacity: 0.55;
+    stroke-width: 1.6;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 3.4;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0.55;
+    stroke-width: 1.6;
+    transform: scale(0.86);
+  }
+}
+
+.cubic-viewport.reduced-motion .hexaclear-tutorial-pulse {
+  animation: none;
+  opacity: 0.95;
+  stroke-width: 2.6;
+}
+
+/* Floating overlay that hosts the prompt, skip link, and exit
+   toast. Sits inside the board wrapper, pointer-events disabled
+   except on its interactive children, so it never blocks drags. */
+.hexaclear-tutorial-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.hexaclear-tutorial-prompt {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.55rem 1.1rem;
+  background: rgba(34, 14, 4, 0.78);
+  border: 1px solid rgba(255, 229, 168, 0.45);
+  border-radius: 999px;
+  color: #ffe8a3;
+  font-weight: 600;
+  font-size: clamp(0.95rem, 3.4vw, 1.15rem);
+  letter-spacing: 0.01em;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  animation: hexaclear-tutorial-prompt-in 520ms cubic-bezier(0.2, 0.7, 0.3, 1)
+    both;
+  pointer-events: none;
+}
+
+@keyframes hexaclear-tutorial-prompt-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.hexaclear-tutorial-toast {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0.7rem 1.4rem;
+  background: rgba(34, 14, 4, 0.85);
+  border: 1px solid rgba(255, 229, 168, 0.6);
+  border-radius: 14px;
+  color: #fff4cc;
+  font-family: 'Monoton', 'Nunito', sans-serif;
+  font-weight: 400;
+  font-size: clamp(1.2rem, 5vw, 1.8rem);
+  letter-spacing: 0.04em;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  animation: hexaclear-tutorial-toast-in 380ms cubic-bezier(0.2, 0.7, 0.3, 1)
+    both;
+}
+
+@keyframes hexaclear-tutorial-toast-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.hexaclear-tutorial-skip {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.55rem;
+  padding: 0.3rem 0.7rem;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 232, 163, 0.72);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 6px;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.hexaclear-tutorial-skip:hover,
+.hexaclear-tutorial-skip:focus-visible {
+  color: #fff4cc;
+  background: rgba(255, 232, 163, 0.1);
+  outline: none;
+}
+
+/* ============================================================
+   Spectator count pill
+   ------------------------------------------------------------
+   Rides at the tail of the SmileyRow when at least one true
+   spectator is watching the current room. Seated players see
+   "👁 N"; spectators see the same pill (since they appear in
+   the count themselves). Re-keyed by count so each increment
+   re-fires the brightness pulse without an explicit timer.
+   ============================================================ */
+
+.hexaclear-spectator-pill {
+  align-self: center;
+  margin-left: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(34, 14, 4, 0.55);
+  border: 1px solid rgba(255, 232, 163, 0.32);
+  color: #ffe8a3;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+  animation: hexaclear-spectator-pulse 520ms ease-out 1;
+}
+
+.hexaclear-spectator-pill-eye {
+  font-size: 0.95rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 229, 168, 0.5));
+}
+
+.hexaclear-spectator-pill-count {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes hexaclear-spectator-pulse {
+  0% {
+    filter: brightness(2.1);
+    background: rgba(255, 229, 168, 0.32);
+  }
+  100% {
+    filter: brightness(1);
+    background: rgba(34, 14, 4, 0.55);
+  }
+}
+
+.cubic-viewport.reduced-motion .hexaclear-spectator-pill {
+  animation: none;
+}
+
+/* ============================================================
+   End-of-run highlight reel
+   ------------------------------------------------------------
+   Inline panel in the gameover modal that re-renders the
+   single best-scoring placement of the run. Uses simplified
+   hex tiles + cube fills rather than the production board so
+   it stays compact and modal-friendly. Cleared cells re-use
+   the shared `clearing-line` / `clearing-flower-*` keyframes
+   that the live board drives, so the timing/feel matches.
+   ============================================================ */
+
+.hexaclear-reel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.65rem 0 0.4rem;
+  padding: 0.7rem 0.85rem 0.55rem;
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 8, 2, 0.55),
+    rgba(40, 16, 4, 0.65)
+  );
+  border: 1px solid rgba(255, 232, 163, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 232, 163, 0.06),
+    0 6px 18px -8px rgba(0, 0, 0, 0.6);
+}
+
+.hexaclear-reel-board-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.hexaclear-reel-svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  /* Heights ~140-160px per the design doc; let the SVG scale
+     proportionally inside that bound so the rosette fits even
+     on the smaller mobile gameover modal. */
+  height: 150px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+}
+
+/* Branding watermark in the corner of the reel. Style echoes the
+   global title (`.hexaclear-title` — Monoton with the warm-orange
+   stamp shadow) so the GIF carries the brand into wherever the
+   player shares it. The blink is gone — the original "REPLAY"
+   needed to flag "this isn't live", but the watermark is just
+   identity and shouldn't draw attention away from the cube
+   action. */
+.hexaclear-reel-points {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffe8a3;
+  text-shadow: 0 0 8px rgba(255, 212, 120, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: hexaclear-reel-points 720ms cubic-bezier(0.18, 0.78, 0.32, 1) 1;
+}
+
+@keyframes hexaclear-reel-points {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.7);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-24px) scale(1);
+  }
+}
+
+.hexaclear-reel-hex {
+  fill: rgba(34, 14, 4, 0.62);
+  stroke: rgba(255, 232, 163, 0.16);
+  stroke-width: 1;
+}
+
+/* Filled cube fill — warm wood palette by default. The cube is a
+   single polygon (no faceted bevel) since the reel is small enough
+   that the extra detail would just read as noise. */
+.hexaclear-reel-cube {
+  fill: #c08049;
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Cells the piece just landed on get a quick scale-up pop so the
+   eye registers "the piece landed *here*" before the clears fire. */
+.hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube {
+  animation: hexaclear-reel-placed 320ms cubic-bezier(0.22, 1.4, 0.36, 1) 1;
+  fill: #e0a060;
+}
+
+@keyframes hexaclear-reel-placed {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Cleared cells: shrink out + fade. The class names mirror the
+   live board so any future tweaks to the live clearing feel can
+   ride the same keyframes the reel renders.
+   ------------------------------------------------------------
+   NOTE: the live board's `clearing-line` keyframe lives on a
+   different DOM shape (with bevels, cube facets, etc.), so we
+   define a small set of reel-local overrides below that drive
+   the polygon directly. */
+.hexaclear-reel-cell.clearing-line .hexaclear-reel-cube,
+.hexaclear-reel-cell.clearing-flower-center .hexaclear-reel-cube,
+.hexaclear-reel-cell.clearing-flower-ring .hexaclear-reel-cube {
+  animation: hexaclear-reel-clear 540ms cubic-bezier(0.4, 0.2, 0.2, 1) forwards;
+}
+
+/* Stepped delays for the line wipe. Mirrors the live board's
+   `clearing-line-step-N` cascade so a horizontal/diagonal wipe
+   feels like a wipe instead of all-at-once. */
+.hexaclear-reel-cell.clearing-line-step-0 .hexaclear-reel-cube { animation-delay: 0ms; }
+.hexaclear-reel-cell.clearing-line-step-1 .hexaclear-reel-cube { animation-delay: 55ms; }
+.hexaclear-reel-cell.clearing-line-step-2 .hexaclear-reel-cube { animation-delay: 110ms; }
+.hexaclear-reel-cell.clearing-line-step-3 .hexaclear-reel-cube { animation-delay: 165ms; }
+.hexaclear-reel-cell.clearing-line-step-4 .hexaclear-reel-cube { animation-delay: 220ms; }
+.hexaclear-reel-cell.clearing-line-step-5 .hexaclear-reel-cube { animation-delay: 275ms; }
+.hexaclear-reel-cell.clearing-line-step-6 .hexaclear-reel-cube { animation-delay: 330ms; }
+
+.hexaclear-reel-cell.clearing-flower-ring .hexaclear-reel-cube {
+  animation-delay: 60ms;
+}
+
+@keyframes hexaclear-reel-clear {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+}
+
+.hexaclear-reel-caption {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 232, 163, 0.92);
+  letter-spacing: 0.02em;
+}
+
+.hexaclear-reel-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hexaclear-reel-replay,
+.hexaclear-reel-download {
+  background: rgba(255, 232, 163, 0.08);
+  border: 1px solid rgba(255, 232, 163, 0.32);
+  border-radius: 999px;
+  padding: 0.28rem 0.95rem;
+  color: #ffe8a3;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+  font-family: inherit;
+}
+
+.hexaclear-reel-replay:hover,
+.hexaclear-reel-replay:focus-visible,
+.hexaclear-reel-download:hover,
+.hexaclear-reel-download:focus-visible {
+  background: rgba(255, 232, 163, 0.18);
+  outline: none;
+}
+
+.hexaclear-reel-replay:active,
+.hexaclear-reel-download:active {
+  transform: translateY(1px);
+}
+
+.hexaclear-reel-replay:disabled,
+.hexaclear-reel-download:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.cubic-viewport.reduced-motion .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube,
+.cubic-viewport.reduced-motion .hexaclear-reel-points,
+.cubic-viewport.reduced-motion .hexaclear-reel-cell.clearing-line .hexaclear-reel-cube,
+.cubic-viewport.reduced-motion .hexaclear-reel-cell.clearing-flower-center .hexaclear-reel-cube,
+.cubic-viewport.reduced-motion .hexaclear-reel-cell.clearing-flower-ring .hexaclear-reel-cube {
+  animation: none;
+}
+
+
+/* ============================================================
+   Piece detail card (Piecetiary tap-through)
+   ------------------------------------------------------------
+   Surfaces a single rotation variant's nickname, mini preview,
+   playful flavor lines, and the device-local stat table. Lives
+   above the rest of the modal stack so the player can drill in
+   from the How-to-Play › Piecetiary tab without losing the
+   underlying modal.
+   ============================================================ */
+
+/* Transparent click-catching wrapper. Unlike `.hexaclear-overlay`
+   we deliberately skip the dark radial backdrop — the detail
+   card sits *on top of* the How-to-Play modal and we want that
+   underlying modal to stay visible behind it. Outside-click
+   still dismisses (the parent React handler reads
+   `e.target === e.currentTarget`), and we lift z-index above
+   the standard overlay so the popover always wins clicks.
+   `position: fixed` (rather than absolute) anchors us to the
+   viewport, not whichever ancestor happens to be positioned —
+   guarantees the click-catching region covers the whole screen
+   even when mounted deep inside a narrow `max-width` column. */
+.hexaclear-popover-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 60;
+}
+
+.hexaclear-piece-detail-card {
+  max-width: 360px;
+  width: min(360px, calc(100vw - 1.5rem));
+  /* Extra shadow so the popover reads as a layer above the
+     underlying scoring modal, since there's no backdrop dim
+     doing that work for us anymore. */
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(255, 232, 163, 0.18);
+}
+
+.hexaclear-piece-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(255, 232, 163, 0.18);
+}
+
+.hexaclear-piece-detail-preview {
+  flex: 0 0 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 197, 138, 0.22);
+  border-radius: 10px;
+  padding: 0.45rem;
+}
+
+.hexaclear-piece-detail-preview svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hexaclear-piece-detail-id {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.hexaclear-piece-detail-nickname {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffe8a3;
+  letter-spacing: 0.01em;
+}
+
+.hexaclear-piece-detail-notation {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace,
+    SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: rgba(255, 232, 163, 0.78);
+}
+
+.hexaclear-piece-detail-flavor {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  color: rgba(255, 232, 163, 0.96);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.hexaclear-piece-detail-stats {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 0.18rem;
+  column-gap: 0.6rem;
+  font-size: 0.86rem;
+}
+
+.hexaclear-piece-detail-stat {
+  display: contents;
+}
+
+.hexaclear-piece-detail-stat dt {
+  color: rgba(255, 232, 163, 0.78);
+}
+
+.hexaclear-piece-detail-stat dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #ffe8a3;
+  font-weight: 600;
+}
+
+.hexaclear-piece-detail-empty {
+  margin-top: 0.55rem;
+  font-size: 0.88rem;
+  color: rgba(255, 232, 163, 0.72);
+  font-style: italic;
+}
+
+.hexaclear-piece-detail-actions {
+  margin-top: 0.85rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ============================================================
+   PvP territory delta preview chip
+   ------------------------------------------------------------
+   Floats above the board during PvP placement preview, showing
+   who will receive territory from each cleared cube. Teaches
+   the "the cube's placer gets the territory" rule at the
+   exact moment it matters. Hidden in co-op / single-player by
+   the React-side gate; CSS just owns the look.
+   ============================================================ */
+
+.hexaclear-pvp-delta-chip {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  padding: 0.3rem 0.7rem 0.32rem;
+  border-radius: 999px;
+  background: rgba(14, 6, 0, 0.82);
+  border: 1px solid rgba(255, 232, 163, 0.32);
+  color: #ffe8a3;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.6);
+  animation: hexaclear-pvp-delta-in 140ms ease-out 1;
+}
+
+@keyframes hexaclear-pvp-delta-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.hexaclear-pvp-delta-chip-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.78);
+}
+
+.hexaclear-pvp-delta-chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.hexaclear-pvp-delta-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.hexaclear-pvp-delta-entry.is-self .hexaclear-pvp-delta-name {
+  color: #fff4cc;
+}
+
+.hexaclear-pvp-delta-entry.is-unattributed .hexaclear-pvp-delta-name {
+  color: rgba(255, 232, 163, 0.68);
+  font-style: italic;
+}
+
+.hexaclear-pvp-delta-sep {
+  color: rgba(255, 232, 163, 0.38);
+  margin: 0 0.05rem;
+}
+
+.hexaclear-pvp-delta-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  display: inline-block;
+}
+
+.hexaclear-pvp-delta-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.cubic-viewport.reduced-motion .hexaclear-pvp-delta-chip {
+  animation: none;
+}
+
+/* ============================================================
+   Colorblind support layer (opt-in)
+   ------------------------------------------------------------
+   Driven by `.cubic-viewport.is-colorblind`. Surfaces shape /
+   pattern cues for information that's currently color-only so
+   ruby cells, invalid drops, and prospective clears stay
+   readable for players who can't distinguish the hues that
+   already encode them. The MVP intentionally stops short of
+   per-player PvP patterns — those need real pattern art and
+   sit behind the doc's "future round" gate.
+   ============================================================ */
+
+/* Diamond glyph on ruby cells. The SVG `<text>` is always
+   rendered (so we don't need to re-render the board when the
+   toggle flips); CSS opacity + transitions handle the reveal. */
+.hexaclear-ruby-glyph {
+  font-size: 16px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: rgba(0, 0, 0, 0.78);
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.78);
+  stroke-width: 0.8;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.cubic-viewport.is-colorblind .hexaclear-ruby-glyph {
+  opacity: 1;
+}
+
+/* Heavier hatch overlay on invalid drops. Default invalid
+   drops already pulse red; under colorblind support we add a
+   crosshatch SVG-style stripe so the "no" reads as a pattern
+   even without the red. */
+.cubic-viewport.is-colorblind .hexaclear-hex.invalid-drop {
+  /* CSS doesn't have a native crosshatch fill on SVG polygons,
+     but we can stack two diagonal-stripe linear-gradients via
+     `filter: url(...)` only in HTML elements. For the SVG
+     `<polygon>` we settle for a stronger stroke + dashed
+     outline that still reads as a "no" marker. */
+  stroke: #ff5252;
+  stroke-width: 3;
+  stroke-dasharray: 6 4;
+  stroke-linejoin: round;
+}
+
+/* Stronger preview-clear outline. The warm glow alone can be
+   hard to spot for some players; colorblind mode wraps it with
+   a contrasting white outline so the "this would clear" cells
+   pop out of the board even in grayscale. */
+.cubic-viewport.is-colorblind .hexaclear-hex.preview-clear {
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  stroke-dasharray: 4 3;
+}
+
+/* PvP territory delta swatches grow a small ring under
+   colorblind support so each entry is distinguishable beyond
+   color alone. (Pattern fills require new art and aren't part
+   of this MVP — the ring + the textual name carry the
+   information until that art lands.) */
+.cubic-viewport.is-colorblind .hexaclear-pvp-delta-swatch {
+  border-width: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 

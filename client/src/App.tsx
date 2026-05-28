@@ -19,14 +19,39 @@ import {
   createBigGameState,
   createInitialGameState,
   createDailyGameState,
+  createTutorialStage1State,
+  createTutorialStage2State,
   dealPlayableHand,
   dealDailyHand,
   hasAnyValidMove,
+  TUTORIAL_STAGE_1_TARGET_CELL_IDS,
+  TUTORIAL_STAGE_2_TARGET_CELL_ID,
 } from './game/gameLogic'
-import type { ActivePiece, GameMode, GameState } from './game/gameLogic'
+import type {
+  ActivePiece,
+  BoardState,
+  GameMode,
+  GameState,
+} from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
 import type { BoardDefinition } from './game/hexTypes'
-import { ALL_PIECE_VARIANTS, PIECE_VARIANT_NAMES } from './game/pieces'
+import {
+  ALL_PIECE_VARIANTS,
+  PIECE_VARIANT_NAMES,
+  findPieceVariant,
+} from './game/pieces'
+import type { PieceVariant } from './game/pieces'
+import {
+  applyGameOverToPieceStats,
+  applyPlacementToPieceStats,
+  averagePoints,
+  buildFlavorLines,
+  getPieceStats,
+  loadPieceStats,
+  savePieceStats,
+  savePieceStatsSyncBaseline,
+} from './pieceStats'
+import type { PieceStatsMap, PieceVariantStats } from './pieceStats'
 import {
   getAudioNeedsUnlock,
   getMasterVolume,
@@ -48,6 +73,7 @@ import { useMultiplayerGame } from './multiplayer/useMultiplayerGame'
 import { getOrCreatePlayerId } from './multiplayer/playerIdentity'
 import {
   applyPlacementToRunStats,
+  buildPieceStatsDelta,
   createEmptyLifetimeStats,
   createEmptyRunStats,
   calculateStatsSyncDelta,
@@ -65,6 +91,12 @@ import {
   saveStatsSyncBaseline,
 } from './stats'
 import type { LifetimeStats, RunStats } from './stats'
+import {
+  createHighlightSnapshot,
+  HighlightReel,
+  HIGHLIGHT_REEL_MIN_POINTS,
+} from './highlightReel'
+import type { RunHighlightSnapshot } from './highlightReel'
 import {
   buildRoomShareUrl,
   readRoomFromUrl,
@@ -896,6 +928,12 @@ type SmileyRowProps = {
   // Active (still-inside-the-10s-window) emote per playerId. Tiles
   // not in this map render the default smiley face.
   activeEmoteByPlayerId: Record<string, { emoji: string; ts: number }>
+  // Number of true spectators currently watching (excludes seated
+  // players). Surface as a tiny pill at the row's tail so seated
+  // players can see they have an audience. Hidden when zero. The
+  // SmileyRow is the natural home for it in both themes — it stays
+  // next to player identity instead of pinning to header chrome.
+  spectatorCount?: number
   onSend: (emoji: string) => void
   onToggle: () => void
 }
@@ -906,6 +944,7 @@ const SmileyRow = ({
   selfPlayer,
   otherPlayers,
   activeEmoteByPlayerId,
+  spectatorCount = 0,
   onToggle,
   onSend,
 }: SmileyRowProps) => {
@@ -1041,6 +1080,29 @@ const SmileyRow = ({
           </div>
         )
       })}
+      {spectatorCount > 0 && (
+        <div
+          key={spectatorCount}
+          className="hexaclear-spectator-pill"
+          aria-label={`${spectatorCount} spectator${
+            spectatorCount === 1 ? '' : 's'
+          } watching this room`}
+          title={`${spectatorCount} watching`}
+        >
+          <span
+            className="hexaclear-spectator-pill-eye"
+            aria-hidden="true"
+          >
+            👁
+          </span>
+          <span
+            className="hexaclear-spectator-pill-count"
+            aria-hidden="true"
+          >
+            {spectatorCount}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -1447,6 +1509,49 @@ const PERSIST_KEY_BY_MODE: Record<GameMode, string> = {
 }
 
 const ACTIVE_MODE_KEY = 'cubic-active-mode'
+
+// Set once the first-launch micro-tutorial has been completed or
+// explicitly skipped. Used to gate the two-stage guided opening so
+// returning players never see it again.
+const TUTORIAL_COMPLETED_KEY = 'cubic-tutorial-completed'
+
+// 0 = not in tutorial. 1 / 2 = currently running the corresponding
+// tutorial stage. The advancement is driven by a post-placement
+// effect that watches the hand-cleared + clear-animation-finished
+// state and swaps to the next stage / exits.
+type TutorialStage = 0 | 1 | 2
+
+// Belt-and-suspenders check for "this player has never played before."
+// Requires both no completion flag AND no evidence of prior play in
+// any persistence slot, so a stale localStorage from an old build
+// can't re-trigger the tutorial on someone who already finished a
+// run.
+//
+// Dev-only escape hatches:
+//   ?forceTutorial=1 — always fires the tutorial, ignoring stored
+//     state. Use to validate the guided opening without nuking
+//     localStorage between iterations. Strict no-op in production.
+const isFirstLaunchEver = (): boolean => {
+  if (typeof window === 'undefined') return false
+  try {
+    if (import.meta.env.DEV) {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('forceTutorial') === '1') return true
+    }
+    if (window.localStorage.getItem(TUTORIAL_COMPLETED_KEY)) return false
+    for (const key of Object.values(PERSIST_KEY_BY_MODE)) {
+      if (window.localStorage.getItem(key)) return false
+    }
+    if (window.localStorage.getItem('cubic-current-game')) return false
+    if (window.localStorage.getItem('cubic-stats-v1')) return false
+    if (window.localStorage.getItem('cubic-highscores')) return false
+    return true
+  } catch {
+    // localStorage is unavailable (privacy mode etc.) — don't trap
+    // the player in a tutorial they can't escape between sessions.
+    return false
+  }
+}
 
 // Try to migrate the pre-multi-mode single-key save into per-mode
 // slots. If both the legacy key and a per-mode key exist, the per-mode
@@ -1867,7 +1972,24 @@ function App() {
   )
   const copyLinkTimerRef = useRef<number | null>(null)
 
-  const [game, setGame] = useState<GameState>(() => loadInitialGameFromStorage())
+  // First-launch micro-tutorial. The detector runs once at mount; we
+  // hold the result in a ref so the placement engine can suppress its
+  // auto-deal / game-over branches without depending on React state
+  // closure semantics.
+  const [tutorialStage, setTutorialStage] = useState<TutorialStage>(() =>
+    isFirstLaunchEver() ? 1 : 0,
+  )
+  const tutorialStageRef = useRef<TutorialStage>(tutorialStage)
+  useEffect(() => {
+    tutorialStageRef.current = tutorialStage
+  }, [tutorialStage])
+  const [tutorialToastVisible, setTutorialToastVisible] = useState(false)
+
+  const [game, setGame] = useState<GameState>(() =>
+    tutorialStage === 1
+      ? createTutorialStage1State()
+      : loadInitialGameFromStorage(),
+  )
   // Dev-only: support `?devScore=N` in the URL to seed the current
   // game's `score` field on load. Lets us visually scrub through
   // every score-tier / octave milestone without grinding to 25k in
@@ -1882,6 +2004,58 @@ function App() {
     const n = Number(raw)
     if (!Number.isFinite(n) || n < 0) return
     setGame((current) => ({ ...current, score: Math.floor(n) }))
+  }, [])
+  // Dev-only preview for the end-of-run highlight reel. Setting
+  // `?devReel=1` mounts a synthetic best-placement snapshot in
+  // `modalHighlightSnapshot` so the reel renders inside a
+  // standalone popover without having to play a full game to
+  // gameover. Pure visual debug aid; gated behind
+  // `import.meta.env.DEV` so production never sees the popover.
+  const [devReelOpen, setDevReelOpen] = useState(false)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('devReel') !== '1') return
+    // Build a plausible endless-mode clear: a horizontal line
+    // through r=0 with a singlet placed at (0,0) to trigger it.
+    // `boardBefore` has every other cell on that line filled so
+    // the placement completes the line and earns the pattern.
+    const boardDef = getBoardDefinitionForMode('endless')
+    const lineCells = ['-4,0', '-3,0', '-2,0', '-1,0', '0,0', '1,0', '2,0', '3,0', '4,0']
+    const validLineCellIds = lineCells.filter((id) =>
+      boardDef.cells.some((c) => c.id === id),
+    )
+    const placedCellId = validLineCellIds[Math.floor(validLineCellIds.length / 2)]
+    const boardBefore = boardDef.cells.reduce<Record<string, 'empty' | 'filled'>>(
+      (acc, cell) => {
+        acc[cell.id] = 'empty'
+        return acc
+      },
+      {},
+    )
+    for (const cellId of validLineCellIds) {
+      if (cellId === placedCellId) continue
+      boardBefore[cellId] = 'filled'
+    }
+    const linePattern = boardDef.patterns.find(
+      (p) =>
+        p.type === 'line' &&
+        validLineCellIds.every((id) => p.cellIds.includes(id)),
+    )
+    if (!linePattern) return
+    setModalHighlightSnapshot({
+      mode: 'endless',
+      boardBefore,
+      placedCellIds: [placedCellId!],
+      clearedCellIds: linePattern.cellIds,
+      clearedPatterns: [
+        { type: linePattern.type, cellIds: [...linePattern.cellIds] },
+      ],
+      pointsGained: 240,
+      causedBoardClear: false,
+    })
+    setDevReelOpen(true)
   }, [])
   // All board-shape data (cell positions, layout dimensions, rosette
   // boundaries, etc.) is precomputed once per mode at module load and
@@ -1907,6 +2081,9 @@ function App() {
   // would trip on the second visit even if the player never engaged. We
   // instead inspect the loaded game's actual state.
   const [hasStartedSession, setHasStartedSession] = useState<boolean>(() => {
+    // First-launch tutorial counts as "not started" so the menu still
+    // offers New Game after the player finishes the guided opening.
+    if (isFirstLaunchEver()) return false
     const initial = loadInitialGameFromStorage()
     return initial.moves > 0 || initial.gameOver
   })
@@ -2047,6 +2224,16 @@ function App() {
   const [runStats, setRunStats] = useState<RunStats>(() =>
     createEmptyRunStats(),
   )
+  // "Best placement of this run" snapshot. The ref tracks the
+  // running-max during play (so the placement reducer can update
+  // it synchronously without dragging React state through the
+  // hot path); we mirror it into modalHighlightSnapshot at
+  // gameover so the gameover modal can render the reel even if
+  // the player keeps playing past the gameover (e.g. starts a
+  // new run) and the live ref gets reset.
+  const runHighlightRef = useRef<RunHighlightSnapshot | null>(null)
+  const [modalHighlightSnapshot, setModalHighlightSnapshot] =
+    useState<RunHighlightSnapshot | null>(null)
   // Lifetime profile stats. Loaded from localStorage on mount;
   // overwritten on each gameover via foldRunIntoLifetime.
   const [lifetimeStats, setLifetimeStats] = useState<LifetimeStats>(() =>
@@ -2054,6 +2241,23 @@ function App() {
       ? createEmptyLifetimeStats()
       : loadLifetimeStats(),
   )
+  // Per-rotation piece stats ("Piecetiary stats"). Loaded once on
+  // mount; mutated through the deal/placement/gameover effects
+  // below; persisted to localStorage on every change. Kept separate
+  // from `lifetimeStats` because the surface area (44 small
+  // counters) is large enough to deserve its own storage key and
+  // its own retrospective UI on the Piecetiary tile.
+  const [pieceStats, setPieceStats] = useState<PieceStatsMap>(() =>
+    typeof window === 'undefined' ? {} : loadPieceStats(),
+  )
+  useEffect(() => {
+    savePieceStats(pieceStats)
+  }, [pieceStats])
+  // Drives the Piecetiary detail sheet. Null means no sheet open;
+  // a variant value means the player tapped that tile and wants to
+  // see its stats / flavor lines.
+  const [selectedPieceVariant, setSelectedPieceVariant] =
+    useState<PieceVariant | null>(null)
   // One-shot backfill: existing accounts predate the synced
   // dailyBestMovesByDate map and only have per-day best moves in
   // `cubic-daily-best-<dateKey>` localStorage. Seed the map from
@@ -2115,7 +2319,17 @@ function App() {
       setAccountError(null)
       try {
         const baseline = loadStatsSyncBaseline(accountId)
-        const delta = calculateStatsSyncDelta(stats, baseline)
+        // Piece stats follow the same sync model as the lifetime
+        // counters: compute (local - per-account baseline), attach
+        // to the payload, then save the post-merge totals as the
+        // new baseline. Silent — no UI surface, just rides along
+        // with every stats sync.
+        const pieceStatsDelta = buildPieceStatsDelta(accountId)
+        const delta = calculateStatsSyncDelta(
+          stats,
+          baseline,
+          pieceStatsDelta,
+        )
         const rawMerged = await mergeAccountStats({ delta })
         // The server validator marks the PvP counters as optional so
         // legacy accountStats rows keep validating during the
@@ -2129,12 +2343,22 @@ function App() {
           pvpShames: rawMerged.pvpShames ?? 0,
           bestRubiesInRun: rawMerged.bestRubiesInRun ?? 0,
           dailyBestMovesByDate: rawMerged.dailyBestMovesByDate ?? {},
+          pieceStats: rawMerged.pieceStats ?? {},
         }
         saveLifetimeStats(merged)
         saveStatsSyncAccountId(accountId)
         saveStatsSyncBaseline(accountId, merged)
         setStatsSyncLastAt(loadStatsSyncLastAt())
         setLifetimeStats(merged)
+        // Piece-stats round-trip: replace the local map with the
+        // server-merged totals so cross-device counters stay in
+        // sync, and save the same map as the new piece-stats
+        // baseline so the next sync only ships brand-new deltas.
+        if (merged.pieceStats) {
+          setPieceStats(merged.pieceStats)
+          savePieceStats(merged.pieceStats)
+          savePieceStatsSyncBaseline(accountId, merged.pieceStats)
+        }
         // Write through the merged per-day best moves to the
         // `cubic-daily-best-<dateKey>` localStorage cache so any
         // surface that still reads from the per-day key (legacy
@@ -2313,6 +2537,20 @@ function App() {
   const [reducedMotion, setReducedMotion] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('cubic-reduced-motion') === 'true'
+  })
+  // Colorblind support: opt-in. When on, the viewport carries an
+  // `is-colorblind` class that lets CSS surface extra non-color
+  // cues — a glyph on ruby cells, a stronger pattern on invalid
+  // drops, and a heavier outline on `preview-clear` cells. We
+  // deliberately scope the MVP to cues that don't depend on per-
+  // player pattern art (those land in a later round once the
+  // pattern set is designed) so the toggle is honest about the
+  // accessibility win it delivers today.
+  const [colorblindSupport, setColorblindSupport] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return (
+      window.localStorage.getItem('cubic-colorblind-support') === 'true'
+    )
   })
   // Score-tier color escalation. Pieces (and recently-placed cubes)
   // shift palette at every 1,000-point boundary up to a cap at 4k+,
@@ -3027,6 +3265,62 @@ function App() {
           streakAfter: placement.streakAfter,
         }),
       )
+
+      // Highlight reel snapshot. PvP runs don't get reels (the
+      // "best moment" framing only really lands in a personal-best
+      // context); co-op uses the same monotonic-max rule as
+      // single-player. We rebuild the pre-placement board by
+      // undoing the placement against the post-placement board the
+      // server just shipped us: cleared cells were filled before,
+      // placed cells were empty before.
+      const isCoop = mp.mode === 'coop'
+      if (
+        isCoop &&
+        placement.pointsGained >= HIGHLIGHT_REEL_MIN_POINTS &&
+        placement.clearedPatternIds.length > 0 &&
+        (runHighlightRef.current === null ||
+          placement.pointsGained > runHighlightRef.current.pointsGained)
+      ) {
+        const reconstructedBoardBefore: BoardState = { ...mp.game.board }
+        for (const cellId of placement.placedCellIds) {
+          reconstructedBoardBefore[cellId] = 'empty'
+        }
+        for (const cellId of placement.clearedCellIds) {
+          reconstructedBoardBefore[cellId] = 'filled'
+        }
+        const patternsById = new Map(
+          boardDef.patterns.map((p) => [p.id, p] as const),
+        )
+        const reconstructedPatterns = placement.clearedPatternIds
+          .map((id) => patternsById.get(id))
+          .filter((p): p is NonNullable<typeof p> => p != null)
+        runHighlightRef.current = createHighlightSnapshot({
+          mode: mp.game.mode,
+          boardBefore: reconstructedBoardBefore,
+          placedCellIds: placement.placedCellIds,
+          clearedCellIds: placement.clearedCellIds,
+          clearedPatterns: reconstructedPatterns,
+          pointsGained: placement.pointsGained,
+          causedBoardClear: placement.boardCleared,
+        })
+      }
+
+      // Per-piece-variant stats for our own MP placements.
+      // Partner placements never appear in our hand, so we
+      // intentionally only track our own. Variant is resolved
+      // from the rotated cells the server shipped back.
+      const placedVariant = findPieceVariant(placement.pieceShape.cells)
+      if (placedVariant) {
+        setPieceStats((prev) =>
+          applyPlacementToPieceStats(prev, {
+            variantId: placedVariant.id,
+            pointsGained: placement.pointsGained,
+            patternsClearedCount: placement.clearedPatternIds.length,
+            rubiesCleared: placement.rubiesCleared,
+            boardCleared: placement.boardCleared,
+          }),
+        )
+      }
     }
 
     const placedSet = new Set(placement.placedCellIds)
@@ -3672,6 +3966,45 @@ function App() {
         }),
       )
 
+      // Best-placement snapshot for the gameover highlight reel.
+      // Only captures placements that *cleared something* — a
+      // raw 0-point drop is never the moment we want to replay.
+      // Monotonic max keeps the snapshot pointing at the highest
+      // single-placement gain of the run.
+      if (
+        result.pointsGained >= HIGHLIGHT_REEL_MIN_POINTS &&
+        result.clearedPatterns.length > 0 &&
+        (runHighlightRef.current === null ||
+          result.pointsGained > runHighlightRef.current.pointsGained)
+      ) {
+        runHighlightRef.current = createHighlightSnapshot({
+          mode: current.mode,
+          boardBefore: before.board,
+          placedCellIds: result.placedCellIds,
+          clearedCellIds: result.clearedCellIds,
+          clearedPatterns: result.clearedPatterns,
+          pointsGained: result.pointsGained,
+          causedBoardClear: result.boardCleared,
+        })
+      }
+
+      // Per-piece-variant stats. Attribute this placement to the
+      // rotation variant the piece was dealt in — that's the unit
+      // the Piecetiary surfaces, and it matches the nickname the
+      // player saw on the tile.
+      const placedVariant = findPieceVariant(piece.shape.cells)
+      if (placedVariant) {
+        setPieceStats((prev) =>
+          applyPlacementToPieceStats(prev, {
+            variantId: placedVariant.id,
+            pointsGained: result.pointsGained,
+            patternsClearedCount: result.clearedPatterns.length,
+            rubiesCleared: result.rubiesCleared,
+            boardCleared: result.boardCleared,
+          }),
+        )
+      }
+
       let newHand = remainingHand
       let gameOver = false
 
@@ -3681,8 +4014,16 @@ function App() {
       const isThirdPieceThisHand =
         !playFromHold && remainingHand.length === 0
       let nextHandDealCount = current.dailyHandDealCount
+      // The first-launch tutorial hand-feeds the player a single piece
+      // per stage; if we auto-dealt three random pieces here a junk
+      // hand would flash into the tray before the stage-transition
+      // effect could replace state with the next tutorial stage. Skip
+      // both the auto-deal and the game-over evaluation for the
+      // duration of the tutorial — the transition effect drives the
+      // post-placement flow instead.
+      const inTutorial = tutorialStageRef.current !== 0
 
-      if (isThirdPieceThisHand) {
+      if (isThirdPieceThisHand && !inTutorial) {
         // In daily mode, use deterministic hand dealing based on seed
         if (current.mode === 'daily' && current.dailySeed != null) {
           nextHandDealCount = (current.dailyHandDealCount ?? 0) + 1
@@ -3714,13 +4055,15 @@ function App() {
         newHold,
       )
 
-      if (current.mode === 'daily') {
-        // Daily puzzles end either when all numbered targets are broken
-        // or when there are no valid moves remaining.
-        gameOver = result.dailyCompleted || noMovesLeft
-      } else {
-        if (noMovesLeft) {
-          gameOver = true
+      if (!inTutorial) {
+        if (current.mode === 'daily') {
+          // Daily puzzles end either when all numbered targets are broken
+          // or when there are no valid moves remaining.
+          gameOver = result.dailyCompleted || noMovesLeft
+        } else {
+          if (noMovesLeft) {
+            gameOver = true
+          }
         }
       }
 
@@ -4366,6 +4709,118 @@ function App() {
     setScorePopup(null)
   }
 
+  // ---- First-launch micro-tutorial -----------------------------------
+  //
+  // The tutorial leans on the existing placement pipeline: a stage's
+  // single hand piece is the player's only legal move, dropping it
+  // produces a real clear with full juice (audio, particles, ripple,
+  // shake), and the state-transition effect below detects "stage's
+  // piece played + clear animation finished" and either swaps in the
+  // next stage's prebuilt board (stage 1 -> 2) or exits into a fresh
+  // endless game (stage 2 -> done).
+  //
+  // Why an effect rather than a callback on placement? The juice
+  // pipeline (clear animations, score particles, ripple, ...) is
+  // driven by post-placement state — we want the player to *see* the
+  // tutorial clear finish before the board changes. Watching
+  // `clearingCells` to drain back to empty is the cleanest "the
+  // animation just ended" signal that already exists.
+
+  const exitTutorial = useCallback(() => {
+    // Wipe any visual artifacts from the tutorial board (particles,
+    // ripples, popups, etc.) before swapping in the real game state.
+    scoreParticleGenerationRef.current += 1
+    lastScheduledScoreParticleActionIdRef.current = null
+    lastScheduledCubeParticleActionIdRef.current = null
+    setScoreParticles([])
+    setPendingCubesDelta(0)
+    setSelectedPieceId(null)
+    setHover(null)
+    setUndoStack([])
+    setUndoAnimation(null)
+    setPendingUndoRestoreSlotIndex(null)
+    setGoldenPopupCellIds([])
+    setClearingCells([])
+    setClearingGoldenCellIds([])
+    setPendingGoldenSpawnCellIds([])
+    setScorePopup(null)
+
+    const fresh = createInitialGameState()
+    setGame(fresh)
+    setSavedEndlessGame(fresh)
+    setTutorialStage(0)
+    setTutorialToastVisible(false)
+    setHandFlyInToken((t) => t + 1)
+    try {
+      window.localStorage.setItem(TUTORIAL_COMPLETED_KEY, '1')
+    } catch {
+      // Best-effort; if storage is unavailable, the tutorial will
+      // re-fire next session, which is harmless.
+    }
+  }, [])
+
+  const skipTutorial = useCallback(() => {
+    if (tutorialStageRef.current === 0) return
+    playUiClick()
+    exitTutorial()
+  }, [exitTutorial])
+
+  // Drive the stage 1 -> 2 -> exit progression. Fires only while a
+  // tutorial stage is active and only after the player's single piece
+  // has been placed (hand empty) AND the resulting clear animation
+  // has finished (clearingCells drained).
+  //
+  // The streak check guards against a clever misclick: nothing
+  // physically prevents the player from dropping the stage 1 pair on
+  // empty cells away from the highlighted line, which is a legal but
+  // non-clearing placement. Without this check we'd happily advance
+  // to stage 2 without the player ever seeing a clear — defeating
+  // the entire point of stage 1. `streak === 0` means the last
+  // placement didn't clear, so we silently restage and let them try
+  // again.
+  useEffect(() => {
+    if (tutorialStage === 0) return
+    if (game.hand.length > 0) return
+    if (clearingCells.length > 0) return
+    if (tutorialStage === 1) {
+      if (game.streak === 0) {
+        const handle = window.setTimeout(() => {
+          setGame(createTutorialStage1State())
+        }, 480)
+        return () => window.clearTimeout(handle)
+      }
+      // Small breath after the line clears before the asterisk board
+      // crossfades in, so the satisfaction of stage 1 has a chance to
+      // register.
+      const handle = window.setTimeout(() => {
+        setGame(createTutorialStage2State())
+        setTutorialStage(2)
+      }, 380)
+      return () => window.clearTimeout(handle)
+    }
+    if (tutorialStage === 2) {
+      if (game.streak === 0) {
+        const handle = window.setTimeout(() => {
+          setGame(createTutorialStage2State())
+        }, 480)
+        return () => window.clearTimeout(handle)
+      }
+      // Stage 2 finished. Pop the brief "have fun" toast, then exit
+      // into a fresh endless run.
+      setTutorialToastVisible(true)
+      const handle = window.setTimeout(() => {
+        exitTutorial()
+      }, 1400)
+      return () => window.clearTimeout(handle)
+    }
+  }, [
+    tutorialStage,
+    game.hand.length,
+    game.streak,
+    clearingCells.length,
+    exitTutorial,
+  ])
+
   // Start (or replay) the daily puzzle for a specific calendar
   // day, dispatched from the history calendar modal. Past-day
   // puzzles share the same seeded layout as the day they
@@ -4583,6 +5038,12 @@ function App() {
   useEffect(() => {
     if (game.moves === 0 && prevMovesRef.current > 0) {
       setRunStats(createEmptyRunStats())
+      // New run: clear the "best placement" snapshot too. We don't
+      // also clear modalHighlightSnapshot here on purpose — the
+      // gameover modal owns its own reset (cleared when the
+      // player dismisses the modal / starts a fresh game from it)
+      // so the reel survives if a new run starts under the modal.
+      runHighlightRef.current = null
     }
     prevMovesRef.current = game.moves
   }, [game.moves])
@@ -4599,6 +5060,39 @@ function App() {
       if (isMultiplayer && mp.isSpectator) {
         prevGameOverRef.current = game.gameOver
         return
+      }
+      // Promote the live best-placement ref into modal state so
+      // the highlight reel can render in the gameover modal
+      // regardless of whether the player triggers a fresh run
+      // beneath the modal (which would clear the ref). Daily
+      // mode runs *don't* get a reel: the format is move-ranked,
+      // not score-ranked, so a "biggest single placement"
+      // framing doesn't fit.
+      if (game.mode !== 'daily' && runHighlightRef.current) {
+        setModalHighlightSnapshot(runHighlightRef.current)
+      } else {
+        setModalHighlightSnapshot(null)
+      }
+      // "Killing hand" credit per piece-variant: every variant
+      // still sitting in the hand or hold buffer at game-over
+      // earns one tick. Deduped inside `applyGameOverToPieceStats`
+      // so a hand of three identical variants only takes one
+      // credit. This is what powers the "Layla has ended N runs"
+      // flavor line on the Piecetiary detail sheet.
+      {
+        const remainingVariantIds: string[] = []
+        const collect = (piece: ActivePiece | null) => {
+          if (!piece) return
+          const variant = findPieceVariant(piece.shape.cells)
+          if (variant) remainingVariantIds.push(variant.id)
+        }
+        for (const piece of game.hand) collect(piece)
+        collect(game.hold)
+        if (remainingVariantIds.length > 0) {
+          setPieceStats((prev) =>
+            applyGameOverToPieceStats(prev, remainingVariantIds),
+          )
+        }
       }
       const finishedRun = runStatsRef.current
       // Co-op partners list = everyone in the room *except* us.
@@ -5171,6 +5665,67 @@ function App() {
     [hover, selectedPiece, game],
   )
 
+  // PvP territory-delta preview. PvP has a non-obvious rule: when a
+  // cube gets cleared, the *placer of that cube* receives the
+  // territory, not the player who triggered the clear. The chip
+  // surfaces that consequence in advance so players can see whose
+  // territory each cleared cell will become before they commit to
+  // the drop. Returns null in co-op / single-player and when the
+  // hover isn't a real clearing placement (so the chip doesn't
+  // flash on every empty hover).
+  //
+  // Self attribution: cells the player would place *and* clear in
+  // the same turn count as theirs (they placed them), matching the
+  // server-side resolution in convex/rooms.ts.
+  const previewTerritoryDelta = useMemo<{
+    entries: Array<{ playerId: string; count: number }>
+    total: number
+    unattributed: number
+  } | null>(() => {
+    if (!isMultiplayer) return null
+    if (mp.mode !== 'pvp') return null
+    if (!preview || !preview.valid) return null
+    if (preview.clearedIds.length === 0) return null
+    const selfId = mp.selfPlayer?.playerId ?? null
+    if (!selfId) return null
+    const placedSet = new Set(preview.targetIds)
+    const owners = mp.cellOwners
+    const tally = new Map<string, number>()
+    let unattributed = 0
+    for (const cellId of preview.clearedIds) {
+      // Cells the player is about to place this turn that also
+      // immediately clear count as their territory (the placer's
+      // own cube cleared).
+      const attributedTo = placedSet.has(cellId)
+        ? selfId
+        : owners[cellId] ?? null
+      if (attributedTo) {
+        tally.set(attributedTo, (tally.get(attributedTo) ?? 0) + 1)
+      } else {
+        unattributed += 1
+      }
+    }
+    if (tally.size === 0 && unattributed === 0) return null
+    // Sort: self first, then by descending count, then by playerId
+    // for a stable tiebreak so the chip text doesn't flicker.
+    const entries = Array.from(tally.entries())
+      .map(([playerId, count]) => ({ playerId, count }))
+      .sort((a, b) => {
+        if (a.playerId === selfId) return -1
+        if (b.playerId === selfId) return 1
+        if (b.count !== a.count) return b.count - a.count
+        return a.playerId.localeCompare(b.playerId)
+      })
+    const total = entries.reduce((sum, e) => sum + e.count, 0) + unattributed
+    return { entries, total, unattributed }
+  }, [
+    isMultiplayer,
+    mp.mode,
+    mp.cellOwners,
+    mp.selfPlayer,
+    preview,
+  ])
+
   // Per-partner ghost overlays: for each non-self player who's
   // currently hovering a piece, resolve their (pieceId, originCellId)
   // pair into the list of cells the piece footprint would occupy
@@ -5466,6 +6021,22 @@ function App() {
       // Best-effort persistence.
     }
   }, [reducedMotion])
+
+  // Same shape as reduced-motion: persist the colorblind toggle to
+  // localStorage so it survives reloads. CSS reads the
+  // `is-colorblind` class on the viewport root to switch on the
+  // non-color cues.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        'cubic-colorblind-support',
+        colorblindSupport ? 'true' : 'false',
+      )
+    } catch {
+      // Best-effort persistence.
+    }
+  }, [colorblindSupport])
 
   // Persist the ad-previews toggle alongside the other prefs.
   useEffect(() => {
@@ -5776,6 +6347,12 @@ function App() {
     // The room owns the source of truth in MP mode; mirroring it back to
     // localStorage would clobber the player's offline single-player save.
     if (isMultiplayer) return
+    // The first-launch tutorial isn't a "real" game state — persisting
+    // it would mean a mid-tutorial refresh resumes inside the canned
+    // board instead of re-triggering the guided opening cleanly. The
+    // completion flag is set once the tutorial actually ends, and the
+    // post-exit endless state is what we want persisted.
+    if (tutorialStage > 0) return
     try {
       const envelope: PersistedGameEnvelope = {
         version: 1,
@@ -5794,7 +6371,7 @@ function App() {
     if (game.mode === 'endless') setSavedEndlessGame(game)
     else if (game.mode === 'daily') setSavedDailyGame(game)
     else if (game.mode === 'big') setSavedBigGame(game)
-  }, [game, isMultiplayer])
+  }, [game, isMultiplayer, tutorialStage])
 
   const handleSaveHighScore = () => {
     if (pendingScore === null) return
@@ -6496,6 +7073,8 @@ function App() {
         'cubic-viewport',
         hitstop ? 'hitstop' : '',
         reducedMotion ? 'reduced-motion' : '',
+        colorblindSupport ? 'is-colorblind' : '',
+        tutorialStage > 0 ? 'is-tutorial-active' : '',
         ...octaveClasses,
       ]
         .filter(Boolean)
@@ -6727,6 +7306,7 @@ function App() {
                   selfPlayer={smileyRowSelfPlayer}
                   otherPlayers={smileyRowOtherPlayers}
                   activeEmoteByPlayerId={activeEmoteByPlayerId}
+                  spectatorCount={mp.spectatorCount ?? 0}
                   onSend={(emoji) => {
                     playUiClick()
                     mp.sendEmote(emoji).catch(() => {
@@ -6874,6 +7454,7 @@ function App() {
                 selfPlayer={smileyRowSelfPlayer}
                 otherPlayers={smileyRowOtherPlayers}
                 activeEmoteByPlayerId={activeEmoteByPlayerId}
+                spectatorCount={mp.spectatorCount ?? 0}
                 onSend={(emoji) => {
                   playUiClick()
                   mp.sendEmote(emoji).catch(() => {})
@@ -7086,6 +7667,82 @@ function App() {
           }}
           ref={boardWrapperRef}
         >
+          {previewTerritoryDelta && (() => {
+            // PvP territory-delta chip. Floats above the board near
+            // the top edge so it doesn't overlap the placement ghost
+            // (which the player needs unobstructed). Sorted self-first
+            // by the memo upstream. Hidden in co-op / SP.
+            const selfId = mp.selfPlayer?.playerId ?? null
+            const nameByPlayerId = new Map<string, string>()
+            for (const p of mp.allPlayers) {
+              nameByPlayerId.set(p.playerId, p.name)
+            }
+            const colorFor = (pid: string): string => {
+              const hue = mp.hueShiftByPlayerId[pid] ?? 0
+              if (theme === 'win98') {
+                return pid === selfId
+                  ? W98_SELF_FILL_HEX
+                  : tintCubeColor(W98_PARTNER_FILL_HEX, hue, 0, 1)
+              }
+              return tintCubeColor(WOOD_CUBE_LEFT_HEX, hue, 0.05, 0.95)
+            }
+            return (
+              <div
+                className="hexaclear-pvp-delta-chip"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="hexaclear-pvp-delta-chip-label">
+                  Territory if cleared
+                </span>
+                <span className="hexaclear-pvp-delta-chip-row">
+                  {previewTerritoryDelta.entries.map((entry, idx) => {
+                    const isSelf = entry.playerId === selfId
+                    const name = isSelf
+                      ? 'You'
+                      : nameByPlayerId.get(entry.playerId) ?? 'Player'
+                    return (
+                      <span
+                        key={entry.playerId}
+                        className={[
+                          'hexaclear-pvp-delta-entry',
+                          isSelf ? 'is-self' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {idx > 0 && (
+                          <span className="hexaclear-pvp-delta-sep">·</span>
+                        )}
+                        <span
+                          className="hexaclear-pvp-delta-swatch"
+                          style={{ background: colorFor(entry.playerId) }}
+                          aria-hidden="true"
+                        />
+                        <span className="hexaclear-pvp-delta-name">
+                          {name}
+                        </span>
+                        <span className="hexaclear-pvp-delta-amount">
+                          +{entry.count}
+                        </span>
+                      </span>
+                    )
+                  })}
+                  {previewTerritoryDelta.unattributed > 0 && (
+                    <span className="hexaclear-pvp-delta-entry is-unattributed">
+                      <span className="hexaclear-pvp-delta-sep">·</span>
+                      <span className="hexaclear-pvp-delta-name">
+                        Neutral
+                      </span>
+                      <span className="hexaclear-pvp-delta-amount">
+                        +{previewTerritoryDelta.unattributed}
+                      </span>
+                    </span>
+                  )}
+                </span>
+              </div>
+            )
+          })()}
           {adPreviews && (
             // Landscape companion ad: rotated 90° and pinned to the
             // right edge of the board wrapper so its visual height
@@ -7439,6 +8096,24 @@ function App() {
                           +10
                         </text>
                       )}
+                    {/* Colorblind-mode ruby glyph. Always rendered
+                        on ruby cells (cheap — one text element per
+                        ruby) and hidden via CSS unless the
+                        viewport carries `.is-colorblind`. Gives the
+                        ruby a non-color identity (a small diamond)
+                        on top of its existing pink/red palette so
+                        a player with red-green confusion can still
+                        find it at a glance. */}
+                    {isGolden && isFilled && !isClearing && (
+                      <text
+                        x={cx}
+                        y={cy + HEX_SIZE * 0.18}
+                        className="hexaclear-ruby-glyph"
+                        aria-hidden="true"
+                      >
+                        ◆
+                      </text>
+                    )}
                     {/* PvP conflict ring: a filled cube sits on a
                         cell whose persistent tint belongs to another
                         player. Render a colored outline over the
@@ -7761,6 +8436,39 @@ function App() {
                 })}
               </g>
             ))}
+            {/* First-launch tutorial: pulse a soft ring on the target
+                cell(s) for the current stage so the player's eye lands
+                on the intended drop without any explicit "drop here"
+                arrow. Lives inside the board SVG so it scales with
+                the cells; pointer-events disabled so it never
+                interferes with drags. */}
+            {tutorialStage > 0 && (() => {
+              const targetIds: string[] =
+                tutorialStage === 1
+                  ? [...TUTORIAL_STAGE_1_TARGET_CELL_IDS]
+                  : [TUTORIAL_STAGE_2_TARGET_CELL_ID]
+              return (
+                <g
+                  className="hexaclear-tutorial-pulse-layer"
+                  aria-hidden="true"
+                  pointerEvents="none"
+                >
+                  {targetIds.map((id) => {
+                    const pos = boardLayout.positions[id]
+                    if (!pos) return null
+                    return (
+                      <circle
+                        key={id}
+                        cx={pos.x + boardLayout.offsetX}
+                        cy={pos.y + boardLayout.offsetY}
+                        r={HEX_SIZE * 0.92}
+                        className="hexaclear-tutorial-pulse"
+                      />
+                    )
+                  })}
+                </g>
+              )
+            })()}
           </svg>
           {boardClearFlashToken > 0 && (
             <div
@@ -7768,6 +8476,48 @@ function App() {
               className="hexaclear-board-clear-flash"
               aria-hidden="true"
             />
+          )}
+          {tutorialStage > 0 && (
+            <div
+              className={[
+                'hexaclear-tutorial-overlay',
+                `is-stage-${tutorialStage}`,
+                tutorialToastVisible ? 'is-toast-visible' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-live="polite"
+            >
+              {/* Stage-specific prompts. Stage 1 teaches "fill a
+                  line to clear it"; stage 2 teaches that combos
+                  multiply each clear's value, so the same single
+                  placement is worth a lot more when several
+                  patterns pop at once. */}
+              {tutorialStage === 1 && !tutorialToastVisible && (
+                <div className="hexaclear-tutorial-prompt">
+                  Drag the cube to fill the line.
+                </div>
+              )}
+              {tutorialStage === 2 && !tutorialToastVisible && (
+                <div className="hexaclear-tutorial-prompt">
+                  The more clears you get in a single placement, the
+                  more points each clear is worth!
+                </div>
+              )}
+              {tutorialToastVisible && (
+                <div className="hexaclear-tutorial-toast" role="status">
+                  That&apos;s it. Have fun.
+                </div>
+              )}
+              <button
+                type="button"
+                className="hexaclear-tutorial-skip"
+                onClick={skipTutorial}
+                aria-label="Skip tutorial"
+              >
+                Skip
+              </button>
+            </div>
           )}
           <div className="hexaclear-board-hud">
             {isMultiplayer && mp.mode === 'pvp' ? (
@@ -8097,6 +8847,10 @@ function App() {
                     {game.score}
                   </div>
                 </div>
+
+                {modalHighlightSnapshot && (
+                  <HighlightReel snapshot={modalHighlightSnapshot} />
+                )}
 
                 {renderRunStatsSection()}
 
@@ -8649,6 +9403,10 @@ function App() {
                   >
                     Undo last move
                   </button>
+                )}
+
+                {modalHighlightSnapshot && (
+                  <HighlightReel snapshot={modalHighlightSnapshot} />
                 )}
 
                 {renderRunStatsSection()}
@@ -9791,6 +10549,17 @@ function App() {
                     <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
                       <input
                         type="checkbox"
+                        checked={colorblindSupport}
+                        onChange={(e) => {
+                          setColorblindSupport(e.target.checked)
+                          playUiClick()
+                        }}
+                      />
+                      <span>Colorblind support</span>
+                    </label>
+                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
+                      <input
+                        type="checkbox"
                         checked={adPreviews}
                         onChange={(e) => {
                           setAdPreviews(e.target.checked)
@@ -10107,33 +10876,61 @@ function App() {
                 {scoringTab === 'pieces' ? (
                   <div className="hexaclear-piecetiary">
                     <div className="hexaclear-piecetiary-grid">
-                      {ALL_PIECE_VARIANTS.map((variant) => (
-                        <div
-                          key={variant.id}
-                          className="hexaclear-piecetiary-cell"
-                          data-piece-size={variant.size}
-                        >
-                          <div className="hexaclear-piecetiary-preview">
-                            <PiecePreview
-                              shape={{
-                                id: variant.id,
-                                cells: variant.cells,
-                                size: variant.size,
-                              }}
-                              mode="hand"
-                            />
-                          </div>
-                          <div className="hexaclear-piecetiary-notation">
-                            {variant.notation}
-                          </div>
-                          {PIECE_VARIANT_NAMES[variant.id] && (
-                            <div className="hexaclear-piecetiary-name">
-                              &ldquo;{PIECE_VARIANT_NAMES[variant.id]}
-                              &rdquo;
+                      {ALL_PIECE_VARIANTS.map((variant) => {
+                        // Tiles double as "show me my history with
+                        // this piece" buttons. Tile chrome stays
+                        // visually identical to the read-only
+                        // version; we just route the click into
+                        // the detail-sheet modal.
+                        const tileStats = getPieceStats(
+                          pieceStats,
+                          variant.id,
+                        )
+                        const hasHistory =
+                          tileStats.timesPlayed > 0 ||
+                          tileStats.killingHands > 0
+                        return (
+                          <button
+                            key={variant.id}
+                            type="button"
+                            className={[
+                              'hexaclear-piecetiary-cell',
+                              hasHistory ? 'has-history' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            data-piece-size={variant.size}
+                            onClick={() => {
+                              playUiClick()
+                              setSelectedPieceVariant(variant)
+                            }}
+                            aria-label={`Open piece details for ${
+                              PIECE_VARIANT_NAMES[variant.id] ??
+                              variant.notation
+                            }`}
+                          >
+                            <div className="hexaclear-piecetiary-preview">
+                              <PiecePreview
+                                shape={{
+                                  id: variant.id,
+                                  cells: variant.cells,
+                                  size: variant.size,
+                                }}
+                                mode="hand"
+                              />
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            <div className="hexaclear-piecetiary-notation">
+                              {variant.notation}
+                            </div>
+                            {PIECE_VARIANT_NAMES[variant.id] && (
+                              <div className="hexaclear-piecetiary-name">
+                                &ldquo;{PIECE_VARIANT_NAMES[variant.id]}
+                                &rdquo;
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 ) : game.mode === 'daily' ? (
@@ -10295,6 +11092,174 @@ function App() {
               </div>
             </div>
           )}
+          {devReelOpen && modalHighlightSnapshot && (
+            <div
+              className="hexaclear-popover-overlay"
+              onClick={(e) => {
+                if (e.target !== e.currentTarget) return
+                setDevReelOpen(false)
+              }}
+            >
+              <div className="hexaclear-overlay-card hexaclear-piece-detail-card">
+                <div className="hexaclear-piece-detail-nickname">
+                  Highlight reel preview (dev)
+                </div>
+                <HighlightReel snapshot={modalHighlightSnapshot} />
+                <div className="hexaclear-piece-detail-actions">
+                  <button
+                    type="button"
+                    className="hexaclear-menu-link"
+                    onClick={() => setDevReelOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {selectedPieceVariant && (() => {
+            // Piecetiary detail sheet. Opens when the player taps a
+            // tile inside the "How to Play › Piecetiary" tab. Shows
+            // the variant's mini-preview + notation + nickname, a
+            // 1-2 line playful flavor blurb derived from this
+            // device's history with the piece, and a compact stat
+            // table. Click-outside / Close button dismisses.
+            const variant = selectedPieceVariant
+            const stats: PieceVariantStats = getPieceStats(
+              pieceStats,
+              variant.id,
+            )
+            const nickname =
+              PIECE_VARIANT_NAMES[variant.id] ?? variant.notation
+            const flavorLines = buildFlavorLines(variant, stats)
+            const hasAny =
+              stats.timesPlayed > 0 || stats.killingHands > 0
+            // Stat rows are only surfaced when there's data behind
+            // them — the empty piece detail card just shows "no
+            // history yet" copy without a giant zero grid. Keeps
+            // the modal honest about retrospection (it's not goals).
+            const statRows: Array<{ label: string; value: string }> = []
+            if (hasAny) {
+              statRows.push({
+                label: 'Times played',
+                value: String(stats.timesPlayed),
+              })
+              if (stats.clearsCaused > 0) {
+                statRows.push({
+                  label: 'Placements that cleared',
+                  value: String(stats.clearsCaused),
+                })
+              }
+              if (stats.combosJoined > 0) {
+                statRows.push({
+                  label: 'Multi-clears',
+                  value: String(stats.combosJoined),
+                })
+              }
+              if (stats.timesPlayed > 0) {
+                statRows.push({
+                  label: 'Avg score per play',
+                  value: String(averagePoints(stats)),
+                })
+              }
+              if (stats.bestClear > 0) {
+                statRows.push({
+                  label: 'Best clear',
+                  value: `+${stats.bestClear}`,
+                })
+              }
+              if (stats.rubiesCaptured > 0) {
+                statRows.push({
+                  label: 'Rubies captured',
+                  value: String(stats.rubiesCaptured),
+                })
+              }
+              if (stats.boardClears > 0) {
+                statRows.push({
+                  label: 'Board clears',
+                  value: String(stats.boardClears),
+                })
+              }
+              if (stats.killingHands > 0) {
+                statRows.push({
+                  label: 'Killing hands',
+                  value: String(stats.killingHands),
+                })
+              }
+            }
+            return (
+              <div
+                className="hexaclear-popover-overlay"
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  playUiClick()
+                  setSelectedPieceVariant(null)
+                }}
+              >
+                <div className="hexaclear-overlay-card hexaclear-piece-detail-card">
+                  <div className="hexaclear-piece-detail-head">
+                    <div className="hexaclear-piece-detail-preview">
+                      <PiecePreview
+                        shape={{
+                          id: variant.id,
+                          cells: variant.cells,
+                          size: variant.size,
+                        }}
+                        mode="hand"
+                      />
+                    </div>
+                    <div className="hexaclear-piece-detail-id">
+                      <div className="hexaclear-piece-detail-nickname">
+                        &ldquo;{nickname}&rdquo;
+                      </div>
+                      <div className="hexaclear-piece-detail-notation">
+                        {variant.notation} ·{' '}
+                        {variant.size === 1
+                          ? '1 cube'
+                          : `${variant.size} cubes`}
+                      </div>
+                    </div>
+                  </div>
+                  {flavorLines.length > 0 && (
+                    <ul className="hexaclear-piece-detail-flavor">
+                      {flavorLines.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {statRows.length > 0 ? (
+                    <dl className="hexaclear-piece-detail-stats">
+                      {statRows.map((row) => (
+                        <div
+                          key={row.label}
+                          className="hexaclear-piece-detail-stat"
+                        >
+                          <dt>{row.label}</dt>
+                          <dd>{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <div className="hexaclear-piece-detail-empty">
+                      You and {nickname} haven't crossed paths yet.
+                    </div>
+                  )}
+                  <div className="hexaclear-piece-detail-actions">
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link"
+                      onClick={() => {
+                        playUiClick()
+                        setSelectedPieceVariant(null)
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           {showStats && (() => {
             // Profile stats modal. Pulls all values from the cached
             // `lifetimeStats` (which is itself the localStorage

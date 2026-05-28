@@ -109,6 +109,22 @@ const hoverValidator = v.object({
   ts: v.number(),
 })
 
+// Per-rotation Piecetiary counters. Mirrors the client-side
+// `PieceVariantStats` shape exactly. Stored as an optional record
+// on the lifetime stats payload so existing accountStats rows
+// (predating piece stats sync) keep validating untouched until a
+// fresh client folds the field in.
+export const pieceVariantStatsValidator = v.object({
+  timesPlayed: v.number(),
+  clearsCaused: v.number(),
+  combosJoined: v.number(),
+  boardClears: v.number(),
+  rubiesCaptured: v.number(),
+  totalPointsGained: v.number(),
+  bestClear: v.number(),
+  killingHands: v.number(),
+})
+
 export const lifetimeStatsValidator = v.object({
   startedTrackingAt: v.number(),
   totalActivePlayMs: v.number(),
@@ -146,6 +162,11 @@ export const lifetimeStatsValidator = v.object({
   // Optional so older accountStats rows keep validating; missing
   // entries are merged with a per-key min.
   dailyBestMovesByDate: v.optional(v.record(v.string(), v.number())),
+  // Per-rotation Piecetiary stats, keyed by stable variant id
+  // (e.g. "1x1x1"). Optional so existing accountStats rows keep
+  // validating; missing entries are treated as a zeroed record
+  // and merged additively in `mergeMyStats`.
+  pieceStats: v.optional(v.record(v.string(), pieceVariantStatsValidator)),
 })
 
 export default defineSchema({

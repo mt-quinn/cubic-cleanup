@@ -248,6 +248,28 @@ const buildVariants = (): PieceVariant[] => {
 
 export const ALL_PIECE_VARIANTS: PieceVariant[] = buildVariants()
 
+// Reverse lookup: normalized cell-set key -> the matching variant.
+// Built once at module load. Used by the per-piece stats layer so
+// runtime placements (which carry rotated, un-normalized cells) can
+// be attributed to the right Piecetiary entry without re-deriving
+// rotation by hand.
+const VARIANT_BY_NORMALIZED_KEY = new Map<string, PieceVariant>()
+for (const variant of ALL_PIECE_VARIANTS) {
+  VARIANT_BY_NORMALIZED_KEY.set(cellsKey(variant.cells), variant)
+}
+
+/**
+ * Resolve a piece (by its raw `cells` array, in whatever rotation it
+ * was dealt) to the matching `PieceVariant`. Returns `null` if no
+ * variant matches — caller should treat that as "untrackable" rather
+ * than throwing, so a future shape change doesn't crash the
+ * per-piece stats layer.
+ */
+export const findPieceVariant = (cells: Axial[]): PieceVariant | null => {
+  if (cells.length === 0) return null
+  return VARIANT_BY_NORMALIZED_KEY.get(cellsKey(normalize(cells))) ?? null
+}
+
 /**
  * Human nicknames for each rotation variant, indexed by variant id.
  *

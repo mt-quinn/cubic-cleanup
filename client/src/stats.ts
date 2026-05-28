@@ -5,6 +5,13 @@
 // do NOT backfill on first encounter so per-game averages aren't
 // skewed by historical runs we couldn't actually measure.
 
+import type { PieceStatsMap } from './pieceStats'
+import {
+  calculatePieceStatsSyncDelta,
+  loadPieceStats,
+  loadPieceStatsSyncBaseline,
+} from './pieceStats'
+
 export type GameModeId = 'endless' | 'daily' | 'big'
 
 export type RunStats = {
@@ -77,6 +84,13 @@ export type LifetimeStats = {
   // fresh device pulls in every cleared day's best — without this
   // the history calendar would only ever show local clears.
   dailyBestMovesByDate: Record<string, number>
+  // Per-variant Piecetiary counters. Local-first on read; on every
+  // account sync we attach a per-variant delta to the payload (see
+  // `calculateStatsSyncDelta`) so signing in on a new device
+  // pulls back the merged totals. Optional in the type because
+  // accounts created before this field shipped won't carry it on
+  // their first round-trip; treat `undefined` as `{}`.
+  pieceStats?: PieceStatsMap
 }
 
 export const STATS_KEY = 'cubic-stats-v1'
@@ -128,6 +142,7 @@ export const createEmptyLifetimeStats = (
   dailyDaysPlayed: [],
   coopPartnerIds: [],
   dailyBestMovesByDate: {},
+  pieceStats: {},
 })
 
 // Coerce a parsed JSON value into a sanitized
@@ -177,6 +192,11 @@ export const loadLifetimeStats = (): LifetimeStats => {
       dailyBestMovesByDate: sanitizeDailyBestMovesMap(
         parsed.dailyBestMovesByDate,
       ),
+      // Piece stats live in their own localStorage key
+      // (`cubic-piece-stats-v1`); we don't try to deserialize them
+      // out of the lifetime payload. Keep the field absent here so
+      // the sync-delta path is the only place this map gets
+      // attached to a LifetimeStats payload.
       // Cap the started-tracking-at to a sane value: if the stored
       // value is in the future or wildly old, fall back to "now" so
       // the profile modal doesn't show "tracking since 1970" or
@@ -335,9 +355,15 @@ const newDailyBestEntries = (
 // first sync there is no baseline, so the whole local profile is added; after
 // a successful merge, the returned server snapshot becomes the baseline and
 // future uploads contain only newly earned local totals.
+//
+// `pieceStatsDelta` is computed independently (caller provides it via the
+// piece-stats baseline) and stitched onto the returned payload. Kept as a
+// separate input rather than re-derived from `current.pieceStats` so the
+// hot sync path doesn't have to also juggle the piece-stats baseline.
 export const calculateStatsSyncDelta = (
   current: LifetimeStats,
   baseline: LifetimeStats | null,
+  pieceStatsDelta?: PieceStatsMap,
 ): LifetimeStats => {
   const base = baseline ?? createEmptyLifetimeStats(current.startedTrackingAt)
   return {
@@ -401,7 +427,19 @@ export const calculateStatsSyncDelta = (
       current.dailyBestMovesByDate,
       base.dailyBestMovesByDate,
     ),
+    pieceStats: pieceStatsDelta,
   }
+}
+
+// Convenience: build the piece-stats delta from local sources so
+// the App.tsx sync path stays a single call instead of duplicating
+// the load + diff dance across every sync site.
+export const buildPieceStatsDelta = (
+  accountId: string,
+): PieceStatsMap => {
+  const current = loadPieceStats()
+  const baseline = loadPieceStatsSyncBaseline(accountId)
+  return calculatePieceStatsSyncDelta(current, baseline)
 }
 
 export type ApplyPlacementToRunStatsArgs = {
