@@ -167,6 +167,11 @@ type HighlightReelProps = {
   // Empty string suppresses the caption entirely (useful if the
   // surrounding modal already labels the panel).
   caption?: string
+  // When false, hides the "Watch again" / "Download GIF" action row.
+  // Used by the multi-snapshot reel, which owns its own controls
+  // and would render a confusingly-redundant action row otherwise.
+  // Defaults to true (the standalone end-of-run modal needs them).
+  showActions?: boolean
 }
 
 // Per-cell clearing classes for a snapshot. The line-clear cascade
@@ -202,7 +207,11 @@ export const computeClearingClasses = (
   return out
 }
 
-export const HighlightReel = ({ snapshot, caption }: HighlightReelProps) => {
+export const HighlightReel = ({
+  snapshot,
+  caption,
+  showActions = true,
+}: HighlightReelProps) => {
   const layout = layoutForMode(snapshot.mode)
   const placedSet = new Set(snapshot.placedCellIds)
   const clearingSet = new Set(snapshot.clearedCellIds)
@@ -351,38 +360,104 @@ export const HighlightReel = ({ snapshot, caption }: HighlightReelProps) => {
             +{snapshot.pointsGained}
           </span>
         )}
+        {showActions && (
+          /* Action pills float in the reel's bottom-right corner so
+             they don't add a stacked row of vertical chrome to the
+             host modal. The replay button stays a simple icon; the
+             download button widens to surface progress text when
+             encoding so the player still gets feedback even with
+             the smaller footprint. */
+          <div className="hexaclear-reel-overlay-actions">
+            <button
+              type="button"
+              className="hexaclear-reel-replay"
+              onClick={replay}
+              aria-label="Watch best placement again"
+              title="Watch again"
+              disabled={isExportingGif}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                width="14"
+                height="14"
+              >
+                <path
+                  d="M20 8a8 8 0 1 0 1.9 7.4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M21 3v6h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={[
+                'hexaclear-reel-download',
+                gifProgress !== null ? 'is-progress' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={downloadGif}
+              aria-label="Download best placement as GIF"
+              title="Download GIF"
+              disabled={isExportingGif}
+            >
+              {gifProgress === null ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  width="14"
+                  height="14"
+                >
+                  <path
+                    d="M12 4v11"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M6 11l6 6 6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M5 20h14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                <span className="hexaclear-reel-overlay-progress">
+                  {gifProgress.label === 'recording'
+                    ? `${Math.round(gifProgress.ratio * 100)}%`
+                    : gifProgress.label === 'encoding'
+                      ? 'Saving…'
+                      : 'Saved'}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
-      {caption !== '' && (
-        <div className="hexaclear-reel-caption">
-          {caption ?? `Best clear · +${snapshot.pointsGained} points`}
-        </div>
+      {caption !== undefined && caption !== '' && (
+        <div className="hexaclear-reel-caption">{caption}</div>
       )}
-      <div className="hexaclear-reel-actions">
-        <button
-          type="button"
-          className="hexaclear-reel-replay"
-          onClick={replay}
-          aria-label="Watch best placement again"
-          disabled={isExportingGif}
-        >
-          Watch again
-        </button>
-        <button
-          type="button"
-          className="hexaclear-reel-download"
-          onClick={downloadGif}
-          aria-label="Download best placement as GIF"
-          disabled={isExportingGif}
-        >
-          {gifProgress?.label === 'recording'
-            ? `Recording… ${Math.round(gifProgress.ratio * 100)}%`
-            : gifProgress?.label === 'encoding'
-              ? 'Encoding…'
-              : gifProgress?.label === 'done'
-                ? 'Saved!'
-                : 'Download GIF'}
-        </button>
-      </div>
     </div>
   )
 }
@@ -403,3 +478,116 @@ export const HIGHLIGHT_REEL_DURATION_MS = PHASE_TOTAL_MS
 // monotonic max keeps the snapshot's bar rising.
 // eslint-disable-next-line react-refresh/only-export-components
 export const HIGHLIGHT_REEL_MIN_POINTS = 1
+
+// Cap on the rolling per-run move history kept for the pause-menu
+// "Export recent moves" tool. Tuned to comfortably exceed the
+// stepper's maximum (so we always have room to honour the player's
+// chosen N) without growing without bound during a long endless
+// session. Each entry is a RunHighlightSnapshot, a few hundred
+// bytes of cell ids + a board copy.
+// eslint-disable-next-line react-refresh/only-export-components
+export const RUN_HISTORY_MAX = 25
+
+// Stepper ceiling for the "Export recent moves as GIF" modal.
+// Picked to keep file size reasonable: at ~30fps × 1.35s/snapshot
+// × ~600px the 10-snapshot export tops out around 4–5MB before
+// the global-palette pass compresses it. Going higher inflates
+// the file faster than the visual payoff justifies.
+// eslint-disable-next-line react-refresh/only-export-components
+export const RUN_HISTORY_EXPORT_MAX = 10
+
+// Beat between consecutive snapshots in the multi-reel preview.
+// Short enough that the loop feels continuous, long enough to let
+// the cleared cells settle before the next placement starts
+// dropping in.
+const MULTI_REEL_GAP_MS = 220
+
+type MultiHighlightReelProps = {
+  // Ordered list of placements to replay, oldest → newest. The
+  // multi-reel cycles through them one at a time and loops back
+  // to the start when the last one finishes.
+  snapshots: RunHighlightSnapshot[]
+  // Render-only mode: drops the embedded "Download GIF" action
+  // and leaves it to the host modal to render its own download
+  // button (the host already has the snapshot list and the
+  // progress state, so duplicating the affordance here would be
+  // out of sync).
+  caption?: string
+}
+
+// Multi-placement preview. Wraps the single-snapshot
+// `<HighlightReel>` and advances `currentIndex` on a timer, using
+// a key change to remount the inner reel each cycle so its CSS
+// keyframes re-fire from the top. Loops indefinitely while
+// mounted — the host modal owns dismiss / count changes.
+export const MultiHighlightReel = ({
+  snapshots,
+  caption,
+}: MultiHighlightReelProps) => {
+  const [currentIndex, setCurrentIndex] = useState(0)
+
+  // Reset to the first snapshot whenever the list changes by
+  // *content* (e.g. the player ticks the stepper up/down in the
+  // export modal). We compare by content-derived signature, not
+  // by reference, because callers commonly compute the snapshot
+  // list inline (`history.slice(-N)`) — a new reference every
+  // render that has the same contents shouldn't restart the
+  // preview from the top.
+  const snapshotsSignature = `${snapshots.length}:${snapshots
+    .map((s) => `${s.placedCellIds.join('|')}:${s.pointsGained}`)
+    .join(',')}`
+  useEffect(() => {
+    setCurrentIndex(0)
+  }, [snapshotsSignature])
+
+  // Advance to the next snapshot after each cycle. Re-armed on
+  // every index change so the timing stays consistent even if the
+  // host pauses / re-mounts us. Depends on the signature, not the
+  // raw `snapshots` reference, for the same parent-recompute
+  // reason called out above — depending on the raw reference would
+  // cause every parent render to cancel and re-arm the timer,
+  // making the preview look frozen.
+  useEffect(() => {
+    if (snapshots.length <= 1) return
+    const id = window.setTimeout(() => {
+      setCurrentIndex((idx) => (idx + 1) % snapshots.length)
+    }, PHASE_TOTAL_MS + MULTI_REEL_GAP_MS)
+    return () => window.clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshotsSignature, currentIndex])
+
+  if (snapshots.length === 0) {
+    return (
+      <div className="hexaclear-reel hexaclear-multi-reel hexaclear-multi-reel-empty">
+        Play a few pieces first, then come back to export a clip.
+      </div>
+    )
+  }
+
+  // Index clamp: snapshots[] can shrink between renders if the
+  // host's stepper drops below the current index — fall back to
+  // the last available frame rather than crash with undefined.
+  const safeIndex = Math.min(currentIndex, snapshots.length - 1)
+  const current = snapshots[safeIndex]
+  const total = snapshots.length
+  const defaultCaption =
+    total === 1
+      ? `1 move · +${current.pointsGained}`
+      : `Move ${safeIndex + 1} of ${total} · +${current.pointsGained}`
+
+  return (
+    <div className="hexaclear-multi-reel">
+      <HighlightReel
+        // The key change is what remounts the inner reel so its
+        // phase machine fires cleanly for each snapshot. Without
+        // it the next snapshot would inherit the previous
+        // snapshot's `phase === 'cleared'` final state and skip
+        // the place-and-clear animation entirely.
+        key={`${safeIndex}-${total}`}
+        snapshot={current}
+        caption={caption ?? defaultCaption}
+        showActions={false}
+      />
+    </div>
+  )
+}

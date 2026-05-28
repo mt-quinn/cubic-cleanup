@@ -13,10 +13,7 @@
 // a player who signs in on a new device finds their accumulated
 // piece history waiting.
 
-import {
-  ALL_PIECE_VARIANTS,
-  PIECE_VARIANT_NAMES,
-} from './game/pieces'
+import { ALL_PIECE_VARIANTS } from './game/pieces'
 import type { PieceVariant } from './game/pieces'
 
 export type PieceVariantStats = {
@@ -30,7 +27,13 @@ export type PieceVariantStats = {
   boardClears: number
   /** Rubies cleared on placements of this variant. */
   rubiesCaptured: number
-  /** Sum of points gained across every placement of this variant. */
+  /**
+   * Sum of **clear bonus** points across every placement of this
+   * variant. NOT the full score contribution — the per-cube
+   * placement points (always `variant.size` per play) are derived
+   * at read time so old saves don't need a migration. See
+   * `averagePoints` for the conversion.
+   */
   totalPointsGained: number
   /** Single highest pointsGained on a placement of this variant. */
   bestClear: number
@@ -190,54 +193,19 @@ export const applyGameOverToPieceStats = (
   return next
 }
 
-export const averagePoints = (stats: PieceVariantStats): number => {
-  if (stats.timesPlayed === 0) return 0
-  return Math.round(stats.totalPointsGained / stats.timesPlayed)
-}
-
-// Playful retrospective copy lines. The caller picks one to surface
-// at the top of the detail sheet based on whichever stat is most
-// noteworthy. Never imply goals or "next milestone" energy.
-export const buildFlavorLines = (
-  variant: PieceVariant,
+// Average score per play, in real game-board points. Every
+// placement of an N-cube variant scores at least N (the placement
+// points awarded for putting cubes on the board), plus any clear
+// bonus. `totalPointsGained` only accumulates the clear bonus —
+// so we add `variant.size` here to surface the actual per-play
+// average without needing to backfill historical saves.
+export const averagePoints = (
   stats: PieceVariantStats,
-): string[] => {
-  const nickname = PIECE_VARIANT_NAMES[variant.id] ?? variant.notation
-  const lines: string[] = []
-  if (stats.timesPlayed === 0 && stats.killingHands === 0) {
-    lines.push(`No history with ${nickname} yet — say hi.`)
-    return lines
-  }
-  if (stats.killingHands > 0) {
-    lines.push(
-      stats.killingHands === 1
-        ? `${nickname} has ended 1 run.`
-        : `${nickname} has ended ${stats.killingHands} runs.`,
-    )
-  }
-  if (stats.bestClear > 0) {
-    lines.push(`${nickname}'s best clear: +${stats.bestClear}.`)
-  }
-  if (stats.rubiesCaptured > 0) {
-    lines.push(
-      stats.rubiesCaptured === 1
-        ? `${nickname} has captured 1 ruby.`
-        : `${nickname} has captured ${stats.rubiesCaptured} rubies.`,
-    )
-  }
-  if (stats.combosJoined >= 3) {
-    lines.push(
-      `${nickname} loves combos: ${stats.combosJoined} multi-clears.`,
-    )
-  }
-  if (stats.boardClears > 0) {
-    lines.push(
-      stats.boardClears === 1
-        ? `${nickname} cleared the board once.`
-        : `${nickname} cleared the board ${stats.boardClears} times.`,
-    )
-  }
-  return lines
+  variant: PieceVariant,
+): number => {
+  if (stats.timesPlayed === 0) return 0
+  const bonusAvg = stats.totalPointsGained / stats.timesPlayed
+  return Math.round(bonusAvg + variant.size)
 }
 
 // =============================================================

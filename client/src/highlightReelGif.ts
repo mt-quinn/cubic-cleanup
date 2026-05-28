@@ -129,17 +129,37 @@ export type CaptureGifArgs = {
   onProgress?: (progress: CaptureProgress) => void
 }
 
-// Filename: lowercase, snake-friendly, includes the points so a
-// folder of exports is easy to skim.
+export type CaptureMultiGifArgs = {
+  // Ordered list of placements to encode into a single GIF, oldest
+  // → newest. Mirrors the on-screen `<MultiHighlightReel>` preview.
+  // Every snapshot is rendered with the same canvas geometry, so
+  // they're expected to all share `mode` (true for any single-run
+  // export, which is the only thing this surface ships today).
+  snapshots: RunHighlightSnapshot[]
+  onProgress?: (progress: CaptureProgress) => void
+}
+
+// Single-snapshot filename: includes the points so a folder of
+// exports is easy to skim by score.
 const buildFilename = (snapshot: RunHighlightSnapshot): string => {
   const points = Math.max(0, Math.floor(snapshot.pointsGained))
-  const ts = new Date()
+  const ts = buildTimestamp()
+  return `cubekill-best-clear-${points}pts-${ts}.gif`
+}
+
+// Multi-snapshot filename: identifies the export as a recent-moves
+// clip by the snapshot count rather than a score.
+const buildMultiFilename = (snapshots: RunHighlightSnapshot[]): string => {
+  const ts = buildTimestamp()
+  return `cubekill-last-${snapshots.length}-moves-${ts}.gif`
+}
+
+const buildTimestamp = (): string =>
+  new Date()
     .toISOString()
     .slice(0, 19)
     .replace(/[:-]/g, '')
     .replace('T', '-')
-  return `cubekill-best-clear-${points}pts-${ts}.gif`
-}
 
 // Force-trigger a browser download for a Blob. The `<a>` element
 // is created on the fly and removed immediately — no DOM litter.
@@ -772,6 +792,185 @@ export const captureHighlightReelAsGif = async ({
   const bytes = gif.bytes()
   const blob = new Blob([bytes as unknown as BlobPart], { type: 'image/gif' })
   triggerDownload(blob, buildFilename(snapshot))
+  if (onProgress) {
+    onProgress({ ratio: 1, label: 'done' })
+  }
+}
+
+/**
+ * Render an ordered list of placements as a single animated GIF.
+ * Each snapshot plays its full place-and-clear timeline back to
+ * back; the last frame of each non-terminal snapshot is held for
+ * a short beat so the eye can catch the score before the next
+ * placement starts dropping in. The terminal snapshot's last
+ * frame gets the same tail-hold as the single-snapshot exporter
+ * so the GIF loop ends on a beat, not a snap.
+ *
+ * Shares all of the offscreen-canvas + global-palette machinery
+ * with `captureHighlightReelAsGif`; the only difference is the
+ * frame plan (per-snapshot timelines stitched together) and the
+ * filename. Resolves once the download is triggered (or rejects
+ * on a fatal encode error).
+ */
+export const captureMultiHighlightReelAsGif = async ({
+  snapshots,
+  onProgress,
+}: CaptureMultiGifArgs): Promise<void> => {
+  if (typeof window === 'undefined') {
+    throw new Error('GIF export is browser-only')
+  }
+  if (snapshots.length === 0) {
+    throw new Error('captureMultiHighlightReelAsGif called with no snapshots')
+  }
+  const gifenc = await import('gifenc')
+  const { GIFEncoder, quantize, applyPalette } = gifenc
+
+  if (typeof document !== 'undefined' && document.fonts?.load) {
+    try {
+      await document.fonts.load(`400 16px "Monoton"`)
+      await document.fonts.load(`400 32px "Monoton"`)
+      if (document.fonts.ready) {
+        await document.fonts.ready
+      }
+    } catch {
+      // Font failures shouldn't block — fallback is still readable.
+    }
+  }
+
+  // All snapshots in a single run share `mode`, so the canvas
+  // geometry is computed once. We also fall back to the first
+  // snapshot's mode if a caller ever passes a mixed list — better
+  // a slightly off rosette than a thrown error mid-export.
+  const layout = layoutForMode(snapshots[0].mode)
+  const pixelScale = (OUTPUT_HEIGHT - OUTPUT_PADDING * 2) / layout.height
+  const canvasWidth = Math.round(layout.width * pixelScale + OUTPUT_PADDING * 2)
+  const canvasHeight = OUTPUT_HEIGHT
+
+  const renderCanvas = document.createElement('canvas')
+  renderCanvas.width = canvasWidth * RENDER_SCALE
+  renderCanvas.height = canvasHeight * RENDER_SCALE
+  const renderCtx = renderCanvas.getContext('2d')
+  if (!renderCtx) {
+    throw new Error('Could not acquire render 2D context')
+  }
+  renderCtx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = canvasWidth
+  canvas.height = canvasHeight
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) {
+    throw new Error('Could not acquire 2D context')
+  }
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  // Build one RenderContext per snapshot so the per-frame render
+  // loop just indexes in.
+  const contexts: RenderContext[] = snapshots.map((s) => ({
+    snapshot: s,
+    layout,
+    clearingClasses: computeClearingClasses(s),
+    placedSet: new Set(s.placedCellIds),
+    clearingSet: new Set(s.clearedCellIds),
+    pixelScale,
+    canvasWidth,
+    canvasHeight,
+  }))
+
+  // Frame plan. Rather than duplicate "hold" frames between
+  // snapshots (which would inflate the GIF), we render exactly
+  // one frame per timestep and let the GIF `delay` field hold
+  // the last frame of each segment for an extended beat.
+  const tailHoldMs = 700
+  const interSnapshotGapMs = 220
+  const baseDelayMs = Math.round(FRAME_INTERVAL_MS)
+  const framesPerSnapshot = Math.ceil(PHASE_TOTAL_MS / FRAME_INTERVAL_MS)
+  type FramePlan = { sIdx: number; localT: number; delayMs: number }
+  const plan: FramePlan[] = []
+  for (let s = 0; s < snapshots.length; s++) {
+    for (let f = 0; f < framesPerSnapshot; f++) {
+      const isLastFrameOfSnapshot = f === framesPerSnapshot - 1
+      const isLastSnapshot = s === snapshots.length - 1
+      const delayMs = isLastFrameOfSnapshot
+        ? isLastSnapshot
+          ? tailHoldMs
+          : interSnapshotGapMs
+        : baseDelayMs
+      plan.push({
+        sIdx: s,
+        localT: Math.min(PHASE_TOTAL_MS, f * FRAME_INTERVAL_MS),
+        delayMs,
+      })
+    }
+  }
+
+  const rawFrames: Uint8ClampedArray[] = []
+  for (let i = 0; i < plan.length; i++) {
+    const { sIdx, localT } = plan[i]
+    renderFrame(renderCtx, contexts[sIdx], localT)
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight)
+    ctx.drawImage(
+      renderCanvas,
+      0,
+      0,
+      renderCanvas.width,
+      renderCanvas.height,
+      0,
+      0,
+      canvasWidth,
+      canvasHeight,
+    )
+    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight)
+    rawFrames.push(new Uint8ClampedArray(imageData.data))
+    if (onProgress) {
+      onProgress({
+        ratio: (i + 1) / plan.length * 0.5,
+        label: 'recording',
+      })
+    }
+    if (i % 6 === 5) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+
+  if (onProgress) {
+    onProgress({ ratio: 0.55, label: 'encoding' })
+  }
+
+  const bytesPerFrame = canvasWidth * canvasHeight * 4
+  const combined = new Uint8ClampedArray(bytesPerFrame * rawFrames.length)
+  for (let i = 0; i < rawFrames.length; i++) {
+    combined.set(rawFrames[i], i * bytesPerFrame)
+  }
+  const globalPalette = quantize(combined, MAX_PALETTE_COLORS, {
+    format: 'rgba4444',
+  })
+
+  const gif = GIFEncoder()
+  for (let i = 0; i < rawFrames.length; i++) {
+    const indexed = applyPalette(rawFrames[i], globalPalette, 'rgba4444')
+    gif.writeFrame(indexed, canvasWidth, canvasHeight, {
+      palette: i === 0 ? globalPalette : undefined,
+      first: i === 0,
+      delay: plan[i].delayMs,
+      transparent: false,
+    })
+    if (onProgress) {
+      onProgress({
+        ratio: 0.55 + (i + 1) / rawFrames.length * 0.42,
+        label: 'encoding',
+      })
+    }
+    if (i % 6 === 5) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+
+  gif.finish()
+  const bytes = gif.bytes()
+  const blob = new Blob([bytes as unknown as BlobPart], { type: 'image/gif' })
+  triggerDownload(blob, buildMultiFilename(snapshots))
   if (onProgress) {
     onProgress({ ratio: 1, label: 'done' })
   }

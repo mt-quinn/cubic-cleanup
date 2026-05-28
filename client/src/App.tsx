@@ -45,7 +45,6 @@ import {
   applyGameOverToPieceStats,
   applyPlacementToPieceStats,
   averagePoints,
-  buildFlavorLines,
   getPieceStats,
   loadPieceStats,
   savePieceStats,
@@ -95,8 +94,13 @@ import {
   createHighlightSnapshot,
   HighlightReel,
   HIGHLIGHT_REEL_MIN_POINTS,
+  MultiHighlightReel,
+  RUN_HISTORY_MAX,
+  RUN_HISTORY_EXPORT_MAX,
 } from './highlightReel'
 import type { RunHighlightSnapshot } from './highlightReel'
+import { captureMultiHighlightReelAsGif } from './highlightReelGif'
+import type { CaptureProgress } from './highlightReelGif'
 import {
   buildRoomShareUrl,
   readRoomFromUrl,
@@ -2057,6 +2061,210 @@ function App() {
     })
     setDevReelOpen(true)
   }, [])
+  // Dev-only preview for the gameover modal itself. `?devGameOver=1`
+  // forces game.gameOver=true on mount with a score in the high-
+  // score range and a synthetic best-placement snapshot wired into
+  // the highlight reel, so the full endless modal (reel + recap +
+  // leaderboard + save input + sticky CTA) is testable without
+  // playing a real run to completion. Optional `&devLb=many` seeds
+  // mock local high scores so the Top-3 / Show-all toggle has data
+  // to expand into.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('devGameOver') !== '1') return
+    // Seed mock piece-stats for Bea (1x1x1) so the Piecetiary
+    // detail view has a populated 2-column stat grid to inspect.
+    // Touches a single variant id so the rest of the grid stays
+    // in its honest "haven't played me yet" empty state.
+    if (params.get('devPieceStats') === 'bea') {
+      const seeded: PieceStatsMap = {
+        'shape-1-0-r0': {
+          timesPlayed: 142,
+          clearsCaused: 38,
+          combosJoined: 12,
+          boardClears: 2,
+          rubiesCaptured: 7,
+          totalPointsGained: 4870,
+          bestClear: 320,
+          killingHands: 6,
+        },
+      }
+      try {
+        window.localStorage.setItem(
+          'cubic-piece-stats-v1',
+          JSON.stringify(seeded),
+        )
+      } catch {
+        // Best-effort seeding.
+      }
+      // localStorage seeding alone isn't enough — pieceStats has
+      // already initialized from storage on mount, so push the
+      // seed into React state too.
+      setPieceStats(seeded)
+    }
+    // Seed mock local high scores so the compact-vs-expanded
+    // leaderboard toggle has rows to surface. The new run's
+    // score is set below so it falls mid-pack and the player's
+    // pinned row exercises the "outside top 3" path.
+    if (params.get('devLb') === 'many') {
+      try {
+        const seedNames = [
+          'Mira',
+          'Kai',
+          'Juno',
+          'Vex',
+          'Lio',
+          'Sol',
+          'Rae',
+          'Pip',
+          'Ash',
+          'Eli',
+        ]
+        const seed = seedNames.map((name, i) => ({
+          name,
+          score: 8000 - i * 350,
+          date: Date.now() - (i + 1) * 24 * 60 * 60 * 1000,
+        }))
+        window.localStorage.setItem('cubic-highscores', JSON.stringify(seed))
+      } catch {
+        // Best-effort seeding; if storage is unavailable the
+        // modal just renders against whatever the page already
+        // has, which is fine for an ad-hoc dev preview.
+      }
+    }
+    const boardDef = getBoardDefinitionForMode('endless')
+    const lineCells = ['-4,0', '-3,0', '-2,0', '-1,0', '0,0', '1,0', '2,0', '3,0', '4,0']
+    const validLineCellIds = lineCells.filter((id) =>
+      boardDef.cells.some((c) => c.id === id),
+    )
+    const placedCellId = validLineCellIds[Math.floor(validLineCellIds.length / 2)]
+    const boardBefore = boardDef.cells.reduce<Record<string, 'empty' | 'filled'>>(
+      (acc, cell) => {
+        acc[cell.id] = 'empty'
+        return acc
+      },
+      {},
+    )
+    for (const cellId of validLineCellIds) {
+      if (cellId === placedCellId) continue
+      boardBefore[cellId] = 'filled'
+    }
+    const linePattern = boardDef.patterns.find(
+      (p) =>
+        p.type === 'line' &&
+        validLineCellIds.every((id) => p.cellIds.includes(id)),
+    )
+    if (linePattern) {
+      const snapshot: RunHighlightSnapshot = {
+        mode: 'endless',
+        boardBefore,
+        placedCellIds: [placedCellId!],
+        clearedCellIds: linePattern.cellIds,
+        clearedPatterns: [
+          { type: linePattern.type, cellIds: [...linePattern.cellIds] },
+        ],
+        pointsGained: 480,
+        causedBoardClear: false,
+      }
+      // Seed both the live ref AND the modal-state snapshot. The
+      // real gameOver transition effect promotes the ref into
+      // modal state, so populating the ref keeps the production
+      // code path happy; explicitly setting the modal snapshot
+      // belt-and-suspenders ensures the reel renders even if any
+      // intermediate effect clobbers the ref back to null first.
+      runHighlightRef.current = snapshot
+      setModalHighlightSnapshot(snapshot)
+    }
+    setGame((current) => ({
+      ...current,
+      mode: 'endless',
+      score: 4250,
+      gameOver: true,
+    }))
+    // Re-assert the modal snapshot after a tick so we win against
+    // the gameover-transition effect that runs on the next commit
+    // and would otherwise reset modalHighlightSnapshot back to
+    // whatever runHighlightRef.current was at THAT moment (which
+    // can be null in StrictMode's double-effect run).
+    window.setTimeout(() => {
+      if (!linePattern) return
+      setModalHighlightSnapshot({
+        mode: 'endless',
+        boardBefore,
+        placedCellIds: [placedCellId!],
+        clearedCellIds: linePattern.cellIds,
+        clearedPatterns: [
+          { type: linePattern.type, cellIds: [...linePattern.cellIds] },
+        ],
+        pointsGained: 480,
+        causedBoardClear: false,
+      })
+    }, 200)
+  }, [])
+  // Dev-only preview for the "Export recent moves as GIF" modal.
+  // `?devExportGif=N` (defaulting to 5) seeds `runHistoryRef` with
+  // N synthetic line-clear placements that share a contiguous
+  // boardBefore→boardAfter chain, then opens the modal so the
+  // multi-snapshot preview + encoder can be tested without playing
+  // a full session up to the desired move count.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const raw = params.get('devExportGif')
+    if (raw === null) return
+    const count = Math.max(1, Math.min(RUN_HISTORY_EXPORT_MAX, Number(raw) || 5))
+    const boardDef = getBoardDefinitionForMode('endless')
+    // Same "fill r=0 minus one slot, drop the singlet, clear the
+    // line" recipe as the devReel mock, but repeated N times with
+    // each placement targeting a different gap. The boardBefore
+    // for snapshot i+1 equals the boardAfter for snapshot i — both
+    // are "every cell on r=0 empty" since the line clears each
+    // time — so the preview transitions cleanly between moves.
+    const lineCells = ['-4,0', '-3,0', '-2,0', '-1,0', '0,0', '1,0', '2,0', '3,0', '4,0']
+    const validLineCellIds = lineCells.filter((id) =>
+      boardDef.cells.some((c) => c.id === id),
+    )
+    if (validLineCellIds.length === 0) return
+    const linePattern = boardDef.patterns.find(
+      (p) =>
+        p.type === 'line' &&
+        validLineCellIds.every((id) => p.cellIds.includes(id)),
+    )
+    if (!linePattern) return
+    const snapshots: RunHighlightSnapshot[] = []
+    for (let i = 0; i < count; i++) {
+      const placedIdx = i % validLineCellIds.length
+      const placedCellId = validLineCellIds[placedIdx]
+      const boardBefore = boardDef.cells.reduce<
+        Record<string, 'empty' | 'filled'>
+      >((acc, cell) => {
+        acc[cell.id] = 'empty'
+        return acc
+      }, {})
+      for (const cellId of validLineCellIds) {
+        if (cellId === placedCellId) continue
+        boardBefore[cellId] = 'filled'
+      }
+      snapshots.push({
+        mode: 'endless',
+        boardBefore,
+        placedCellIds: [placedCellId],
+        clearedCellIds: linePattern.cellIds,
+        clearedPatterns: [
+          { type: linePattern.type, cellIds: [...linePattern.cellIds] },
+        ],
+        pointsGained: 240 + i * 30,
+        causedBoardClear: false,
+      })
+    }
+    runHistoryRef.current = snapshots
+    setExportGifCount(Math.min(count, RUN_HISTORY_EXPORT_MAX))
+    setExportGifProgress(null)
+    setShowExportGif(true)
+  }, [])
   // All board-shape data (cell positions, layout dimensions, rosette
   // boundaries, etc.) is precomputed once per mode at module load and
   // re-pointed at when the active mode changes. Everything below uses
@@ -2234,6 +2442,13 @@ function App() {
   const runHighlightRef = useRef<RunHighlightSnapshot | null>(null)
   const [modalHighlightSnapshot, setModalHighlightSnapshot] =
     useState<RunHighlightSnapshot | null>(null)
+  // Rolling history of recent solo placements as RunHighlightSnapshots,
+  // used by the pause menu's "Export recent moves" tool. Kept in a
+  // ref (not React state) so we can append from inside the placement
+  // reducer's hot path without triggering re-renders on every move.
+  // Capped at RUN_HISTORY_MAX so an idle game can't grow this list
+  // without bound; older entries are shifted off the front.
+  const runHistoryRef = useRef<RunHighlightSnapshot[]>([])
   // Lifetime profile stats. Loaded from localStorage on mount;
   // overwritten on each gameover via foldRunIntoLifetime.
   const [lifetimeStats, setLifetimeStats] = useState<LifetimeStats>(() =>
@@ -2485,6 +2700,15 @@ function App() {
   const [gameoverEndlessGlobalPage, setGameoverEndlessGlobalPage] = useState(0)
   const [gameoverDailyGlobalPage, setGameoverDailyGlobalPage] = useState(0)
   const [gameoverCoopGlobalPage, setGameoverCoopGlobalPage] = useState(0)
+  // Gameover-modal leaderboards default to a compact top-3 view
+  // (with the player's row pinned underneath if they fall outside
+  // the top 3). The "Show all" toggle expands to the full paginated
+  // leaderboard. The state is shared between endless and daily
+  // because only one gameover modal is on screen at a time; it
+  // resets on every new run via resetGame / createDailyGameState
+  // so the next modal always opens collapsed.
+  const [gameoverLeaderboardExpanded, setGameoverLeaderboardExpanded] =
+    useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   // Open the menu on load. The first gesture the player makes is
   // dismissing the menu, which gives us a clean moment to prime the
@@ -2499,6 +2723,15 @@ function App() {
   // hooks) and the cold-start "I don't even know what mode I'm in
   // until I dismiss this" friction is gone.
   const [showMenu, setShowMenu] = useState(false)
+  // "Export recent moves as GIF" modal. Opens from the pause menu.
+  // `exportGifCount` is the stepper value (1..available, capped at
+  // RUN_HISTORY_EXPORT_MAX). `exportGifProgress` mirrors the
+  // single-snapshot exporter's progress reporting so the button
+  // can show recording / encoding / done states.
+  const [showExportGif, setShowExportGif] = useState(false)
+  const [exportGifCount, setExportGifCount] = useState(1)
+  const [exportGifProgress, setExportGifProgress] =
+    useState<CaptureProgress | null>(null)
   const [volume, setVolumeState] = useState<number>(() => getMasterVolume())
   const [audioMuted, setAudioMutedState] = useState<boolean>(() => getMuted())
   // True iff the player is unmuted AND the AudioContext is missing,
@@ -2628,15 +2861,6 @@ function App() {
     const id = window.setTimeout(() => setTierPulseActive(false), duration)
     return () => window.clearTimeout(id)
   }, [tierPulseActive, tierPulseToken, tierPulseVariant])
-  // Joke "ad previews" preview-mode. When on, a parody banner-ad
-  // image gets stamped between the header chrome and the board so we
-  // can mock up what a freemium / monetized build of Cubekill might
-  // look like. Off by default; persisted under cubic-ad-previews so
-  // the player's choice survives reloads.
-  const [adPreviews, setAdPreviews] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return window.localStorage.getItem('cubic-ad-previews') === 'true'
-  })
   // Theme engine: which visual theme is active. Wood is the original
   // warm cream/gold treatment; win98 is the Windows 98 / Minesweeper
   // homage. Stored as a flat string so we can add more themes later
@@ -3988,6 +4212,30 @@ function App() {
         })
       }
 
+      // Rolling history of every solo placement, used by the
+      // pause-menu "Export recent moves as GIF" tool. Snapshots are
+      // captured unconditionally here (unlike the best-of-run
+      // snapshot above, which gates on pointsGained / clears) so
+      // the player can export a sequence that includes setup
+      // moves, not just clears. The ring buffer is capped to
+      // RUN_HISTORY_MAX entries and reset on new run below.
+      {
+        const moveSnapshot = createHighlightSnapshot({
+          mode: current.mode,
+          boardBefore: before.board,
+          placedCellIds: result.placedCellIds,
+          clearedCellIds: result.clearedCellIds,
+          clearedPatterns: result.clearedPatterns,
+          pointsGained: result.pointsGained,
+          causedBoardClear: result.boardCleared,
+        })
+        const history = runHistoryRef.current
+        history.push(moveSnapshot)
+        if (history.length > RUN_HISTORY_MAX) {
+          history.splice(0, history.length - RUN_HISTORY_MAX)
+        }
+      }
+
       // Per-piece-variant stats. Attribute this placement to the
       // rotation variant the piece was dealt in — that's the unit
       // the Piecetiary surfaces, and it matches the nickname the
@@ -5044,6 +5292,10 @@ function App() {
       // player dismisses the modal / starts a fresh game from it)
       // so the reel survives if a new run starts under the modal.
       runHighlightRef.current = null
+      // Same for the move-history ring buffer that backs the
+      // pause-menu export tool — the new run starts with a fresh
+      // (empty) history; only this run's moves are exportable.
+      runHistoryRef.current = []
     }
     prevMovesRef.current = game.moves
   }, [game.moves])
@@ -5259,6 +5511,14 @@ function App() {
     setGameoverEndlessPage(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.gameOver, game.mode, highScoreSaved, lastSavedHighScoreDate])
+
+  // Always re-collapse the gameover leaderboard when the modal is
+  // closed (game.gameOver flips back to false on retry / new run).
+  // This way the next gameover modal opens to its compact top-3
+  // default, even if the player had previously expanded it.
+  useEffect(() => {
+    if (!game.gameOver) setGameoverLeaderboardExpanded(false)
+  }, [game.gameOver])
 
   // Snap each gameover GLOBAL leaderboard to the page containing the
   // player's row whenever the global query first resolves (or the
@@ -6037,19 +6297,6 @@ function App() {
       // Best-effort persistence.
     }
   }, [colorblindSupport])
-
-  // Persist the ad-previews toggle alongside the other prefs.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(
-        'cubic-ad-previews',
-        adPreviews ? 'true' : 'false',
-      )
-    } catch {
-      // Best-effort persistence.
-    }
-  }, [adPreviews])
 
   // Apply the active theme to <html data-theme="..."> and persist it.
   // Every theme override in CSS is scoped under that selector so
@@ -6934,13 +7181,24 @@ function App() {
   // Per-run summary card. Rendered on every gameover modal under
   // the score/save section. Hidden when the run has zero placements
   // (e.g. instant abandon) since "0 pieces / 0s" is just noise.
-  // Renders as a tight recap strip (baseline stats) plus a short
-  // achievement ribbon (moments worth celebrating). This keeps the
-  // modal compact while making actual accomplishments feel authored
-  // instead of just another box in a grid.
+  //
+  // History: this used to be a labeled section ("THIS RUN") with a
+  // baseline strip on top and a separate moments ribbon underneath.
+  // That stacked layout was a major contributor to the gameover
+  // modal blowing past short-phone viewports. We've since merged
+  // baseline + moments into a single horizontal ribbon and dropped
+  // the section label — the modal context (FINAL SCORE header
+  // above, leaderboard below) already tells the player what they
+  // are looking at, and an extra header just steals vertical space.
+  //
+  // Note: we intentionally drop "Best clear" from the moments here.
+  // The highlight reel directly above the recap is literally a
+  // moving picture of that exact placement (with the +N overlay);
+  // duplicating it as a static chip below felt like saying the
+  // same thing twice.
   const renderRunStatsSection = () => {
     if (runStats.piecesPlaced === 0) return null
-    const baselineStats: StatDatum[] = [
+    const ribbon: StatDatum[] = [
       {
         key: 'time',
         label: 'Time',
@@ -6962,17 +7220,16 @@ function App() {
     // "0 rubies" stat there — it just reads as a missing feature
     // rather than a meaningful zero.
     if (game.mode !== 'daily') {
-      baselineStats.push({
+      ribbon.push({
         key: 'rubies',
         label: 'Rubies',
         value: String(runStats.rubiesCleared),
       })
     }
-    const moments: StatDatum[] = []
     if (runStats.boardClears > 0) {
-      moments.push({
+      ribbon.push({
         key: 'boards',
-        label: 'Board clears',
+        label: 'Boards',
         value: String(runStats.boardClears),
       })
     }
@@ -6983,51 +7240,32 @@ function App() {
     // ribbon only surfaces things that actually matter for that mode.
     const showScoreMoments = game.mode !== 'daily'
     if (showScoreMoments && runStats.bestCombo >= 2) {
-      moments.push({
+      ribbon.push({
         key: 'combo',
         label: 'Combo',
         value: `×${runStats.bestCombo}`,
       })
     }
     if (runStats.bestStreak > 0) {
-      moments.push({
+      ribbon.push({
         key: 'streak',
         label: 'Streak',
         value: String(runStats.bestStreak),
       })
     }
-    if (showScoreMoments && runStats.topPlacementPoints > 0) {
-      moments.push({
-        key: 'top',
-        label: 'Best clear',
-        value: `+${runStats.topPlacementPoints}`,
-      })
-    }
     return (
-      <div className="hexaclear-gameover-section hexaclear-run-recap">
-        <div className="hexaclear-gameover-section-label">This run</div>
+      <div
+        className="hexaclear-gameover-section hexaclear-run-recap"
+        aria-label="Run summary"
+      >
         <div className="hexaclear-run-strip">
-          {baselineStats.map((stat) => (
+          {ribbon.map((stat) => (
             <div key={stat.key} className="hexaclear-run-stat">
               <span className="hexaclear-run-stat-value">{stat.value}</span>
               <span className="hexaclear-run-stat-label">{stat.label}</span>
             </div>
           ))}
         </div>
-        {moments.length > 0 && (
-          <div className="hexaclear-run-moments" aria-label="Run highlights">
-            {moments.map((moment) => (
-              <span key={moment.key} className="hexaclear-run-moment">
-                <span className="hexaclear-run-moment-value">
-                  {moment.value}
-                </span>
-                <span className="hexaclear-run-moment-label">
-                  {moment.label}
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
       </div>
     )
   }
@@ -7470,14 +7708,6 @@ function App() {
         )
       })()}
 
-      {adPreviews && (
-        <img
-          className="hexaclear-banner-ad"
-          src="/banner_ad.png"
-          alt="Sponsored banner ad preview"
-        />
-      )}
-
       <main className="hexaclear-main">
         {/* "You are spectating" banner. Surfaces when the viewer
             joined a PvP room after the first move and got parked on
@@ -7743,24 +7973,6 @@ function App() {
               </div>
             )
           })()}
-          {adPreviews && (
-            // Landscape companion ad: rotated 90° and pinned to the
-            // right edge of the board wrapper so its visual height
-            // tracks the board exactly, with a small gap. The CSS
-            // hides this in portrait and reveals it once the
-            // viewport has room to spare horizontally.
-            <div
-              className="hexaclear-banner-ad-side-frame"
-              aria-hidden="true"
-            >
-              <img
-                className="hexaclear-banner-ad-side"
-                src="/banner_ad.png"
-                alt=""
-                draggable={false}
-              />
-            </div>
-          )}
           <svg
             className="hexaclear-board"
             ref={svgRef}
@@ -8854,70 +9066,23 @@ function App() {
 
                 {renderRunStatsSection()}
 
-                {pendingHighScore && (
-                  <div className="hexaclear-gameover-section hexaclear-gameover-save-section">
-                    <div className="hexaclear-gameover-section-label">
-                      {(() => {
-                        // We only submit to the global board when the
-                        // run also dethrones the device's local #1
-                        // (per the gating in handleSaveHighScore). So
-                        // a top-30-but-not-top-1 run is "local only"
-                        // — surface that explicitly so the player
-                        // knows they're not displacing anything on
-                        // the global board with this save.
-                        const currentTop = highScores[0]?.score ?? -Infinity
-                        const wouldBeNewBest =
-                          pendingScore !== null && pendingScore > currentTop
-                        if (wouldBeNewBest) return 'New high score'
-                        const localRank =
-                          pendingScore === null
-                            ? null
-                            : highScores.filter(
-                                (entry) => entry.score >= pendingScore,
-                              ).length + 1
-                        return localRank === null
-                          ? 'New local high score'
-                          : `New local high score (#${localRank})`
-                      })()}
-                    </div>
-                    <div className="hexaclear-gameover-input-row">
-                      <input
-                        className="hexaclear-input"
-                        value={playerName}
-                        onChange={(e) => setPlayerName(e.target.value)}
-                        placeholder="Your name"
-                      />
-                      <button
-                        type="button"
-                        className="hexaclear-gameover-save-button"
-                        onClick={() => {
-                          playUiClick()
-                          handleSaveHighScore()
-                        }}
-                      >
-                        Save score
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {(() => {
-                  // Endless gameover leaderboard. Default-on the
-                  // global view if the player has it toggled in the
-                  // pause-menu high scores panel; the inline checkbox
-                  // here flips back and forth without leaving the
-                  // modal. The "you" highlight tracks the player's
-                  // best entry in whichever view is showing — for
-                  // global that's their playerId row (one-per-player
-                  // by construction), for local it's the just-saved
-                  // run.
+                  // Endless gameover leaderboard. Defaults to a
+                  // compact top-3 view to keep the modal short on
+                  // phones; the "Show all" toggle expands to the
+                  // full paginated list. The save-score input is
+                  // integrated into the section header below the
+                  // global toggle so the modal carries one fewer
+                  // stacked section. The "you" highlight tracks the
+                  // player's best entry in whichever view is
+                  // showing — for global that's their playerId row
+                  // (one-per-player by construction), for local
+                  // it's the just-saved run.
                   //
-                  // Local list paginates `GAMEOVER_LEADERBOARD_PAGE_SIZE`
-                  // rows per page (up to the top-30 cap) and defaults
-                  // to whichever page contains the just-saved row.
-                  // Global stays at the same per-page count with a
-                  // "Your rank" footnote when the player's row falls
-                  // below it.
+                  // When expanded, the list paginates
+                  // `GAMEOVER_LEADERBOARD_PAGE_SIZE` rows at a time
+                  // (up to the top-30 cap) and defaults to whichever
+                  // page contains the just-saved row.
                   const localTop = highScores
                     .slice()
                     .sort((a, b) => b.score - a.score || a.date - b.date)
@@ -8925,6 +9090,7 @@ function App() {
                     showGlobalLeaderboard && globalEndlessScores === undefined
                   const globalTop = (globalEndlessScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
+                  const expanded = gameoverLeaderboardExpanded
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
                   )
@@ -8934,12 +9100,20 @@ function App() {
                     playerGlobalIndex === -1
                       ? null
                       : globalTop[playerGlobalIndex]
-                  // Local pagination math. The page index is held by
-                  // `gameoverEndlessPage` and seeded by the snap
-                  // effect so the player's row is on screen by
-                  // default. Clamp here in case the list shrank
-                  // (e.g. a reset) out from under whatever page we
-                  // were sitting on.
+                  // Local "you" identification: the just-saved row
+                  // matched by saveDate (when the player saved this
+                  // run). If they haven't saved this run yet, we
+                  // can't pin a specific row — pinned-you only
+                  // applies once they've committed.
+                  const playerLocalIndex =
+                    highScoreSaved && lastSavedHighScoreDate !== null
+                      ? localTop.findIndex(
+                          (e) => e.date === lastSavedHighScoreDate,
+                        )
+                      : -1
+                  const playerLocalRank =
+                    playerLocalIndex === -1 ? null : playerLocalIndex + 1
+                  // Pagination math (only used when expanded).
                   const localPageCount = Math.max(
                     1,
                     Math.ceil(
@@ -8956,10 +9130,6 @@ function App() {
                     localPageStart,
                     localPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE,
                   )
-                  // Global pagination math. Same shape as local —
-                  // `gameoverEndlessGlobalPage` is seeded by its own
-                  // snap effect so the modal opens framed on the
-                  // player's row when they're on the global board.
                   const globalPageCount = Math.max(
                     1,
                     Math.ceil(
@@ -8980,13 +9150,211 @@ function App() {
                     playerGlobalIndex >= globalPageStart &&
                     playerGlobalIndex <
                       globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE
+                  // Hide the entire section when there's nothing to
+                  // show AND nothing to save. If the player has a
+                  // pending high score we keep the section so the
+                  // save input has a home (it lives in this
+                  // section's header now).
                   if (
                     !usingGlobal &&
                     localTop.length === 0 &&
-                    !globalLoading
+                    !globalLoading &&
+                    !pendingHighScore
                   ) {
                     return null
                   }
+                  // Save-input subsection — appears at the top of
+                  // the leaderboard section (right under the title +
+                  // global toggle) whenever there's a pending save.
+                  // Used to be a standalone section above the
+                  // leaderboard; merging here saves one stacked
+                  // chrome row of "label + padding".
+                  const saveSubsection = pendingHighScore ? (
+                    <div className="hexaclear-gameover-save-inline">
+                      <div className="hexaclear-gameover-save-inline-label">
+                        {(() => {
+                          // Global submission only fires when the
+                          // run also dethrones the device's local
+                          // #1 (per the gating in
+                          // handleSaveHighScore). Surface a "local
+                          // only" hint for top-30-but-not-#1 runs
+                          // so the player knows their save isn't
+                          // hitting the global board.
+                          const currentTop = highScores[0]?.score ?? -Infinity
+                          const wouldBeNewBest =
+                            pendingScore !== null && pendingScore > currentTop
+                          if (wouldBeNewBest) return 'New high score'
+                          const localRank =
+                            pendingScore === null
+                              ? null
+                              : highScores.filter(
+                                  (entry) => entry.score >= pendingScore,
+                                ).length + 1
+                          return localRank === null
+                            ? 'New local high score'
+                            : `New local high score (#${localRank})`
+                        })()}
+                      </div>
+                      <div className="hexaclear-gameover-input-row">
+                        <input
+                          className="hexaclear-input"
+                          value={playerName}
+                          onChange={(e) => setPlayerName(e.target.value)}
+                          placeholder="Your name"
+                        />
+                        <button
+                          type="button"
+                          className="hexaclear-gameover-save-button"
+                          onClick={() => {
+                            playUiClick()
+                            handleSaveHighScore()
+                          }}
+                        >
+                          Save score
+                        </button>
+                      </div>
+                    </div>
+                  ) : null
+                  // Compact body: top-3 rows + optional pinned "you"
+                  // row when the player is outside top 3. The pin
+                  // gets a visual divider above it so it reads as
+                  // separated from the top-3 cluster.
+                  const renderCompactList = (
+                    rows: Array<{
+                      key: string
+                      rank: number
+                      name: string
+                      value: string
+                      isYou: boolean
+                    }>,
+                    playerRank: number | null,
+                    playerRow: {
+                      key: string
+                      name: string
+                      value: string
+                    } | null,
+                  ) => {
+                    if (rows.length === 0) {
+                      return (
+                        <p className="hexaclear-scores-empty">
+                          {usingGlobal
+                            ? 'No global scores yet — be the first.'
+                            : highScoreSaved
+                              ? 'Saved!'
+                              : 'No saved scores yet.'}
+                        </p>
+                      )
+                    }
+                    const showPin =
+                      playerRank !== null && playerRow !== null && playerRank > 3
+                    return (
+                      <ol className="hexaclear-scores-list">
+                        {rows.map((row) => {
+                          const chipClass = [
+                            'hexaclear-rank-chip',
+                            row.rank === 1
+                              ? 'hexaclear-chip-trophy'
+                              : row.rank <= 3
+                                ? 'hexaclear-chip-gold'
+                                : 'hexaclear-chip-neutral',
+                          ].join(' ')
+                          return (
+                            <li
+                              key={row.key}
+                              className={[
+                                'hexaclear-scores-row',
+                                row.isYou ? 'recent' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                            >
+                              <span className={chipClass}>{row.rank}</span>
+                              <span className="hexaclear-scores-name">
+                                {row.name}
+                                {row.isYou && usingGlobal ? ' (you)' : ''}
+                              </span>
+                              <span className="hexaclear-scores-value">
+                                {row.value}
+                              </span>
+                            </li>
+                          )
+                        })}
+                        {showPin && (
+                          <li
+                            key={`pin-${playerRow.key}`}
+                            className="hexaclear-scores-row recent hexaclear-scores-row-pinned"
+                            aria-label={`Your row: rank ${playerRank}`}
+                          >
+                            <span className="hexaclear-rank-chip hexaclear-chip-neutral">
+                              {playerRank}
+                            </span>
+                            <span className="hexaclear-scores-name">
+                              {playerRow.name}
+                              {usingGlobal ? ' (you)' : ''}
+                            </span>
+                            <span className="hexaclear-scores-value">
+                              {playerRow.value}
+                            </span>
+                          </li>
+                        )}
+                      </ol>
+                    )
+                  }
+                  // Pre-shaped row arrays for the compact renderer so
+                  // local/global share a single render path.
+                  const localCompactRows = localTop.slice(0, 3).map(
+                    (entry, idx) => ({
+                      key: `${entry.date}-${entry.name}-${idx}`,
+                      rank: idx + 1,
+                      name: entry.name,
+                      value: String(entry.score),
+                      isYou:
+                        highScoreSaved &&
+                        lastSavedHighScoreDate !== null &&
+                        entry.date === lastSavedHighScoreDate,
+                    }),
+                  )
+                  const localPlayerRow =
+                    playerLocalIndex >= 0
+                      ? {
+                          key: `local-you-${localTop[playerLocalIndex].date}`,
+                          name: localTop[playerLocalIndex].name,
+                          value: String(localTop[playerLocalIndex].score),
+                        }
+                      : null
+                  const globalCompactRows = globalTop.slice(0, 3).map(
+                    (entry, idx) => ({
+                      key: `${entry.savedAt}-${entry.playerId}-${idx}`,
+                      rank: idx + 1,
+                      name: entry.name,
+                      value: String(entry.score),
+                      isYou: entry.playerId === playerId,
+                    }),
+                  )
+                  const globalPlayerRow =
+                    playerGlobalEntry !== null
+                      ? {
+                          key: `global-you-${playerGlobalEntry.playerId}`,
+                          name: playerGlobalEntry.name,
+                          value: String(playerGlobalEntry.score),
+                        }
+                      : null
+                  // "Show all (N)" / "Show fewer" toggle. Only render
+                  // when there are more rows than the compact view
+                  // surfaces; if the leaderboard is already <= 3
+                  // entries (plus a pinned-you), expanding wouldn't
+                  // reveal anything new.
+                  const visibleCount = usingGlobal
+                    ? globalTop.length
+                    : localTop.length
+                  const compactSurfaceCount =
+                    Math.min(3, visibleCount) +
+                    ((usingGlobal ? playerGlobalRank : playerLocalRank) !==
+                      null &&
+                    (usingGlobal ? playerGlobalRank : playerLocalRank)! > 3
+                      ? 1
+                      : 0)
+                  const canExpand = visibleCount > compactSurfaceCount
                   return (
                     <div className="hexaclear-gameover-section">
                       <div className="hexaclear-gameover-section-header">
@@ -9005,109 +9373,130 @@ function App() {
                           <span>Global</span>
                         </label>
                       </div>
+                      {saveSubsection}
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">
                           Loading global scores…
                         </p>
                       ) : usingGlobal ? (
-                        <>
-                          {globalVisible.length === 0 ? (
-                            <p className="hexaclear-scores-empty">
-                              No global scores yet — be the first.
-                            </p>
-                          ) : (
-                            <ol className="hexaclear-scores-list">
-                              {globalVisible.map((entry, idx) => {
-                                const rank = globalPageStart + idx + 1
-                                const isYou = entry.playerId === playerId
-                                const chipClass = [
-                                  'hexaclear-rank-chip',
-                                  rank === 1
-                                    ? 'hexaclear-chip-trophy'
-                                    : rank <= 3
-                                      ? 'hexaclear-chip-gold'
-                                      : 'hexaclear-chip-neutral',
-                                ].join(' ')
-                                return (
-                                  <li
-                                    key={entry.savedAt + entry.playerId + idx}
-                                    className={[
-                                      'hexaclear-scores-row',
-                                      isYou ? 'recent' : '',
-                                    ]
-                                      .filter(Boolean)
-                                      .join(' ')}
-                                  >
-                                    <span className={chipClass}>{rank}</span>
-                                    <span className="hexaclear-scores-name">
-                                      {entry.name}
-                                      {isYou ? ' (you)' : ''}
-                                    </span>
-                                    <span className="hexaclear-scores-value">
-                                      {entry.score}
-                                    </span>
-                                  </li>
-                                )
-                              })}
-                            </ol>
-                          )}
-                          {globalPageCount > 1 && (
-                            <div className="hexaclear-scores-pagination">
-                              <button
-                                type="button"
-                                className="hexaclear-scores-page-step"
-                                aria-label="Previous page"
-                                onClick={() => {
-                                  playUiClick()
-                                  setGameoverEndlessGlobalPage((p) =>
-                                    Math.max(0, p - 1),
+                        expanded ? (
+                          <>
+                            {globalVisible.length === 0 ? (
+                              <p className="hexaclear-scores-empty">
+                                No global scores yet — be the first.
+                              </p>
+                            ) : (
+                              <ol className="hexaclear-scores-list">
+                                {globalVisible.map((entry, idx) => {
+                                  const rank = globalPageStart + idx + 1
+                                  const isYou = entry.playerId === playerId
+                                  const chipClass = [
+                                    'hexaclear-rank-chip',
+                                    rank === 1
+                                      ? 'hexaclear-chip-trophy'
+                                      : rank <= 3
+                                        ? 'hexaclear-chip-gold'
+                                        : 'hexaclear-chip-neutral',
+                                  ].join(' ')
+                                  return (
+                                    <li
+                                      key={
+                                        entry.savedAt +
+                                        entry.playerId +
+                                        idx
+                                      }
+                                      className={[
+                                        'hexaclear-scores-row',
+                                        isYou ? 'recent' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    >
+                                      <span className={chipClass}>{rank}</span>
+                                      <span className="hexaclear-scores-name">
+                                        {entry.name}
+                                        {isYou ? ' (you)' : ''}
+                                      </span>
+                                      <span className="hexaclear-scores-value">
+                                        {entry.score}
+                                      </span>
+                                    </li>
                                   )
-                                }}
-                                disabled={globalPageIndex === 0}
-                              >
-                                ‹
-                              </button>
-                              <span className="hexaclear-scores-page-label">
-                                {globalPageStart + 1}–
-                                {Math.min(
-                                  globalPageStart +
-                                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
-                                  globalTop.length,
-                                )}{' '}
-                                of {globalTop.length}
-                              </span>
-                              <button
-                                type="button"
-                                className="hexaclear-scores-page-step"
-                                aria-label="Next page"
-                                onClick={() => {
-                                  playUiClick()
-                                  setGameoverEndlessGlobalPage((p) =>
-                                    Math.min(globalPageCount - 1, p + 1),
-                                  )
-                                }}
-                                disabled={
-                                  globalPageIndex >= globalPageCount - 1
-                                }
-                              >
-                                ›
-                              </button>
-                            </div>
-                          )}
-                          {playerGlobalRank !== null && !globalShowsPlayer &&
-                            playerGlobalEntry && (
+                                })}
+                              </ol>
+                            )}
+                            {globalPageCount > 1 && (
+                              <div className="hexaclear-scores-pagination">
+                                <button
+                                  type="button"
+                                  className="hexaclear-scores-page-step"
+                                  aria-label="Previous page"
+                                  onClick={() => {
+                                    playUiClick()
+                                    setGameoverEndlessGlobalPage((p) =>
+                                      Math.max(0, p - 1),
+                                    )
+                                  }}
+                                  disabled={globalPageIndex === 0}
+                                >
+                                  ‹
+                                </button>
+                                <span className="hexaclear-scores-page-label">
+                                  {globalPageStart + 1}–
+                                  {Math.min(
+                                    globalPageStart +
+                                      GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                                    globalTop.length,
+                                  )}{' '}
+                                  of {globalTop.length}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="hexaclear-scores-page-step"
+                                  aria-label="Next page"
+                                  onClick={() => {
+                                    playUiClick()
+                                    setGameoverEndlessGlobalPage((p) =>
+                                      Math.min(globalPageCount - 1, p + 1),
+                                    )
+                                  }}
+                                  disabled={
+                                    globalPageIndex >= globalPageCount - 1
+                                  }
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            )}
+                            {playerGlobalRank !== null &&
+                              !globalShowsPlayer &&
+                              playerGlobalEntry && (
+                                <p className="hexaclear-scores-your-rank">
+                                  Your rank: #{playerGlobalRank} ·{' '}
+                                  {playerGlobalEntry.score}
+                                </p>
+                              )}
+                            {playerGlobalRank === null && highScoreSaved && (
                               <p className="hexaclear-scores-your-rank">
-                                Your rank: #{playerGlobalRank} ·{' '}
-                                {playerGlobalEntry.score}
+                                Not on the global board yet.
                               </p>
                             )}
-                          {playerGlobalRank === null && highScoreSaved && (
-                            <p className="hexaclear-scores-your-rank">
-                              Not on the global board yet.
-                            </p>
-                          )}
-                        </>
-                      ) : (
+                          </>
+                        ) : (
+                          <>
+                            {renderCompactList(
+                              globalCompactRows,
+                              playerGlobalRank,
+                              globalPlayerRow,
+                            )}
+                            {playerGlobalRank === null && highScoreSaved && (
+                              <p className="hexaclear-scores-your-rank">
+                                Not on the global board yet.
+                              </p>
+                            )}
+                          </>
+                        )
+                      ) : expanded ? (
                         <>
                           <ol className="hexaclear-scores-list">
                             {localWindow.map((entry, idx) => {
@@ -9189,42 +9578,65 @@ function App() {
                             </div>
                           )}
                         </>
+                      ) : (
+                        renderCompactList(
+                          localCompactRows,
+                          playerLocalRank,
+                          localPlayerRow,
+                        )
+                      )}
+                      {canExpand && (
+                        <button
+                          type="button"
+                          className="hexaclear-scores-expand-toggle"
+                          onClick={() => {
+                            playUiClick()
+                            setGameoverLeaderboardExpanded((v) => !v)
+                          }}
+                          aria-expanded={expanded}
+                        >
+                          {expanded
+                            ? 'Show fewer'
+                            : `Show all (${visibleCount})`}
+                        </button>
                       )}
                     </div>
                   )
                 })()}
 
-                {undoStack.length > 0 && !highScoreSaved && (
+                <div className="hexaclear-gameover-footer">
+                  {undoStack.length > 0 && !highScoreSaved && (
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link"
+                      onClick={() => {
+                        playUiClick()
+                        handleUndo()
+                      }}
+                    >
+                      Undo last move
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    className="hexaclear-menu-link"
+                    className="hexaclear-gameover-cta"
                     onClick={() => {
                       playUiClick()
-                      handleUndo()
+                      // Autosave the high score on dismiss so the
+                      // "Save score" button is just a confirm shortcut —
+                      // if the player walks away without clicking it
+                      // (or without typing a custom name) we still log
+                      // their run with whatever's in the field.
+                      if (pendingHighScore) {
+                        handleSaveHighScore()
+                      }
+                      resetGame()
                     }}
                   >
-                    Undo last move
+                    Play again
                   </button>
-                )}
-
-                <button
-                  type="button"
-                  className="hexaclear-gameover-cta"
-                  onClick={() => {
-                    playUiClick()
-                    // Autosave the high score on dismiss so the
-                    // "Save score" button is just a confirm shortcut —
-                    // if the player walks away without clicking it
-                    // (or without typing a custom name) we still log
-                    // their run with whatever's in the field.
-                    if (pendingHighScore) {
-                      handleSaveHighScore()
-                    }
-                    resetGame()
-                  }}
-                >
-                  Play again
-                </button>
+                </div>
               </div>
             </div>
           )}
@@ -9636,48 +10048,50 @@ function App() {
                   )
                 })()}
 
-                {isMultiplayer ? (
-                  <>
-                    {/* Keep the same room/partner — just rerack and
-                        play again. Either player can fire it; the
-                        server reset propagates to both clients.
-                        Spectators don't get a restart button — the
-                        match isn't theirs to restart. */}
-                    {!mp.isSpectator && (
+                <div className="hexaclear-gameover-footer">
+                  {isMultiplayer ? (
+                    <>
+                      {/* Keep the same room/partner — just rerack and
+                          play again. Either player can fire it; the
+                          server reset propagates to both clients.
+                          Spectators don't get a restart button — the
+                          match isn't theirs to restart. */}
+                      {!mp.isSpectator && (
+                        <button
+                          type="button"
+                          className="hexaclear-gameover-cta"
+                          onClick={() => {
+                            playUiClick()
+                            handleRestartCoop()
+                          }}
+                        >
+                          New game
+                        </button>
+                      )}
                       <button
                         type="button"
-                        className="hexaclear-gameover-cta"
+                        className="hexaclear-menu-link"
                         onClick={() => {
                           playUiClick()
-                          handleRestartCoop()
+                          handleLeaveRoom()
                         }}
                       >
-                        New game
+                        Back to single player
                       </button>
-                    )}
+                    </>
+                  ) : (
                     <button
                       type="button"
-                      className="hexaclear-menu-link"
+                      className="hexaclear-gameover-cta"
                       onClick={() => {
                         playUiClick()
-                        handleLeaveRoom()
+                        resetGame()
                       }}
                     >
-                      Back to single player
+                      Play again
                     </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="hexaclear-gameover-cta"
-                    onClick={() => {
-                      playUiClick()
-                      resetGame()
-                    }}
-                  >
-                    Play again
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -9750,52 +10164,25 @@ function App() {
 
                 {renderRunStatsSection()}
 
-                {pendingDailyHighScore && (
-                  <div className="hexaclear-gameover-section hexaclear-gameover-save-section">
-                    <div className="hexaclear-gameover-section-label">
-                      {game.dailyCompleted
-                        ? 'New daily best'
-                        : 'Log this attempt'}
-                    </div>
-                    <div className="hexaclear-gameover-input-row">
-                      <input
-                        className="hexaclear-input"
-                        value={playerName}
-                        onChange={(e) => setPlayerName(e.target.value)}
-                        placeholder="Your name"
-                      />
-                      <button
-                        type="button"
-                        className="hexaclear-gameover-save-button"
-                        onClick={() => {
-                          playUiClick()
-                          handleSaveDailyHighScore()
-                        }}
-                      >
-                        Save daily result
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {(() => {
-                  // Daily gameover leaderboard. Defaults to whichever
-                  // view the player last had open (the global toggle
-                  // is shared with the pause-menu high scores
-                  // panel). Daily ranks ascending by moves; we show
-                  // `GAMEOVER_LEADERBOARD_PAGE_SIZE` rows here to
-                  // keep the modal compact. The "you" highlight
-                  // tracks the player's local best for today
+                  // Daily gameover leaderboard. Defaults to a
+                  // compact top-3 view (with the player's own row
+                  // pinned beneath if they're outside the top 3)
+                  // so the modal stays short on phones; the "Show
+                  // all" toggle expands to the full paginated list.
+                  // The save-score input now lives inside the
+                  // section header instead of as a separate stacked
+                  // section above it. Daily ranks ascending by
+                  // moves (fewest = best); the "you" highlight
+                  // tracks the player's local best for the day
                   // (lastSavedDaily…) and, in the global view, the
                   // row whose playerId matches.
-                  const localVisible = todayPlayerDailyRuns.slice(
-                    0,
-                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
-                  )
+                  const localAll = todayPlayerDailyRuns
                   const globalLoading =
                     showGlobalLeaderboard && globalDailyScores === undefined
                   const globalTop = (globalDailyScores ?? []).slice()
                   const usingGlobal = showGlobalLeaderboard
+                  const expanded = gameoverLeaderboardExpanded
                   const playerGlobalIndex = globalTop.findIndex(
                     (e) => e.playerId === playerId,
                   )
@@ -9805,7 +10192,24 @@ function App() {
                     playerGlobalIndex === -1
                       ? null
                       : globalTop[playerGlobalIndex]
-                  // Daily global pagination — same shape as endless.
+                  // Local "you" identification: the just-saved daily
+                  // run matched by saveDate. If they haven't saved
+                  // this run yet, no pin is shown — pinned-you only
+                  // applies once the result is committed.
+                  const playerLocalIndex =
+                    dailyHighScoreSaved &&
+                    lastSavedDailyHighScoreDate !== null
+                      ? localAll.findIndex(
+                          (e) => e.date === lastSavedDailyHighScoreDate,
+                        )
+                      : -1
+                  const playerLocalRank =
+                    playerLocalIndex === -1 ? null : playerLocalIndex + 1
+                  // Pagination math (expanded view only).
+                  const localPageWindow = localAll.slice(
+                    0,
+                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                  )
                   const globalPageCount = Math.max(
                     1,
                     Math.ceil(
@@ -9828,11 +10232,170 @@ function App() {
                       globalPageStart + GAMEOVER_LEADERBOARD_PAGE_SIZE
                   if (
                     !usingGlobal &&
-                    localVisible.length === 0 &&
-                    !globalLoading
+                    localAll.length === 0 &&
+                    !globalLoading &&
+                    !pendingDailyHighScore
                   ) {
                     return null
                   }
+                  const formatDailyMoves = (n: number) =>
+                    `${n} ${n === 1 ? 'move' : 'moves'}`
+                  const saveSubsection = pendingDailyHighScore ? (
+                    <div className="hexaclear-gameover-save-inline">
+                      <div className="hexaclear-gameover-save-inline-label">
+                        {game.dailyCompleted
+                          ? 'New daily best'
+                          : 'Log this attempt'}
+                      </div>
+                      <div className="hexaclear-gameover-input-row">
+                        <input
+                          className="hexaclear-input"
+                          value={playerName}
+                          onChange={(e) => setPlayerName(e.target.value)}
+                          placeholder="Your name"
+                        />
+                        <button
+                          type="button"
+                          className="hexaclear-gameover-save-button"
+                          onClick={() => {
+                            playUiClick()
+                            handleSaveDailyHighScore()
+                          }}
+                        >
+                          Save daily result
+                        </button>
+                      </div>
+                    </div>
+                  ) : null
+                  const renderCompactList = (
+                    rows: Array<{
+                      key: string
+                      rank: number
+                      name: string
+                      value: string
+                      isYou: boolean
+                    }>,
+                    playerRank: number | null,
+                    playerRow: {
+                      key: string
+                      name: string
+                      value: string
+                    } | null,
+                  ) => {
+                    if (rows.length === 0) {
+                      return (
+                        <p className="hexaclear-scores-empty">
+                          {usingGlobal
+                            ? 'No global daily scores yet — be the first.'
+                            : 'No saved attempts yet.'}
+                        </p>
+                      )
+                    }
+                    const showPin =
+                      playerRank !== null && playerRow !== null && playerRank > 3
+                    return (
+                      <ol className="hexaclear-scores-list">
+                        {rows.map((row) => {
+                          const chipClass = [
+                            'hexaclear-rank-chip',
+                            row.rank === 1
+                              ? 'hexaclear-chip-trophy'
+                              : row.rank <= 3
+                                ? 'hexaclear-chip-gold'
+                                : 'hexaclear-chip-neutral',
+                          ].join(' ')
+                          return (
+                            <li
+                              key={row.key}
+                              className={[
+                                'hexaclear-scores-row',
+                                row.isYou ? 'recent' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                            >
+                              <span className={chipClass}>{row.rank}</span>
+                              <span className="hexaclear-scores-name">
+                                {row.name}
+                                {row.isYou && usingGlobal ? ' (you)' : ''}
+                              </span>
+                              <span className="hexaclear-scores-value">
+                                {row.value}
+                              </span>
+                            </li>
+                          )
+                        })}
+                        {showPin && (
+                          <li
+                            key={`pin-${playerRow.key}`}
+                            className="hexaclear-scores-row recent hexaclear-scores-row-pinned"
+                            aria-label={`Your row: rank ${playerRank}`}
+                          >
+                            <span className="hexaclear-rank-chip hexaclear-chip-neutral">
+                              {playerRank}
+                            </span>
+                            <span className="hexaclear-scores-name">
+                              {playerRow.name}
+                              {usingGlobal ? ' (you)' : ''}
+                            </span>
+                            <span className="hexaclear-scores-value">
+                              {playerRow.value}
+                            </span>
+                          </li>
+                        )}
+                      </ol>
+                    )
+                  }
+                  const localCompactRows = localAll.slice(0, 3).map(
+                    (entry, idx) => ({
+                      key: `${entry.date}-${entry.name || 'you'}-${idx}`,
+                      rank: idx + 1,
+                      name: entry.name || 'You',
+                      value: formatDailyMoves(entry.moves),
+                      isYou:
+                        dailyHighScoreSaved &&
+                        lastSavedDailyHighScoreDate !== null &&
+                        entry.date === lastSavedDailyHighScoreDate,
+                    }),
+                  )
+                  const localPlayerRow =
+                    playerLocalIndex >= 0
+                      ? {
+                          key: `local-you-${localAll[playerLocalIndex].date}`,
+                          name: localAll[playerLocalIndex].name || 'You',
+                          value: formatDailyMoves(
+                            localAll[playerLocalIndex].moves,
+                          ),
+                        }
+                      : null
+                  const globalCompactRows = globalTop.slice(0, 3).map(
+                    (entry, idx) => ({
+                      key: `${entry.savedAt}-${entry.playerId}-${idx}`,
+                      rank: idx + 1,
+                      name: entry.name,
+                      value: formatDailyMoves(entry.moves),
+                      isYou: entry.playerId === playerId,
+                    }),
+                  )
+                  const globalPlayerRow =
+                    playerGlobalEntry !== null
+                      ? {
+                          key: `global-you-${playerGlobalEntry.playerId}`,
+                          name: playerGlobalEntry.name,
+                          value: formatDailyMoves(playerGlobalEntry.moves),
+                        }
+                      : null
+                  const visibleCount = usingGlobal
+                    ? globalTop.length
+                    : localAll.length
+                  const compactSurfaceCount =
+                    Math.min(3, visibleCount) +
+                    ((usingGlobal ? playerGlobalRank : playerLocalRank) !==
+                      null &&
+                    (usingGlobal ? playerGlobalRank : playerLocalRank)! > 3
+                      ? 1
+                      : 0)
+                  const canExpand = visibleCount > compactSurfaceCount
                   return (
                     <div className="hexaclear-gameover-section">
                       <div className="hexaclear-gameover-section-header">
@@ -9872,115 +10435,138 @@ function App() {
                           <span>Global</span>
                         </label>
                       </div>
+                      {saveSubsection}
                       {globalLoading ? (
                         <p className="hexaclear-scores-empty">
                           Loading global scores…
                         </p>
                       ) : usingGlobal ? (
-                        <>
-                          {globalVisible.length === 0 ? (
-                            <p className="hexaclear-scores-empty">
-                              No global daily scores yet — be the first.
-                            </p>
-                          ) : (
-                            <ol className="hexaclear-scores-list">
-                              {globalVisible.map((entry, idx) => {
-                                const rank = globalPageStart + idx + 1
-                                const isYou = entry.playerId === playerId
-                                const chipClass = [
-                                  'hexaclear-rank-chip',
-                                  rank === 1
-                                    ? 'hexaclear-chip-trophy'
-                                    : rank <= 3
-                                      ? 'hexaclear-chip-gold'
-                                      : 'hexaclear-chip-neutral',
-                                ].join(' ')
-                                return (
-                                  <li
-                                    key={entry.savedAt + entry.playerId + idx}
-                                    className={[
-                                      'hexaclear-scores-row',
-                                      isYou ? 'recent' : '',
-                                    ]
-                                      .filter(Boolean)
-                                      .join(' ')}
-                                  >
-                                    <span className={chipClass}>{rank}</span>
-                                    <span className="hexaclear-scores-name">
-                                      {entry.name}
-                                      {isYou ? ' (you)' : ''}
-                                    </span>
-                                    <span className="hexaclear-scores-value">
-                                      {entry.moves}{' '}
-                                      {entry.moves === 1 ? 'move' : 'moves'}
-                                    </span>
-                                  </li>
-                                )
-                              })}
-                            </ol>
-                          )}
-                          {globalPageCount > 1 && (
-                            <div className="hexaclear-scores-pagination">
-                              <button
-                                type="button"
-                                className="hexaclear-scores-page-step"
-                                aria-label="Previous page"
-                                onClick={() => {
-                                  playUiClick()
-                                  setGameoverDailyGlobalPage((p) =>
-                                    Math.max(0, p - 1),
-                                  )
-                                }}
-                                disabled={globalPageIndex === 0}
-                              >
-                                ‹
-                              </button>
-                              <span className="hexaclear-scores-page-label">
-                                {globalPageStart + 1}–
-                                {Math.min(
-                                  globalPageStart +
-                                    GAMEOVER_LEADERBOARD_PAGE_SIZE,
-                                  globalTop.length,
-                                )}{' '}
-                                of {globalTop.length}
-                              </span>
-                              <button
-                                type="button"
-                                className="hexaclear-scores-page-step"
-                                aria-label="Next page"
-                                onClick={() => {
-                                  playUiClick()
-                                  setGameoverDailyGlobalPage((p) =>
-                                    Math.min(globalPageCount - 1, p + 1),
-                                  )
-                                }}
-                                disabled={
-                                  globalPageIndex >= globalPageCount - 1
-                                }
-                              >
-                                ›
-                              </button>
-                            </div>
-                          )}
-                          {playerGlobalRank !== null && !globalShowsPlayer &&
-                            playerGlobalEntry && (
-                              <p className="hexaclear-scores-your-rank">
-                                Your rank: #{playerGlobalRank} ·{' '}
-                                {playerGlobalEntry.moves}{' '}
-                                {playerGlobalEntry.moves === 1
-                                  ? 'move'
-                                  : 'moves'}
+                        expanded ? (
+                          <>
+                            {globalVisible.length === 0 ? (
+                              <p className="hexaclear-scores-empty">
+                                No global daily scores yet — be the first.
                               </p>
+                            ) : (
+                              <ol className="hexaclear-scores-list">
+                                {globalVisible.map((entry, idx) => {
+                                  const rank = globalPageStart + idx + 1
+                                  const isYou = entry.playerId === playerId
+                                  const chipClass = [
+                                    'hexaclear-rank-chip',
+                                    rank === 1
+                                      ? 'hexaclear-chip-trophy'
+                                      : rank <= 3
+                                        ? 'hexaclear-chip-gold'
+                                        : 'hexaclear-chip-neutral',
+                                  ].join(' ')
+                                  return (
+                                    <li
+                                      key={
+                                        entry.savedAt +
+                                        entry.playerId +
+                                        idx
+                                      }
+                                      className={[
+                                        'hexaclear-scores-row',
+                                        isYou ? 'recent' : '',
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    >
+                                      <span className={chipClass}>{rank}</span>
+                                      <span className="hexaclear-scores-name">
+                                        {entry.name}
+                                        {isYou ? ' (you)' : ''}
+                                      </span>
+                                      <span className="hexaclear-scores-value">
+                                        {entry.moves}{' '}
+                                        {entry.moves === 1 ? 'move' : 'moves'}
+                                      </span>
+                                    </li>
+                                  )
+                                })}
+                              </ol>
                             )}
-                          {playerGlobalRank === null && dailyHighScoreSaved && (
-                            <p className="hexaclear-scores-your-rank">
-                              Not on today's global board yet.
-                            </p>
-                          )}
-                        </>
-                      ) : (
+                            {globalPageCount > 1 && (
+                              <div className="hexaclear-scores-pagination">
+                                <button
+                                  type="button"
+                                  className="hexaclear-scores-page-step"
+                                  aria-label="Previous page"
+                                  onClick={() => {
+                                    playUiClick()
+                                    setGameoverDailyGlobalPage((p) =>
+                                      Math.max(0, p - 1),
+                                    )
+                                  }}
+                                  disabled={globalPageIndex === 0}
+                                >
+                                  ‹
+                                </button>
+                                <span className="hexaclear-scores-page-label">
+                                  {globalPageStart + 1}–
+                                  {Math.min(
+                                    globalPageStart +
+                                      GAMEOVER_LEADERBOARD_PAGE_SIZE,
+                                    globalTop.length,
+                                  )}{' '}
+                                  of {globalTop.length}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="hexaclear-scores-page-step"
+                                  aria-label="Next page"
+                                  onClick={() => {
+                                    playUiClick()
+                                    setGameoverDailyGlobalPage((p) =>
+                                      Math.min(globalPageCount - 1, p + 1),
+                                    )
+                                  }}
+                                  disabled={
+                                    globalPageIndex >= globalPageCount - 1
+                                  }
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            )}
+                            {playerGlobalRank !== null &&
+                              !globalShowsPlayer &&
+                              playerGlobalEntry && (
+                                <p className="hexaclear-scores-your-rank">
+                                  Your rank: #{playerGlobalRank} ·{' '}
+                                  {playerGlobalEntry.moves}{' '}
+                                  {playerGlobalEntry.moves === 1
+                                    ? 'move'
+                                    : 'moves'}
+                                </p>
+                              )}
+                            {playerGlobalRank === null &&
+                              dailyHighScoreSaved && (
+                                <p className="hexaclear-scores-your-rank">
+                                  Not on today's global board yet.
+                                </p>
+                              )}
+                          </>
+                        ) : (
+                          <>
+                            {renderCompactList(
+                              globalCompactRows,
+                              playerGlobalRank,
+                              globalPlayerRow,
+                            )}
+                            {playerGlobalRank === null &&
+                              dailyHighScoreSaved && (
+                                <p className="hexaclear-scores-your-rank">
+                                  Not on today's global board yet.
+                                </p>
+                              )}
+                          </>
+                        )
+                      ) : expanded ? (
                         <ol className="hexaclear-scores-list">
-                          {localVisible.map((entry, idx) => {
+                          {localPageWindow.map((entry, idx) => {
                             const isRecent =
                               dailyHighScoreSaved &&
                               lastSavedDailyHighScoreDate !== null &&
@@ -10016,6 +10602,27 @@ function App() {
                             )
                           })}
                         </ol>
+                      ) : (
+                        renderCompactList(
+                          localCompactRows,
+                          playerLocalRank,
+                          localPlayerRow,
+                        )
+                      )}
+                      {canExpand && (
+                        <button
+                          type="button"
+                          className="hexaclear-scores-expand-toggle"
+                          onClick={() => {
+                            playUiClick()
+                            setGameoverLeaderboardExpanded((v) => !v)
+                          }}
+                          aria-expanded={expanded}
+                        >
+                          {expanded
+                            ? 'Show fewer'
+                            : `Show all (${visibleCount})`}
+                        </button>
                       )}
                     </div>
                   )
@@ -10219,7 +10826,14 @@ function App() {
                     Both autosave any pending result on the way out
                     so the leaderboard reflects every completed
                     attempt regardless of which exit the player
-                    chooses. */}
+                    chooses. Wrapped in the sticky `hexaclear-
+                    gameover-footer` so the primary exit is always
+                    one tap away even on tall puzzle days where the
+                    leaderboard/recap scrolls below the fold. The
+                    daily-nav row and Copy Share above stay in the
+                    scrollable body because they're optional
+                    side-doors, not the modal's primary action. */}
+                <div className="hexaclear-gameover-footer">
                 <div className="hexaclear-gameover-cta-row">
                   <button
                     type="button"
@@ -10269,6 +10883,7 @@ function App() {
                       ? 'Retry this puzzle'
                       : "Retry today's puzzle"}
                   </button>
+                </div>
                 </div>
               </div>
             </div>
@@ -10461,6 +11076,39 @@ function App() {
                   </button>
                 </div>
 
+                {/* "Export recent moves as GIF" — solo only.
+                    MP runs share the board across two players so a
+                    "my last N moves" export would be missing the
+                    partner's interleaved placements and look like
+                    the board teleporting. Disabled until at least
+                    one move has been recorded this run. */}
+                {!isMultiplayer && (
+                  <div className="hexaclear-menu-export">
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link hexaclear-menu-export-button"
+                      onClick={() => {
+                        unlockAudioOnGesture()
+                        playUiClick()
+                        const available = runHistoryRef.current.length
+                        if (available === 0) return
+                        const defaultCount = Math.min(
+                          5,
+                          available,
+                          RUN_HISTORY_EXPORT_MAX,
+                        )
+                        setExportGifCount(defaultCount)
+                        setExportGifProgress(null)
+                        setShowMenu(false)
+                        setShowExportGif(true)
+                      }}
+                      disabled={runHistoryRef.current.length === 0}
+                    >
+                      Export recent moves as GIF
+                    </button>
+                  </div>
+                )}
+
                 <div className="hexaclear-menu-settings">
                   <div className="hexaclear-menu-settings-label">Settings</div>
                   {isMultiplayer && (
@@ -10556,17 +11204,6 @@ function App() {
                         }}
                       />
                       <span>Colorblind support</span>
-                    </label>
-                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
-                      <input
-                        type="checkbox"
-                        checked={adPreviews}
-                        onChange={(e) => {
-                          setAdPreviews(e.target.checked)
-                          playUiClick()
-                        }}
-                      />
-                      <span>Ad previews</span>
                     </label>
                   </div>
                 </div>
@@ -11117,6 +11754,154 @@ function App() {
               </div>
             </div>
           )}
+          {showExportGif && (() => {
+            // "Export recent moves" modal. Reads `runHistoryRef`
+            // directly — the menu was open when this opened, so
+            // the game is paused and the ref is stable across the
+            // modal's lifetime (no need to snapshot it into React
+            // state). The stepper is clamped to
+            // `[1..min(history, RUN_HISTORY_EXPORT_MAX)]`; the
+            // preview shows the trailing slice so the *most
+            // recent* N moves are what gets exported.
+            const history = runHistoryRef.current
+            const maxCount = Math.min(history.length, RUN_HISTORY_EXPORT_MAX)
+            const clampedCount = Math.max(1, Math.min(exportGifCount, maxCount))
+            const snapshotsToExport =
+              clampedCount > 0 ? history.slice(-clampedCount) : []
+            const totalPoints = snapshotsToExport.reduce(
+              (sum, s) => sum + Math.max(0, s.pointsGained),
+              0,
+            )
+            const isExporting =
+              exportGifProgress !== null &&
+              exportGifProgress.label !== 'done'
+            const downloadLabel =
+              exportGifProgress?.label === 'recording'
+                ? `Recording… ${Math.round(exportGifProgress.ratio * 100)}%`
+                : exportGifProgress?.label === 'encoding'
+                  ? 'Encoding…'
+                  : exportGifProgress?.label === 'done'
+                    ? 'Saved!'
+                    : 'Download GIF'
+            const closeModal = () => {
+              if (isExporting) return
+              playUiClick()
+              setShowExportGif(false)
+              setExportGifProgress(null)
+            }
+            const handleDownload = async () => {
+              if (isExporting || snapshotsToExport.length === 0) return
+              setExportGifProgress({ ratio: 0, label: 'recording' })
+              try {
+                await captureMultiHighlightReelAsGif({
+                  snapshots: snapshotsToExport,
+                  onProgress: setExportGifProgress,
+                })
+              } catch {
+                // Quiet recovery — a failed export reverts the
+                // button label without surfacing a modal-on-modal
+                // dialog the player can't action.
+                setExportGifProgress(null)
+                return
+              }
+              window.setTimeout(() => setExportGifProgress(null), 1500)
+            }
+            const adjustCount = (delta: number) => {
+              playUiClick()
+              setExportGifCount((current) =>
+                Math.max(1, Math.min(current + delta, maxCount)),
+              )
+            }
+            return (
+              <div
+                className="hexaclear-popover-overlay"
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return
+                  closeModal()
+                }}
+              >
+                <div className="hexaclear-overlay-card hexaclear-export-gif-card">
+                  <div className="hexaclear-piece-detail-nickname">
+                    Export recent moves
+                  </div>
+                  <MultiHighlightReel
+                    key={`export-preview-${clampedCount}`}
+                    snapshots={snapshotsToExport}
+                  />
+                  <div className="hexaclear-export-gif-meta">
+                    {snapshotsToExport.length === 1
+                      ? '1 move'
+                      : `${snapshotsToExport.length} moves`}
+                    {' · '}
+                    {totalPoints} points
+                  </div>
+                  <div
+                    className="hexaclear-export-gif-stepper"
+                    aria-label="Number of recent moves to export"
+                  >
+                    <button
+                      type="button"
+                      className="hexaclear-export-gif-step"
+                      onClick={() => adjustCount(-1)}
+                      disabled={isExporting || clampedCount <= 1}
+                      aria-label="Decrease move count"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      className="hexaclear-export-gif-count"
+                      min={1}
+                      max={maxCount}
+                      step={1}
+                      value={clampedCount}
+                      disabled={isExporting}
+                      onChange={(e) => {
+                        const raw = Number(e.target.value)
+                        if (!Number.isFinite(raw)) return
+                        setExportGifCount(
+                          Math.max(1, Math.min(Math.round(raw), maxCount)),
+                        )
+                      }}
+                      aria-label="Move count"
+                    />
+                    <button
+                      type="button"
+                      className="hexaclear-export-gif-step"
+                      onClick={() => adjustCount(1)}
+                      disabled={isExporting || clampedCount >= maxCount}
+                      aria-label="Increase move count"
+                    >
+                      +
+                    </button>
+                    <span className="hexaclear-export-gif-step-label">
+                      moves (max {maxCount})
+                    </span>
+                  </div>
+                  <div className="hexaclear-export-gif-actions">
+                    <button
+                      type="button"
+                      className="hexaclear-reel-download hexaclear-export-gif-download"
+                      onClick={handleDownload}
+                      disabled={
+                        isExporting || snapshotsToExport.length === 0
+                      }
+                    >
+                      {downloadLabel}
+                    </button>
+                    <button
+                      type="button"
+                      className="hexaclear-menu-link"
+                      onClick={closeModal}
+                      disabled={isExporting}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
           {selectedPieceVariant && (() => {
             // Piecetiary detail sheet. Opens when the player taps a
             // tile inside the "How to Play › Piecetiary" tab. Shows
@@ -11131,46 +11916,50 @@ function App() {
             )
             const nickname =
               PIECE_VARIANT_NAMES[variant.id] ?? variant.notation
-            const flavorLines = buildFlavorLines(variant, stats)
             const hasAny =
               stats.timesPlayed > 0 || stats.killingHands > 0
             // Stat rows are only surfaced when there's data behind
             // them — the empty piece detail card just shows "no
             // history yet" copy without a giant zero grid. Keeps
             // the modal honest about retrospection (it's not goals).
+            // Labels are kept terse so the two-column grid below
+            // can render an even left/right ribbon of pairs without
+            // wrapping. Order matters: we want the most universally
+            // relevant stats first (Played, Clears) so even pieces
+            // with light data have a meaningful first row.
             const statRows: Array<{ label: string; value: string }> = []
             if (hasAny) {
               statRows.push({
-                label: 'Times played',
+                label: 'Played',
                 value: String(stats.timesPlayed),
               })
               if (stats.clearsCaused > 0) {
                 statRows.push({
-                  label: 'Placements that cleared',
+                  label: 'Clears',
                   value: String(stats.clearsCaused),
                 })
               }
               if (stats.combosJoined > 0) {
                 statRows.push({
-                  label: 'Multi-clears',
+                  label: 'Combos',
                   value: String(stats.combosJoined),
                 })
               }
               if (stats.timesPlayed > 0) {
                 statRows.push({
-                  label: 'Avg score per play',
-                  value: String(averagePoints(stats)),
+                  label: 'Avg. Score',
+                  value: String(averagePoints(stats, variant)),
                 })
               }
               if (stats.bestClear > 0) {
                 statRows.push({
-                  label: 'Best clear',
+                  label: 'Best Play',
                   value: `+${stats.bestClear}`,
                 })
               }
               if (stats.rubiesCaptured > 0) {
                 statRows.push({
-                  label: 'Rubies captured',
+                  label: 'Rubies',
                   value: String(stats.rubiesCaptured),
                 })
               }
@@ -11182,7 +11971,7 @@ function App() {
               }
               if (stats.killingHands > 0) {
                 statRows.push({
-                  label: 'Killing hands',
+                  label: 'Cubekilled You',
                   value: String(stats.killingHands),
                 })
               }
@@ -11220,13 +12009,6 @@ function App() {
                       </div>
                     </div>
                   </div>
-                  {flavorLines.length > 0 && (
-                    <ul className="hexaclear-piece-detail-flavor">
-                      {flavorLines.map((line) => (
-                        <li key={line}>{line}</li>
-                      ))}
-                    </ul>
-                  )}
                   {statRows.length > 0 ? (
                     <dl className="hexaclear-piece-detail-stats">
                       {statRows.map((row) => (

@@ -237,87 +237,6 @@ body {
   color: #3a1204;
 }
 
-/* Joke banner-ad preview strip. Sits between the header and the
-   board when the menu's "Ad previews" toggle is on AND the
-   viewport has vertical room to spare. Once we go landscape with
-   non-trivial horizontal space we hide this in favor of the
-   fixed-position rotated variant defined further below — the
-   inline banner would steal vertical space the board is already
-   fighting for on short / wide displays. */
-.hexaclear-banner-ad {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 0.4rem;
-  margin: 0.4rem 0;
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-}
-
-[data-theme="win98"] .hexaclear-banner-ad {
-  border-radius: 0;
-  margin: 4px 0;
-}
-
-/* Side-banner variant: shown only on landscape viewports with
-   enough horizontal room (laptops / desktops / wide tablets), where
-   stacking the banner on top of the board would squeeze the
-   already-cramped vertical real estate. The frame is absolutely
-   positioned against `.hexaclear-board-wrapper` so its visible
-   height tracks the board exactly, with a small horizontal gap.
-
-   Sizing trick: the source artwork is 5:1 (1920×384). The frame
-   declares `aspect-ratio: 1 / 5` so its width is height/5, matching
-   the rotated artwork's footprint. Container queries (`cqh`) let
-   the inner image scale relative to the frame's height: setting
-   the unrotated image width to 100cqh (= frame height) makes the
-   post-rotation visual height fill the frame perfectly, and natural
-   aspect handles the rotated visual width. */
-.hexaclear-banner-ad-side-frame {
-  display: none;
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 100%;
-  margin-left: 0.75rem;
-  aspect-ratio: 1 / 5;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  user-select: none;
-  container-type: size;
-  z-index: 1;
-}
-.hexaclear-banner-ad-side {
-  display: block;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100cqh;
-  height: auto;
-  transform: translate(-50%, -50%) rotate(90deg);
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-  border-radius: 0.4rem;
-}
-[data-theme="win98"] .hexaclear-banner-ad-side {
-  border-radius: 0;
-}
-
-/* Switch which banner variant is visible.
-   Default state: inline banner shown, side banner hidden.
-   Landscape AND a roomy viewport: hide inline, show side strip. */
-@media (orientation: landscape) and (min-width: 720px) {
-  .hexaclear-banner-ad {
-    display: none;
-  }
-  .hexaclear-banner-ad-side-frame {
-    display: flex;
-  }
-}
-
 .hexaclear-main {
   flex: 1;
   display: flex;
@@ -2307,7 +2226,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -3084,9 +3003,16 @@ body {
 .hexaclear-run-recap {
   gap: 0.32rem;
 }
+/* Single-row ribbon that holds every run stat (baseline + moments
+   used to be two separate rows). Flex with `wrap` so a long ribbon
+   (e.g. an endless run that scored a combo *and* a streak) flows
+   to a second row instead of clipping. Dividers were dropped in
+   the merged design — the gradient background acts as the visual
+   container so each cell reads as a column without a vertical
+   line between them. */
 .hexaclear-run-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   border-block: 1px solid rgba(255, 205, 143, 0.16);
   background:
     linear-gradient(
@@ -3097,19 +3023,17 @@ body {
     );
 }
 .hexaclear-run-stat {
-  min-width: 0;
-  padding: 0.42rem 0.22rem 0.36rem;
+  min-width: 52px;
+  flex: 1 1 52px;
+  padding: 0.4rem 0.18rem 0.34rem;
   text-align: center;
-}
-.hexaclear-run-stat + .hexaclear-run-stat {
-  border-left: 1px solid rgba(255, 205, 143, 0.12);
 }
 .hexaclear-run-stat-value {
   display: block;
   font-family: 'Nunito', system-ui, sans-serif;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  font-size: 1.24rem;
+  font-size: 1.18rem;
   line-height: 1;
   color: #ffe8a3;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
@@ -3123,6 +3047,12 @@ body {
   text-transform: uppercase;
   color: rgba(255, 232, 163, 0.66);
 }
+/* Moments ribbon (.hexaclear-run-moments / .hexaclear-run-moment*)
+   was removed in the gameover compaction pass — the moments now
+   live inline in the .hexaclear-run-strip ribbon alongside the
+   baseline stats. The unused selectors below are kept as no-ops
+   for one release in case a stale tab is open against the new
+   bundle; they will be removed in a follow-up. */
 .hexaclear-run-moments {
   display: flex;
   flex-wrap: wrap;
@@ -5962,6 +5892,62 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  /* Hard cap on modal height so a long leaderboard + reel +
+     run-stats stack can never bleed off short phone viewports.
+     `svh` (small viewport height) bakes in the worst-case URL
+     bar / home indicator chrome so we don't have to subtract
+     a magic pixel pad. The card becomes the scroll container;
+     the sticky `.hexaclear-gameover-footer` below keeps the
+     primary CTA reachable in one tap regardless of how much the
+     player scrolls in the middle. */
+  max-height: min(90svh, 720px);
+  overflow-y: auto;
+  /* `stable` reserves space for the scrollbar even when not
+     scrolling so toggling tabs / global mode doesn't reflow
+     content horizontally as the bar appears and disappears. */
+  scrollbar-gutter: stable;
+  /* WebKit/Blink: thin, subtle scrollbar that picks up the
+     warm-wood palette instead of the platform default which
+     looks like a debug overlay against the dark card. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 205, 143, 0.28) transparent;
+}
+.hexaclear-gameover-card::-webkit-scrollbar {
+  width: 6px;
+}
+.hexaclear-gameover-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 205, 143, 0.28);
+  border-radius: 999px;
+}
+.hexaclear-gameover-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Sticky CTA strip pinned to the card's bottom. Holds the
+   "Play again" / "Done / Retry" / "New game / Back" primary
+   actions so they're always 1 tap away even when the leaderboard
+   or recap content above has scrolled. The gradient fade above
+   the strip blurs the seam between the scrolling body and the
+   sticky footer so content fades behind it instead of clipping.
+   Negative side-margins + positive padding make the fade extend
+   to the card's true edges (the card has `padding: 0 1.2rem`)
+   so we don't see the dark card body peeking out beside the
+   gradient on narrow phones. */
+.hexaclear-gameover-footer {
+  position: sticky;
+  bottom: -1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.2rem -1.2rem -1rem;
+  padding: 0.85rem 1.2rem 1rem;
+  background: linear-gradient(
+    180deg,
+    rgba(42, 18, 9, 0) 0%,
+    rgba(42, 18, 9, 0.92) 35%,
+    rgba(42, 18, 9, 1) 70%
+  );
+  z-index: 1;
 }
 
 .hexaclear-gameover-card .title {
@@ -6053,6 +6039,69 @@ body {
   margin-bottom: 0.05rem;
 }
 
+/* Save-input subsection that lives INSIDE the leaderboard section
+   (replacing the standalone .hexaclear-gameover-save-section above
+   it). The inline placement saves one tier of stacked section
+   chrome — the leaderboard's title + global toggle already gives
+   us a header, and the save input + button slot right below it
+   before the rows start. */
+.hexaclear-gameover-save-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0.5rem;
+  padding: 0.5rem 0.6rem 0.55rem;
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 205, 143, 0.06),
+    rgba(255, 205, 143, 0.02)
+  );
+  border: 1px solid rgba(255, 205, 143, 0.18);
+}
+.hexaclear-gameover-save-inline-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: #ffd9a3;
+  opacity: 0.92;
+}
+
+/* Show all / Show fewer toggle at the bottom of the leaderboard
+   compact view. Text-link affordance — minimal chrome so the
+   leaderboard's content stays the visual anchor. */
+.hexaclear-overlay-card button.hexaclear-scores-expand-toggle {
+  align-self: flex-start;
+  margin-top: 0.3rem;
+  padding: 0.1rem 0;
+  background: transparent;
+  border: none;
+  color: #ffd9a3;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 217, 163, 0.45);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  min-height: 0;
+}
+.hexaclear-overlay-card button.hexaclear-scores-expand-toggle:hover,
+.hexaclear-overlay-card button.hexaclear-scores-expand-toggle:focus-visible {
+  color: #fff5dc;
+  text-decoration-color: rgba(255, 245, 220, 0.7);
+  outline: none;
+}
+
+/* Pinned "you" row at the bottom of the compact leaderboard view.
+   Visually offset from the top-3 cluster with a thin divider line
+   above it so the player understands it's outside the main list. */
+.hexaclear-scores-row.hexaclear-scores-row-pinned {
+  margin-top: 0.18rem;
+  border-top: 1px dashed rgba(255, 205, 143, 0.32);
+  padding-top: 0.32rem;
+}
+
 .hexaclear-gameover-section-label {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -6138,6 +6187,13 @@ body {
   gap: 0.55rem;
   align-self: stretch;
   margin-top: 0.4rem;
+}
+
+/* Inside the sticky footer the cta-row sits directly under the
+   gradient fade — drop the top margin so the row hugs the top
+   of the strip and doesn't add a dead band of background. */
+.hexaclear-gameover-footer .hexaclear-gameover-cta-row {
+  margin-top: 0;
 }
 
 .hexaclear-gameover-cta-row > button.hexaclear-gameover-cta {
@@ -6338,8 +6394,6 @@ body {
 .cubic-viewport.is-tutorial-active .hexaclear-live-stat,
 .cubic-viewport.is-tutorial-active .hexaclear-live-stat-placeholder,
 .cubic-viewport.is-tutorial-active .hexaclear-board-hud,
-.cubic-viewport.is-tutorial-active .hexaclear-banner-ad,
-.cubic-viewport.is-tutorial-active .hexaclear-banner-ad-side-frame,
 .cubic-viewport.is-tutorial-active .hexaclear-undo-button,
 .cubic-viewport.is-tutorial-active .hexaclear-hold {
   visibility: hidden;
@@ -6559,9 +6613,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
-  margin: 0.65rem 0 0.4rem;
-  padding: 0.7rem 0.85rem 0.55rem;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.5rem;
   border-radius: 14px;
   background: linear-gradient(
     180deg,
@@ -6719,46 +6773,220 @@ body {
   letter-spacing: 0.02em;
 }
 
-.hexaclear-reel-actions {
+/* Reel action overlay — sits in the bottom-right of the reel's
+   board-wrap as a row of small pill buttons. The icon-only sizing
+   keeps the reel chrome tight; the download button widens to a
+   text pill when encoding is in progress so the player still gets
+   recording / encoding / saved feedback without the actions
+   stealing a stacked row of vertical chrome. */
+.hexaclear-reel-overlay-actions {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 4px;
+  z-index: 2;
+  /* Let the underlying SVG receive interactions in the negative
+     space between buttons (rare, but a stray tap shouldn't be
+     swallowed by an invisible wrapper). */
+  pointer-events: none;
 }
 
 .hexaclear-reel-replay,
 .hexaclear-reel-download {
-  background: rgba(255, 232, 163, 0.08);
-  border: 1px solid rgba(255, 232, 163, 0.32);
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
   border-radius: 999px;
-  padding: 0.28rem 0.95rem;
+  background: rgba(20, 8, 2, 0.72);
+  border: 1px solid rgba(255, 232, 163, 0.34);
   color: #ffe8a3;
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 140ms ease, transform 140ms ease;
   font-family: inherit;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: background 140ms ease, transform 140ms ease;
 }
 
-.hexaclear-reel-replay:hover,
-.hexaclear-reel-replay:focus-visible,
-.hexaclear-reel-download:hover,
-.hexaclear-reel-download:focus-visible {
-  background: rgba(255, 232, 163, 0.18);
+.hexaclear-reel-replay svg,
+.hexaclear-reel-download svg {
+  display: block;
+  /* Drop the inherited modal `:hover` color flips by ensuring the
+     icon strokes track `currentColor`; the parent button already
+     manages its color state. */
+}
+
+.hexaclear-reel-replay:hover:not(:disabled),
+.hexaclear-reel-replay:focus-visible:not(:disabled),
+.hexaclear-reel-download:hover:not(:disabled),
+.hexaclear-reel-download:focus-visible:not(:disabled) {
+  background: rgba(40, 16, 4, 0.92);
   outline: none;
 }
 
-.hexaclear-reel-replay:active,
-.hexaclear-reel-download:active {
+.hexaclear-reel-replay:active:not(:disabled),
+.hexaclear-reel-download:active:not(:disabled) {
   transform: translateY(1px);
 }
 
 .hexaclear-reel-replay:disabled,
 .hexaclear-reel-download:disabled {
   cursor: progress;
-  opacity: 0.7;
+  opacity: 0.78;
+}
+
+/* Download pill widens to fit progress text without distorting
+   the replay button next to it. */
+.hexaclear-reel-download.is-progress {
+  width: auto;
+  padding: 0 0.55rem;
+}
+
+.hexaclear-reel-overlay-progress {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Multi-snapshot reel + "Export recent moves" modal
+   ------------------------------------------------------------
+   The multi reel re-uses the standard `.hexaclear-reel` styles
+   (it wraps `<HighlightReel showActions={false}>`), so it only
+   needs minimal scaffolding here.
+   ============================================================ */
+.hexaclear-multi-reel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.hexaclear-multi-reel-empty {
+  padding: 1rem;
+  text-align: center;
+  color: rgba(255, 232, 163, 0.75);
+  font-size: 0.92rem;
+}
+
+.hexaclear-export-gif-card {
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.hexaclear-export-gif-meta {
+  text-align: center;
+  font-size: 0.82rem;
+  color: rgba(255, 232, 163, 0.78);
+  letter-spacing: 0.02em;
+}
+
+.hexaclear-export-gif-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.hexaclear-export-gif-step {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(255, 232, 163, 0.08);
+  border: 1px solid rgba(255, 232, 163, 0.32);
+  color: #ffe8a3;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: inherit;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.hexaclear-export-gif-step:hover:not(:disabled),
+.hexaclear-export-gif-step:focus-visible:not(:disabled) {
+  background: rgba(255, 232, 163, 0.18);
+  outline: none;
+}
+
+.hexaclear-export-gif-step:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.hexaclear-export-gif-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.hexaclear-export-gif-count {
+  width: 3.4rem;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 232, 163, 0.32);
+  border-radius: 0.4rem;
+  color: #ffe8a3;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.32rem 0.4rem;
+  font-family: inherit;
+  -moz-appearance: textfield;
+}
+
+.hexaclear-export-gif-count::-webkit-outer-spin-button,
+.hexaclear-export-gif-count::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.hexaclear-export-gif-count:disabled {
+  opacity: 0.5;
+}
+
+.hexaclear-export-gif-step-label {
+  font-size: 0.78rem;
+  color: rgba(255, 232, 163, 0.72);
+  letter-spacing: 0.04em;
+}
+
+.hexaclear-export-gif-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hexaclear-export-gif-download {
+  min-width: 8.5rem;
+}
+
+/* Pause-menu "Export recent moves" button. Compact link-style row
+   that sits between the library nav cards and the settings list,
+   so it reads as a runtime action rather than a permanent surface. */
+.hexaclear-menu-export {
+  display: flex;
+  justify-content: center;
+}
+
+.hexaclear-menu-export-button {
+  font-size: 0.85rem;
+}
+
+.hexaclear-menu-export-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .cubic-viewport.reduced-motion .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube,
@@ -6859,34 +7087,35 @@ body {
   color: rgba(255, 232, 163, 0.78);
 }
 
-.hexaclear-piece-detail-flavor {
-  margin: 0.6rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.22rem;
-  color: rgba(255, 232, 163, 0.96);
-  font-size: 0.92rem;
-  line-height: 1.35;
-}
-
+/* Two-column ribbon: each row holds two label/value pairs side
+   by side so the modal stays short on phones. Each .stat is its
+   own flex cell (label left, value right) and the outer grid
+   distributes them evenly. An odd number of stats leaves the
+   last grid cell empty — visually fine and self-aligning. */
 .hexaclear-piece-detail-stats {
   margin: 0.65rem 0 0;
   padding: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
-  row-gap: 0.18rem;
-  column-gap: 0.6rem;
+  grid-template-columns: 1fr 1fr;
+  row-gap: 0.22rem;
+  column-gap: 0.9rem;
   font-size: 0.86rem;
 }
 
 .hexaclear-piece-detail-stat {
-  display: contents;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .hexaclear-piece-detail-stat dt {
   color: rgba(255, 232, 163, 0.78);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hexaclear-piece-detail-stat dd {
@@ -6895,6 +7124,16 @@ body {
   font-variant-numeric: tabular-nums;
   color: #ffe8a3;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* On very narrow phones (≤340px), collapse back to a single
+   column so longer labels (e.g. "Cubekilled You") don't get
+   ellipsized into incomprehensible stubs. */
+@media (max-width: 340px) {
+  .hexaclear-piece-detail-stats {
+    grid-template-columns: 1fr;
+  }
 }
 
 .hexaclear-piece-detail-empty {
