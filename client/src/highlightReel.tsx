@@ -282,6 +282,14 @@ export const HighlightReel = ({
 
   return (
     <div className="hexaclear-reel" aria-label="Best-placement replay">
+      {/* Small uppercase title that anchors the reel as
+          "Play of the game" without taking a full label row's
+          worth of vertical space — sits flush above the board
+          inside the same wood-bordered container. Distinct from
+          the prop-driven `.hexaclear-reel-caption` (which is
+          rendered BELOW the board for the GIF-export preview's
+          per-frame "Move N of M" text). */}
+      <div className="hexaclear-reel-title">Play of the game</div>
       <div className="hexaclear-reel-board-wrap">
         {/* The CUBEKILL.FUN watermark is intentionally only
             drawn into the saved GIF (see highlightReelGif.ts).

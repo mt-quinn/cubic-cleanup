@@ -6547,6 +6547,28 @@ body {
     0 6px 18px -8px rgba(0, 0, 0, 0.6);
 }
 
+/* "Play of the game" title — tiny uppercase ticket-letter row
+   that sits flush at the top of the reel container so the reel
+   reads as a named artifact, not just a video. Uses the same
+   muted-gold + extra-wide letter spacing as the menu's zone
+   labels so it carries a consistent UI voice across modals.
+   Distinct from `.hexaclear-reel-caption` (which is the bigger
+   prop-driven caption rendered BELOW the board for the GIF
+   export preview's per-frame "Move N of M" text). */
+.hexaclear-reel-title {
+  align-self: stretch;
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 163, 0.62);
+  line-height: 1;
+  /* Shave the reel's column gap on the top side so the title
+     hugs the board instead of swimming above it. */
+  margin-bottom: -0.15rem;
+}
+
 .hexaclear-reel-board-wrap {
   position: relative;
   display: flex;
