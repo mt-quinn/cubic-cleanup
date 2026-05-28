@@ -2723,6 +2723,29 @@ function App() {
   // hooks) and the cold-start "I don't even know what mode I'm in
   // until I dismiss this" friction is gone.
   const [showMenu, setShowMenu] = useState(false)
+  // Pause menu's Settings section is collapsed by default — Audio,
+  // Theme, Visual, and Account live behind a one-line "Settings" strip
+  // so the menu's hot path (Resume / Restart / library cards) stays
+  // visible without scrolling. Resets to collapsed every time the
+  // menu reopens so the player isn't surprised by a tall expanded
+  // panel sitting under Resume from a previous session.
+  const [menuSettingsExpanded, setMenuSettingsExpanded] = useState(false)
+  useEffect(() => {
+    if (!showMenu) setMenuSettingsExpanded(false)
+  }, [showMenu])
+  // Esc dismisses the pause menu (in addition to the existing
+  // tap-on-backdrop behavior). Mounted only while the menu is open
+  // so it doesn't compete with other modals' future Esc handling.
+  useEffect(() => {
+    if (!showMenu) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setShowMenu(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showMenu])
   // "Export recent moves as GIF" modal. Opens from the pause menu.
   // `exportGifCount` is the stepper value (1..available, capped at
   // RUN_HISTORY_EXPORT_MAX). `exportGifProgress` mirrors the
@@ -10943,271 +10966,427 @@ function App() {
                 setShowMenu(false)
               }}
             >
-              <div className="hexaclear-overlay-card hexaclear-menu-card">
-                <div className="title">Cubekill</div>
-
-                <div className="hexaclear-menu-actions">
-                  {hasStartedSession || isMultiplayer ? (
-                    <>
-                      <button
-                        type="button"
-                        className="hexaclear-reset hexaclear-menu-resume"
-                        onClick={() => {
-                          unlockAudioOnGesture()
-                          playUiClick()
-                          setShowMenu(false)
-                        }}
-                      >
-                        Resume
-                      </button>
-                      {isMultiplayer ? (
-                        <button
-                          type="button"
-                          className="hexaclear-menu-danger-button"
-                          onClick={() => {
-                            unlockAudioOnGesture()
-                            playUiClick()
-                            setShowMenu(false)
-                            handleLeaveRoom()
-                          }}
-                        >
-                          Leave game
-                        </button>
+              {(() => {
+                // === Pause menu derived data =====================
+                // Library card teases: each card carries one short
+                // line of useful data so the menu reads at-a-glance
+                // (instead of three blind nav titles).
+                const menuTotalGames =
+                  lifetimeStats.gamesPlayedEndless +
+                  lifetimeStats.gamesPlayedDaily +
+                  lifetimeStats.gamesPlayedCoop +
+                  lifetimeStats.gamesPlayedPvp
+                const menuUnlockedPieces = ALL_PIECE_VARIANTS.reduce(
+                  (acc, variant) => {
+                    const s = getPieceStats(pieceStats, variant.id)
+                    return s.timesPlayed > 0 || s.killingHands > 0
+                      ? acc + 1
+                      : acc
+                  },
+                  0,
+                )
+                // Collapsed settings strip summary: shows the three
+                // pieces of state players actually tweak — audio
+                // level, theme, and account/sync status. Short
+                // labels only; full controls live in the expanded
+                // body below.
+                const menuVolumeSummary = audioMuted
+                  ? 'Muted'
+                  : `${Math.round(volume * 100)}%`
+                const menuThemeSummary =
+                  theme === 'win98' ? 'Win98' : 'Cubekill'
+                const menuAccountSummary = authLoading
+                  ? 'Checking…'
+                  : isAuthenticated
+                  ? accountSyncState === 'syncing'
+                    ? 'Syncing…'
+                    : 'Synced'
+                  : 'Local'
+                // "Save GIF" chip only renders when there is at
+                // least one recorded move; no orphaned disabled
+                // state in the menu (the player just doesn't see
+                // the chip until it's usable).
+                const menuCanExportGif =
+                  !isMultiplayer && runHistoryRef.current.length > 0
+                return (
+                  <div className="hexaclear-overlay-card hexaclear-menu-card">
+                    {/* Zone A — Resume hero. Single dominant action
+                        anchored to the top of the menu so the muscle
+                        memory is one tap = back to the game. */}
+                    <div className="hexaclear-menu-hero">
+                      {hasStartedSession || isMultiplayer ? (
+                        <>
+                          <button
+                            type="button"
+                            className="hexaclear-reset hexaclear-menu-resume-hero"
+                            onClick={() => {
+                              unlockAudioOnGesture()
+                              playUiClick()
+                              setShowMenu(false)
+                            }}
+                          >
+                            Resume
+                          </button>
+                          <div className="hexaclear-menu-hero-hint">
+                            Esc · or tap outside to dismiss
+                          </div>
+                        </>
                       ) : (
                         <button
                           type="button"
-                          className="hexaclear-menu-danger-button"
+                          className="hexaclear-menu-new-game-hero"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setHasStartedSession(true)
+                            setShowMenu(false)
+                          }}
+                        >
+                          New Game
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Zone B — This run. Session-scoped actions
+                        grouped under their own label so Restart /
+                        Leave can never be confused with a primary
+                        CTA. Restart is a warm-warning chip; Leave
+                        is the danger variant; Save GIF is a quiet
+                        utility chip. */}
+                    {(hasStartedSession || isMultiplayer) && (
+                      <section className="hexaclear-menu-zone hexaclear-menu-zone-run">
+                        <div className="hexaclear-menu-zone-label">
+                          This run
+                        </div>
+                        <div className="hexaclear-menu-chip-row">
+                          {isMultiplayer ? (
+                            <button
+                              type="button"
+                              className="hexaclear-menu-chip hexaclear-menu-chip-danger"
+                              onClick={() => {
+                                unlockAudioOnGesture()
+                                playUiClick()
+                                setShowMenu(false)
+                                handleLeaveRoom()
+                              }}
+                            >
+                              Leave game
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="hexaclear-menu-chip hexaclear-menu-chip-warn"
+                              onClick={() => {
+                                unlockAudioOnGesture()
+                                playUiClick()
+                                setShowMenu(false)
+                                resetGame()
+                              }}
+                            >
+                              Restart
+                            </button>
+                          )}
+                          {menuCanExportGif && (
+                            <button
+                              type="button"
+                              className="hexaclear-menu-chip"
+                              onClick={() => {
+                                unlockAudioOnGesture()
+                                playUiClick()
+                                const available =
+                                  runHistoryRef.current.length
+                                if (available === 0) return
+                                const defaultCount = Math.min(
+                                  5,
+                                  available,
+                                  RUN_HISTORY_EXPORT_MAX,
+                                )
+                                setExportGifCount(defaultCount)
+                                setExportGifProgress(null)
+                                setShowMenu(false)
+                                setShowExportGif(true)
+                              }}
+                            >
+                              Save GIF
+                            </button>
+                          )}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Zone C — Your game. Cross-run library cards.
+                        Each card carries a one-line stat tease so
+                        the menu reads as useful information instead
+                        of blind navigation. */}
+                    <section className="hexaclear-menu-zone">
+                      <div className="hexaclear-menu-zone-label">
+                        Your game
+                      </div>
+                      <div className="hexaclear-menu-library">
+                        <button
+                          type="button"
+                          className="hexaclear-menu-nav-card hexaclear-menu-nav-card-scores"
                           onClick={() => {
                             unlockAudioOnGesture()
                             playUiClick()
                             setShowMenu(false)
-                            resetGame()
+                            setShowHighScores(true)
                           }}
                         >
-                          Restart
+                          <span className="hexaclear-menu-nav-title">
+                            High Scores
+                          </span>
+                          <span className="hexaclear-menu-nav-tease">
+                            {bestScore != null && bestScore > 0
+                              ? `Best ${bestScore.toLocaleString()}`
+                              : 'No runs yet'}
+                          </span>
                         </button>
+                        <button
+                          type="button"
+                          className="hexaclear-menu-nav-card hexaclear-menu-nav-card-stats"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            setShowStats(true)
+                          }}
+                        >
+                          <span className="hexaclear-menu-nav-title">
+                            Stats
+                          </span>
+                          <span className="hexaclear-menu-nav-tease">
+                            {menuTotalGames > 0
+                              ? `${menuTotalGames.toLocaleString()} game${
+                                  menuTotalGames === 1 ? '' : 's'
+                                }`
+                              : 'Local profile'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="hexaclear-menu-nav-card hexaclear-menu-nav-card-play hexaclear-menu-nav-card-wide"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            setShowScoring(true)
+                          }}
+                        >
+                          <span className="hexaclear-menu-nav-title">
+                            How to play
+                          </span>
+                          <span className="hexaclear-menu-nav-tease">
+                            Scoring · Piecetiary ({menuUnlockedPieces}/
+                            {ALL_PIECE_VARIANTS.length})
+                          </span>
+                        </button>
+                      </div>
+                    </section>
+
+                    {/* Zone D — Settings. Collapsed to a single
+                        summary strip by default; expanding reveals
+                        Audio / Theme / Visual / (Co-op name) /
+                        Account groups inline. Audio + Mute live on
+                        one row (one concept), and the sign-in pitch
+                        paragraph collapses to a 4-word Account row. */}
+                    <section
+                      className={[
+                        'hexaclear-menu-settings-zone',
+                        menuSettingsExpanded ? 'is-expanded' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <button
+                        type="button"
+                        className="hexaclear-menu-settings-strip"
+                        aria-expanded={menuSettingsExpanded}
+                        onClick={() => {
+                          playUiClick()
+                          setMenuSettingsExpanded((v) => !v)
+                        }}
+                      >
+                        <span
+                          className="hexaclear-menu-settings-strip-icon"
+                          aria-hidden="true"
+                        >
+                          ⚙
+                        </span>
+                        <span className="hexaclear-menu-settings-strip-label">
+                          Settings
+                        </span>
+                        <span className="hexaclear-menu-settings-strip-summary">
+                          <span>{menuVolumeSummary}</span>
+                          <span
+                            className="hexaclear-menu-settings-strip-dot"
+                            aria-hidden="true"
+                          >
+                            ·
+                          </span>
+                          <span>{menuThemeSummary}</span>
+                          <span
+                            className="hexaclear-menu-settings-strip-dot"
+                            aria-hidden="true"
+                          >
+                            ·
+                          </span>
+                          <span>{menuAccountSummary}</span>
+                        </span>
+                        <span
+                          className="hexaclear-menu-settings-strip-chevron"
+                          aria-hidden="true"
+                        >
+                          {menuSettingsExpanded ? '▴' : '▾'}
+                        </span>
+                      </button>
+
+                      {menuSettingsExpanded && (
+                        <div className="hexaclear-menu-settings-body">
+                          <div className="hexaclear-menu-settings-group">
+                            <div className="hexaclear-menu-settings-group-label">
+                              Audio
+                            </div>
+                            <div className="hexaclear-menu-settings-audio">
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={Math.round(volume * 100)}
+                                disabled={audioMuted}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value) / 100
+                                  setVolumeState(v)
+                                  setMasterVolume(v)
+                                }}
+                                aria-label="Volume"
+                              />
+                              <span className="hexaclear-menu-settings-audio-readout">
+                                {Math.round(volume * 100)}%
+                              </span>
+                              <label className="hexaclear-menu-settings-mute">
+                                <input
+                                  type="checkbox"
+                                  checked={audioMuted}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                    setAudioMutedState(next)
+                                    setMuted(next)
+                                    // After mute toggles:
+                                    //   unmuting -> click is audible (signals "audio back")
+                                    //   muting   -> click is silenced (visual confirms it)
+                                    playUiClick()
+                                  }}
+                                />
+                                <span>Mute</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="hexaclear-menu-settings-group">
+                            <div className="hexaclear-menu-settings-group-label">
+                              Theme
+                            </div>
+                            <select
+                              className="hexaclear-menu-settings-select"
+                              value={theme}
+                              onChange={(e) => {
+                                setTheme(e.target.value as ThemeId)
+                                playUiClick()
+                              }}
+                              aria-label="Theme"
+                            >
+                              {THEME_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="hexaclear-menu-settings-group">
+                            <div className="hexaclear-menu-settings-group-label">
+                              Visual
+                            </div>
+                            <div className="hexaclear-menu-settings-toggles">
+                              <label className="hexaclear-menu-settings-toggle-row">
+                                <input
+                                  type="checkbox"
+                                  checked={reducedMotion}
+                                  onChange={(e) => {
+                                    setReducedMotion(e.target.checked)
+                                    playUiClick()
+                                  }}
+                                />
+                                <span>Reduced motion</span>
+                              </label>
+                              <label className="hexaclear-menu-settings-toggle-row">
+                                <input
+                                  type="checkbox"
+                                  checked={colorblindSupport}
+                                  onChange={(e) => {
+                                    setColorblindSupport(e.target.checked)
+                                    playUiClick()
+                                  }}
+                                />
+                                <span>Colorblind support</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {isMultiplayer && (
+                            <div className="hexaclear-menu-settings-group">
+                              <div className="hexaclear-menu-settings-group-label">
+                                Co-op name
+                              </div>
+                              <input
+                                type="text"
+                                className="hexaclear-menu-settings-text"
+                                value={mpPlayerName}
+                                maxLength={20}
+                                onChange={(e) =>
+                                  setMpPlayerName(e.target.value)
+                                }
+                                aria-label="Co-op display name"
+                              />
+                            </div>
+                          )}
+
+                          <div className="hexaclear-menu-settings-group">
+                            <div className="hexaclear-menu-settings-group-label">
+                              Account
+                            </div>
+                            <div className="hexaclear-menu-settings-account">
+                              <span className="hexaclear-menu-settings-account-text">
+                                {authLoading
+                                  ? 'Checking account…'
+                                  : isAuthenticated
+                                  ? accountSyncState === 'syncing'
+                                    ? 'Syncing online stats…'
+                                    : 'Signed in — stats syncing across devices.'
+                                  : 'Local only — sign in to sync stats and daily history.'}
+                              </span>
+                              <button
+                                type="button"
+                                className="hexaclear-menu-settings-account-button"
+                                onClick={() => {
+                                  unlockAudioOnGesture()
+                                  playUiClick()
+                                  setShowMenu(false)
+                                  setShowAccount(true)
+                                }}
+                              >
+                                {isAuthenticated ? 'Manage' : 'Sign in'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       )}
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="hexaclear-menu-new-game"
-                      onClick={() => {
-                        unlockAudioOnGesture()
-                        playUiClick()
-                        setHasStartedSession(true)
-                        setShowMenu(false)
-                      }}
-                    >
-                      New Game
-                    </button>
-                  )}
-                </div>
-
-                <div className="hexaclear-menu-account">
-                  <div>
-                    <div className="hexaclear-menu-account-label">
-                      Stats &amp; daily history sync
-                    </div>
-                    <div className="hexaclear-menu-account-status">
-                      {authLoading
-                        ? 'Checking account...'
-                        : isAuthenticated
-                        ? accountSyncState === 'syncing'
-                          ? 'Syncing online stats and daily history...'
-                          : 'Signed in'
-                        : 'Local only - sign in to sync stats and daily history across devices!'}
-                    </div>
+                    </section>
                   </div>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-account-button"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowAccount(true)
-                    }}
-                  >
-                    {isAuthenticated ? 'Manage' : 'Sign in'}
-                  </button>
-                </div>
-
-                <div className="hexaclear-menu-library">
-                  <button
-                    type="button"
-                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-scores"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowHighScores(true)
-                    }}
-                  >
-                    <span className="hexaclear-menu-nav-title">
-                      High Scores
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-stats"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowStats(true)
-                    }}
-                  >
-                    <span className="hexaclear-menu-nav-title">Stats</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="hexaclear-menu-nav-card hexaclear-menu-nav-card-play hexaclear-menu-nav-card-wide"
-                    onClick={() => {
-                      unlockAudioOnGesture()
-                      playUiClick()
-                      setShowMenu(false)
-                      setShowScoring(true)
-                    }}
-                  >
-                    <span className="hexaclear-menu-nav-title">
-                      How to Play
-                    </span>
-                  </button>
-                </div>
-
-                {/* "Export recent moves as GIF" — solo only.
-                    MP runs share the board across two players so a
-                    "my last N moves" export would be missing the
-                    partner's interleaved placements and look like
-                    the board teleporting. Disabled until at least
-                    one move has been recorded this run. */}
-                {!isMultiplayer && (
-                  <div className="hexaclear-menu-export">
-                    <button
-                      type="button"
-                      className="hexaclear-menu-link hexaclear-menu-export-button"
-                      onClick={() => {
-                        unlockAudioOnGesture()
-                        playUiClick()
-                        const available = runHistoryRef.current.length
-                        if (available === 0) return
-                        const defaultCount = Math.min(
-                          5,
-                          available,
-                          RUN_HISTORY_EXPORT_MAX,
-                        )
-                        setExportGifCount(defaultCount)
-                        setExportGifProgress(null)
-                        setShowMenu(false)
-                        setShowExportGif(true)
-                      }}
-                      disabled={runHistoryRef.current.length === 0}
-                    >
-                      Export recent moves as GIF
-                    </button>
-                  </div>
-                )}
-
-                <div className="hexaclear-menu-settings">
-                  <div className="hexaclear-menu-settings-label">Settings</div>
-                  {isMultiplayer && (
-                    <label className="hexaclear-menu-row">
-                      <span className="hexaclear-menu-row-label">
-                        Co-op name
-                      </span>
-                      <input
-                        type="text"
-                        className="hexaclear-menu-row-text"
-                        value={mpPlayerName}
-                        maxLength={20}
-                        onChange={(e) => setMpPlayerName(e.target.value)}
-                        aria-label="Co-op display name"
-                      />
-                    </label>
-                  )}
-                  <div className="hexaclear-menu-audio-row">
-                    <label className="hexaclear-menu-volume">
-                      <span className="hexaclear-menu-row-label">Volume</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={Math.round(volume * 100)}
-                        disabled={audioMuted}
-                        onChange={(e) => {
-                          const v = Number(e.target.value) / 100
-                          setVolumeState(v)
-                          setMasterVolume(v)
-                        }}
-                        aria-label="Volume"
-                      />
-                      <span className="hexaclear-menu-row-readout">
-                        {Math.round(volume * 100)}%
-                      </span>
-                    </label>
-                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
-                      <input
-                        type="checkbox"
-                        checked={audioMuted}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                          setAudioMutedState(next)
-                          setMuted(next)
-                          // After mute state is updated:
-                          //   unmuting -> click is now audible (signals "audio back")
-                          //   muting   -> click is silenced (visual change confirms it)
-                          playUiClick()
-                        }}
-                      />
-                      <span>Mute</span>
-                    </label>
-                  </div>
-                  <label className="hexaclear-menu-row hexaclear-menu-theme-row">
-                    <span className="hexaclear-menu-row-label">Theme</span>
-                    <select
-                      className="hexaclear-menu-row-select"
-                      value={theme}
-                      onChange={(e) => {
-                        setTheme(e.target.value as ThemeId)
-                        playUiClick()
-                      }}
-                      aria-label="Theme"
-                    >
-                      {THEME_OPTIONS.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="hexaclear-menu-toggle-grid">
-                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
-                      <input
-                        type="checkbox"
-                        checked={reducedMotion}
-                        onChange={(e) => {
-                          setReducedMotion(e.target.checked)
-                          playUiClick()
-                        }}
-                      />
-                      <span>Reduced motion</span>
-                    </label>
-                    <label className="hexaclear-scores-global-toggle hexaclear-menu-settings-toggle">
-                      <input
-                        type="checkbox"
-                        checked={colorblindSupport}
-                        onChange={(e) => {
-                          setColorblindSupport(e.target.checked)
-                          playUiClick()
-                        }}
-                      />
-                      <span>Colorblind support</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+                )
+              })()}
             </div>
           )}
           {showAccount && (() => {

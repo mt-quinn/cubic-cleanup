@@ -1801,7 +1801,8 @@
 [data-theme="win98"] button.hexaclear-reset,
 [data-theme="win98"] button.hexaclear-gameover-cta,
 [data-theme="win98"] button.hexaclear-gameover-save-button,
-[data-theme="win98"] button.hexaclear-menu-new-game {
+[data-theme="win98"] button.hexaclear-menu-resume-hero,
+[data-theme="win98"] button.hexaclear-menu-new-game-hero {
   background: var(--w98-surface) !important;
   color: var(--w98-text) !important;
   font-family: inherit !important;
@@ -1830,7 +1831,8 @@
 [data-theme="win98"] button.hexaclear-reset:active,
 [data-theme="win98"] button.hexaclear-gameover-cta:active,
 [data-theme="win98"] button.hexaclear-gameover-save-button:active,
-[data-theme="win98"] button.hexaclear-menu-new-game:active {
+[data-theme="win98"] button.hexaclear-menu-resume-hero:active,
+[data-theme="win98"] button.hexaclear-menu-new-game-hero:active {
   border-color:
     var(--w98-deep-shadow)
     var(--w98-highlight)
@@ -2139,18 +2141,17 @@
   padding: 3px 5px !important;
 }
 
-/* --- Menu modal rows: settings list ---------------------------------- */
+/* --- Pause menu: redesigned (Win98) --------------------------------- */
 [data-theme="win98"] .hexaclear-menu-card {
   min-width: 320px;
 }
 
-[data-theme="win98"] .hexaclear-menu-actions,
-[data-theme="win98"] .hexaclear-menu-volume,
-[data-theme="win98"] .hexaclear-menu-mini-toggle,
-[data-theme="win98"] .hexaclear-menu-settings-toggle,
-[data-theme="win98"] .hexaclear-menu-theme-row,
-[data-theme="win98"] .hexaclear-menu-account,
-[data-theme="win98"] .hexaclear-menu-account-button,
+/* Settings panels and the Sign-out / danger button get the inverted
+   sunken bevel so they read as containers (vs. the raised buttons
+   they share the card with). */
+[data-theme="win98"] .hexaclear-menu-settings-audio,
+[data-theme="win98"] .hexaclear-menu-settings-account,
+[data-theme="win98"] .hexaclear-menu-settings-toggle-row,
 [data-theme="win98"] .hexaclear-menu-account-secondary,
 [data-theme="win98"] .hexaclear-menu-nav-card,
 [data-theme="win98"] .hexaclear-menu-danger-button {
@@ -2172,65 +2173,145 @@
   letter-spacing: 0 !important;
 }
 
-/* Classic Win98 "default button" treatment for Resume: a 1px solid
-   black ring is painted around the standard grey bevel to mark this
-   as the Enter-key / primary action, and the label is bolded for
-   extra emphasis. The press state keeps the ring while the bevel
-   flips to its sunken form.
+/* Resume / New Game hero: the classic Win98 "default button"
+   treatment — a 1px solid black ring around the raised bevel and a
+   bolded label to mark these as the Enter-key / primary action.
+   The press state keeps the ring while the bevel flips to its
+   sunken form.
 
-   Selector chain mirrors the global Win98 overlay-button rule
-   (`.hexaclear-overlay-card button:not(.title-control)`) so this
-   override actually wins on specificity rather than just tying it. */
-[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-resume {
+   Selector chain mirrors the global Win98 overlay-button rule so
+   this override actually wins on specificity. */
+[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-resume-hero,
+[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-new-game-hero {
   box-shadow:
     inset -1px -1px 0 var(--w98-shadow),
     inset 1px 1px 0 var(--w98-surface),
     0 0 0 1px #000 !important;
   font-weight: 700 !important;
+  font-size: 16px !important;
+  min-height: 44px;
+  padding: 10px 22px !important;
 }
-
-[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-resume:active {
+[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-resume-hero:active,
+[data-theme="win98"] .hexaclear-overlay-card button.hexaclear-menu-new-game-hero:active {
   box-shadow:
     inset 1px 1px 0 var(--w98-shadow),
     inset -1px -1px 0 var(--w98-surface),
     0 0 0 1px #000 !important;
 }
 
-/* The wood theme leaves these containers flush against their parent
-   because the bevel is invisible. In win98 the bevel is a real frame,
-   so the inner controls need a few px of breathing room or they slam
-   into the chrome. */
-[data-theme="win98"] .hexaclear-menu-actions {
-  padding: 8px 10px !important;
+/* Hero hint + zone label: plain Tahoma in the muted secondary color. */
+[data-theme="win98"] .hexaclear-menu-hero-hint,
+[data-theme="win98"] .hexaclear-menu-zone-label {
+  color: var(--w98-text-mute, #555) !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-weight: 400 !important;
+  opacity: 1 !important;
 }
 
-[data-theme="win98"] .hexaclear-menu-theme-row {
-  padding: 6px 10px !important;
+/* Run-scope chips read as raised Win98 buttons (already inherits
+   the generic chrome from the global selector above). Just strip
+   the gold uppercase styling. */
+[data-theme="win98"] .hexaclear-menu-chip {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-weight: 400 !important;
+}
+[data-theme="win98"] .hexaclear-menu-chip-warn {
+  color: #8a2a00 !important;
+}
+[data-theme="win98"] .hexaclear-menu-chip-danger {
+  color: #c80000 !important;
 }
 
+/* Library nav cards: a Win98-y group of raised buttons with a
+   small Tahoma title and a muted subtitle (the stat tease).
+   Stats card retains its dotted focus outline from the pre-
+   redesign menu so it still reads as the "secondary default". */
 [data-theme="win98"] .hexaclear-menu-nav-card-stats {
   outline: 1px dotted var(--w98-text) !important;
   outline-offset: -4px !important;
 }
-
 [data-theme="win98"] .hexaclear-menu-nav-title,
-[data-theme="win98"] .hexaclear-menu-nav-subtitle,
-[data-theme="win98"] .hexaclear-menu-settings-label,
-[data-theme="win98"] .hexaclear-menu-account-label,
-[data-theme="win98"] .hexaclear-menu-account-status,
-[data-theme="win98"] .hexaclear-menu-mini-toggle,
-[data-theme="win98"] .hexaclear-menu-howto-link {
+[data-theme="win98"] .hexaclear-menu-nav-tease,
+[data-theme="win98"] .hexaclear-menu-settings-group-label,
+[data-theme="win98"] .hexaclear-menu-settings-strip-label,
+[data-theme="win98"] .hexaclear-menu-settings-strip-summary,
+[data-theme="win98"] .hexaclear-menu-settings-strip-icon,
+[data-theme="win98"] .hexaclear-menu-settings-strip-chevron,
+[data-theme="win98"] .hexaclear-menu-settings-mute,
+[data-theme="win98"] .hexaclear-menu-settings-account-text {
   color: var(--w98-text) !important;
   font-family: inherit !important;
   letter-spacing: 0 !important;
 }
-
-/* Nav-card labels are uppercased + heavyweight in the wood theme;
-   the Win98 theme uses Title Case Tahoma for all dialog buttons,
-   so strip the transform and the 900-weight bump here. */
 [data-theme="win98"] .hexaclear-menu-nav-title {
   text-transform: none !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+}
+[data-theme="win98"] .hexaclear-menu-nav-tease {
+  text-transform: none !important;
   font-weight: 400 !important;
+  font-size: 12px !important;
+  color: var(--w98-text-mute, #555) !important;
+}
+
+/* Settings strip — the collapsed one-line "Settings · 100% · …" row.
+   Inherits the raised Win98 button chrome from the global selector
+   so this rule only handles the typographic flatten. */
+[data-theme="win98"] .hexaclear-menu-settings-strip {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-weight: 400 !important;
+  padding: 6px 10px !important;
+}
+[data-theme="win98"] .hexaclear-menu-settings-strip-label {
+  font-weight: 700 !important;
+  text-transform: none !important;
+}
+[data-theme="win98"] .hexaclear-menu-settings-strip-summary {
+  font-weight: 400 !important;
+  color: var(--w98-text-mute, #555) !important;
+}
+[data-theme="win98"] .hexaclear-menu-settings-zone.is-expanded .hexaclear-menu-settings-strip {
+  background: var(--w98-surface) !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-settings-group-label {
+  text-transform: none !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-settings-audio,
+[data-theme="win98"] .hexaclear-menu-settings-account,
+[data-theme="win98"] .hexaclear-menu-settings-toggle-row {
+  padding: 6px 10px !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-settings-toggle-row {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-settings-audio-readout {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--w98-text) !important;
+}
+
+[data-theme="win98"] .hexaclear-menu-settings-account-text {
+  font-size: 12px !important;
 }
 
 [data-theme="win98"] .hexaclear-account-card {
@@ -2319,50 +2400,11 @@
   outline-offset: -4px !important;
 }
 
-[data-theme="win98"] .hexaclear-menu-howto-link {
-  text-align: left !important;
-  align-self: flex-start !important;
-}
-
-[data-theme="win98"] .hexaclear-menu-rows {
-  border: 2px solid !important;
-  border-color:
-    var(--w98-shadow)
-    var(--w98-highlight)
-    var(--w98-highlight)
-    var(--w98-shadow) !important;
-  background: var(--w98-surface);
-  padding: 12px 14px;
-  margin: 8px 0;
-  gap: 8px;
-}
-
-[data-theme="win98"] .hexaclear-menu-row {
-  color: var(--w98-text) !important;
-  font-family: inherit !important;
-  font-size: 14px !important;
-  padding: 6px 0 !important;
-  gap: 12px;
-  min-height: 28px;
-}
-
-[data-theme="win98"] .hexaclear-menu-row-label {
-  font-weight: 400 !important;
-}
-
-/* Volume readout (the "100%") next to the slider. */
-[data-theme="win98"] .hexaclear-menu-row-readout {
-  font-size: 14px !important;
-  flex-basis: 3.2rem !important;
-}
-
-/* Slider — Win98 trough + raised thumb, sized so the thumb is a
-   comfortable touch target (28px tall, ~16px wide). flex: 1 lets
-   the trough soak up whatever horizontal space is left in the row
-   so the percentage readout always sits inside the row's right
-   edge instead of overhanging the panel border. */
-[data-theme="win98"] .hexaclear-menu-row input[type="range"],
-[data-theme="win98"] .hexaclear-menu-volume input[type="range"] {
+/* Volume slider — Win98 trough + raised thumb, sized so the thumb
+   is a comfortable touch target (28px tall, ~16px wide). flex: 1
+   lets the trough soak up whatever horizontal space is left so the
+   percentage readout always sits inside the row's right edge. */
+[data-theme="win98"] .hexaclear-menu-settings-audio input[type="range"] {
   appearance: none;
   flex: 1 1 auto;
   width: auto;
@@ -2372,9 +2414,7 @@
   margin: 0;
   cursor: default;
 }
-
-[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-runnable-track,
-[data-theme="win98"] .hexaclear-menu-volume input[type="range"]::-webkit-slider-runnable-track {
+[data-theme="win98"] .hexaclear-menu-settings-audio input[type="range"]::-webkit-slider-runnable-track {
   height: 5px;
   background: var(--w98-surface);
   border: 1px solid;
@@ -2387,9 +2427,7 @@
   margin-top: 11px;
   margin-bottom: 11px;
 }
-
-[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-webkit-slider-thumb,
-[data-theme="win98"] .hexaclear-menu-volume input[type="range"]::-webkit-slider-thumb {
+[data-theme="win98"] .hexaclear-menu-settings-audio input[type="range"]::-webkit-slider-thumb {
   appearance: none;
   width: 16px;
   height: 28px;
@@ -2406,9 +2444,7 @@
     inset 1px 1px 0 var(--w98-surface);
   border-radius: 0;
 }
-
-[data-theme="win98"] .hexaclear-menu-row input[type="range"]::-moz-range-thumb,
-[data-theme="win98"] .hexaclear-menu-volume input[type="range"]::-moz-range-thumb {
+[data-theme="win98"] .hexaclear-menu-settings-audio input[type="range"]::-moz-range-thumb {
   width: 16px;
   height: 28px;
   background: var(--w98-surface);
@@ -2416,10 +2452,11 @@
   border-radius: 0;
 }
 
-/* Checkboxes — a plain sunken square with a black ✓ when checked.
-   Sized up to ~24px square for a finger-friendly tap target. */
-[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"],
-[data-theme="win98"] .hexaclear-menu-mini-toggle input[type="checkbox"] {
+/* Checkboxes inside the menu — plain sunken square with a black ✓
+   when checked. Sized up to ~24px for a finger-friendly tap. */
+[data-theme="win98"] .hexaclear-menu-settings-audio input[type="checkbox"],
+[data-theme="win98"] .hexaclear-menu-settings-toggle-row input[type="checkbox"],
+[data-theme="win98"] .hexaclear-menu-settings-mute input[type="checkbox"] {
   appearance: none;
   width: 24px;
   height: 24px;
@@ -2437,9 +2474,9 @@
   cursor: default;
   flex: 0 0 auto;
 }
-
-[data-theme="win98"] .hexaclear-menu-row input[type="checkbox"]:checked::after,
-[data-theme="win98"] .hexaclear-menu-mini-toggle input[type="checkbox"]:checked::after {
+[data-theme="win98"] .hexaclear-menu-settings-audio input[type="checkbox"]:checked::after,
+[data-theme="win98"] .hexaclear-menu-settings-toggle-row input[type="checkbox"]:checked::after,
+[data-theme="win98"] .hexaclear-menu-settings-mute input[type="checkbox"]:checked::after {
   content: '✓';
   position: absolute;
   inset: 0;
@@ -2453,9 +2490,8 @@
   line-height: 1;
 }
 
-/* In-session co-op name input. Same sunken Win98 field chrome as
-   the theme picker, no special arrow indicator. */
-[data-theme="win98"] .hexaclear-menu-row-text {
+/* Co-op name input — sunken Win98 field chrome. */
+[data-theme="win98"] .hexaclear-menu-settings-text {
   appearance: none;
   background: var(--w98-highlight) !important;
   color: var(--w98-text) !important;
@@ -2470,16 +2506,15 @@
     inset -1px -1px 0 var(--w98-surface) !important;
   border-radius: 0 !important;
   font-family: inherit !important;
-  /* 16px floor (vs the previous 14px) so iOS Safari doesn't zoom
-     the viewport when the input takes focus. */
+  /* 16px floor so iOS Safari doesn't zoom the viewport on focus. */
   font-size: 16px !important;
   padding: 6px 10px !important;
   min-height: 32px;
 }
 
-/* Native <select> for the theme picker — keep system rendering when
-   possible, but apply the sunken Win98 chrome where we can. */
-[data-theme="win98"] .hexaclear-menu-row-select {
+/* Theme picker — sunken Win98 select chrome with a classic 2-arrow
+   dropdown glyph painted via gradients. */
+[data-theme="win98"] .hexaclear-menu-settings-select {
   appearance: none;
   background: var(--w98-highlight) !important;
   color: var(--w98-text) !important;
@@ -2507,25 +2542,12 @@
   background-repeat: no-repeat !important;
 }
 
-/* "How to score" / "High scores" links inside the menu modal — render
-   as plain Win98 text links (underlined) instead of the warm
-   handwritten chrome. (These are styled as full Win98 buttons by
-   the .hexaclear-overlay-card button rule above; we only restore
-   transparent backgrounds here if needed.) */
+/* "Reset hiscores / Cancel" link separator in the High Scores modal
+   still uses the menu-link bullet glyph. */
 [data-theme="win98"] .hexaclear-menu-link-sep {
   text-decoration: none !important;
   color: var(--w98-text) !important;
   font-size: 14px !important;
-}
-
-/* Menu modal hint — plain text, larger for touch readability. */
-[data-theme="win98"] .hexaclear-menu-hint {
-  color: var(--w98-text) !important;
-  font-family: inherit !important;
-  font-size: 14px !important;
-  line-height: 1.4 !important;
-  opacity: 1 !important;
-  text-align: left !important;
 }
 
 /* --- Scoring & High Scores cards: same dialog-window treatment ------- */
