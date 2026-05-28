@@ -6440,16 +6440,25 @@ body {
   top: 8%;
   left: 50%;
   transform: translateX(-50%);
+  /* Wrap to as many lines as the copy needs to stay legible — the
+     prompt holds a full sentence, so a hard one-line constraint
+     would either overflow the board or force an unreadably tiny
+     font. Cap the width so wrapped lines stay centered over the
+     board instead of stretching edge-to-edge, and round the pill
+     corners modestly (a 999px radius looks wrong on a multi-line
+     block). */
+  max-width: min(86%, 22rem);
   padding: 0.55rem 1.1rem;
   background: rgba(34, 14, 4, 0.78);
   border: 1px solid rgba(255, 229, 168, 0.45);
-  border-radius: 999px;
+  border-radius: 14px;
   color: #ffe8a3;
   font-weight: 600;
   font-size: clamp(0.95rem, 3.4vw, 1.15rem);
+  line-height: 1.3;
   letter-spacing: 0.01em;
   text-align: center;
-  white-space: nowrap;
+  text-wrap: balance;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   animation: hexaclear-tutorial-prompt-in 520ms cubic-bezier(0.2, 0.7, 0.3, 1)
     both;
@@ -6715,11 +6724,25 @@ body {
   transform-origin: center;
 }
 
+/* Ruby cube: red fill so the replay marks where the ruby sat (and
+   the moment it's captured when it's part of the clear). Matches
+   the live board's ruby palette (`--cube-golden-left`). Declared
+   after the base rule and reasserted on the placed/clearing
+   variants below so the red wins regardless of which animation
+   state the cell is in. */
+.hexaclear-reel-cube.is-ruby {
+  fill: #e23c5c;
+}
+
 /* Cells the piece just landed on get a quick scale-up pop so the
    eye registers "the piece landed *here*" before the clears fire. */
 .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube {
   animation: hexaclear-reel-placed 320ms cubic-bezier(0.22, 1.4, 0.36, 1) 1;
   fill: #e0a060;
+}
+
+.hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube.is-ruby {
+  fill: #e23c5c;
 }
 
 @keyframes hexaclear-reel-placed {

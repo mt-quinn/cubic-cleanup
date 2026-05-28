@@ -879,6 +879,14 @@ const TUTORIAL_STAGE_1_LINE_CELLS: CellId[] = [
 // at an end.
 const TUTORIAL_STAGE_1_TARGET_CELLS: CellId[] = ['0,0', '1,-1']
 
+// One pre-filled cell on the stage-1 line is dressed up as a ruby so
+// the player's very first clear also captures a ruby — teaching the
+// bonus collectible in the same beat as the core clear loop. Sits a
+// couple cells off-center (not in the gap the player fills) so it's
+// clearly "already on the board" rather than part of the piece they
+// drop. Completing the line clears the whole line, ruby included.
+const TUTORIAL_STAGE_1_RUBY_CELL: CellId = '-2,2'
+
 const TUTORIAL_PAIR_SHAPE: PieceShape = {
   id: 'shape-tutorial-pair',
   // Two cells offset along (1, -1) — the same axis as the chosen
@@ -948,6 +956,11 @@ export const createTutorialStage1State = (): GameState => {
     if (targetSet.has(cellId)) continue
     state.board[cellId] = 'filled'
   }
+  // Mark one already-filled line cell as a ruby so completing the
+  // line captures it — the player's first clear doubles as their
+  // first ruby grab. (The cell is guaranteed filled above; it's a
+  // line cell that isn't part of the gap.)
+  state.goldenCellIds = [TUTORIAL_STAGE_1_RUBY_CELL]
   const piece: ActivePiece = {
     id: 'tutorial-pair-1',
     shape: TUTORIAL_PAIR_SHAPE,

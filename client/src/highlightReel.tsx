@@ -79,6 +79,12 @@ export type RunHighlightSnapshot = {
   // True when this placement also cleared the entire board.
   // Reserved for a future flourish; not used by the MVP renderer.
   causedBoardClear: boolean
+  // Cells that were rubies (golden) in the pre-placement board.
+  // Rendered as a red hex in the reel so the replay shows where
+  // the ruby sat — and, when it's part of the clear, the moment
+  // it gets captured. Empty for modes / placements with no ruby
+  // on the board (daily, multiplayer reconstructions, etc.).
+  goldenCellIds: CellId[]
 }
 
 // Build a one-shot snapshot from the data already on hand inside
@@ -93,6 +99,7 @@ export const createHighlightSnapshot = (args: {
   clearedPatterns: Pattern[]
   pointsGained: number
   causedBoardClear: boolean
+  goldenCellIds?: CellId[]
 }): RunHighlightSnapshot => ({
   mode: args.mode,
   // Shallow copy the board so a later mutation of the live
@@ -106,6 +113,7 @@ export const createHighlightSnapshot = (args: {
   })),
   pointsGained: args.pointsGained,
   causedBoardClear: args.causedBoardClear,
+  goldenCellIds: [...(args.goldenCellIds ?? [])],
 })
 
 // Phase timing. Phase 1 holds the pre-placement state so the player
@@ -211,6 +219,11 @@ export const HighlightReel = ({
   const layout = layoutForMode(snapshot.mode)
   const placedSet = new Set(snapshot.placedCellIds)
   const clearingSet = new Set(snapshot.clearedCellIds)
+  // Cells that were rubies in the pre-placement board. Their cube
+  // renders red (`.is-ruby`) so the replay shows where the ruby
+  // sat and — when it's part of the clear — the beat it gets
+  // swept up. Tolerates an older snapshot with no field.
+  const goldenSet = new Set(snapshot.goldenCellIds ?? [])
 
   // Per-cell animation classes that mirror the live board: lines
   // stagger their cells by index for the wipe; flower centers vs
@@ -348,7 +361,12 @@ export const HighlightReel = ({
                 {fillNow && (
                   <polygon
                     points={points}
-                    className="hexaclear-reel-cube"
+                    className={[
+                      'hexaclear-reel-cube',
+                      goldenSet.has(cell.id) ? 'is-ruby' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                   />
                 )}
               </g>

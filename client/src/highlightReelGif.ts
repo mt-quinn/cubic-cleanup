@@ -97,6 +97,10 @@ const COLOR_HEX_FILL = 'rgba(34, 14, 4, 0.62)'
 const COLOR_HEX_STROKE = 'rgba(255, 232, 163, 0.16)'
 const COLOR_CUBE_BASE = '#c08049'
 const COLOR_CUBE_PLACED = '#e0a060'
+// Ruby cube fill — mirrors the on-screen reel's `.is-ruby` red
+// (`--cube-golden-left`) so the exported clip marks the ruby's
+// location the same way the live replay does.
+const COLOR_CUBE_RUBY = '#e23c5c'
 const COLOR_CUBE_STROKE = 'rgba(0, 0, 0, 0.35)'
 const COLOR_POINTS = '#ffe8a3'
 const COLOR_POINTS_GLOW = 'rgba(255, 212, 120, 0.55)'
@@ -362,6 +366,8 @@ type RenderContext = {
   clearingClasses: Record<CellId, string[]>
   placedSet: Set<CellId>
   clearingSet: Set<CellId>
+  // Cells that were rubies in the pre-placement board — drawn red.
+  goldenSet: Set<CellId>
   // Pixel scale from layout coords (the reel SVG's internal
   // viewBox) to canvas pixels. Computed once per export.
   pixelScale: number
@@ -380,6 +386,7 @@ const renderFrame = (
     clearingClasses,
     placedSet,
     clearingSet,
+    goldenSet,
     pixelScale,
     canvasWidth,
     canvasHeight,
@@ -442,11 +449,16 @@ const renderFrame = (
     const wasFilledBefore = snapshot.boardBefore[cell.id] === 'filled'
     const isPlaced = placedSet.has(cell.id)
     const isClearing = inCleared && clearingSet.has(cell.id)
+    // Pre-existing ruby cells draw red regardless of phase; the
+    // placed piece is never a ruby, so the placed-cube color is
+    // unaffected.
+    const isGolden = goldenSet.has(cell.id)
+    const restColor = isGolden ? COLOR_CUBE_RUBY : COLOR_CUBE_BASE
 
     if (!inPlaced) {
       // 'before' phase: only pre-placement filled cells.
       if (wasFilledBefore) {
-        drawCube(ctx, cx, cy, 1, 1, COLOR_CUBE_BASE)
+        drawCube(ctx, cx, cy, 1, 1, restColor)
       }
       continue
     }
@@ -455,7 +467,7 @@ const renderFrame = (
       // 'placed' phase: original cells + the placed piece's
       // pop-in animation.
       if (wasFilledBefore && !isPlaced) {
-        drawCube(ctx, cx, cy, 1, 1, COLOR_CUBE_BASE)
+        drawCube(ctx, cx, cy, 1, 1, restColor)
       }
       if (isPlaced) {
         const localT = t - PHASE_PLACE_TRIGGER_MS
@@ -480,7 +492,11 @@ const renderFrame = (
     }
 
     // 'cleared' phase.
-    const baseColor = isPlaced ? COLOR_CUBE_PLACED : COLOR_CUBE_BASE
+    const baseColor = isPlaced
+      ? COLOR_CUBE_PLACED
+      : isGolden
+        ? COLOR_CUBE_RUBY
+        : COLOR_CUBE_BASE
     if (isClearing) {
       const delay = deriveClearDelay(cell.id, clearingClasses)
       const localT = clearLocalT - delay
@@ -735,6 +751,7 @@ export const captureHighlightReelAsGif = async ({
     clearingClasses: computeClearingClasses(snapshot),
     placedSet: new Set(snapshot.placedCellIds),
     clearingSet: new Set(snapshot.clearedCellIds),
+    goldenSet: new Set(snapshot.goldenCellIds ?? []),
     pixelScale,
     canvasWidth,
     canvasHeight,
@@ -936,6 +953,7 @@ export const captureMultiHighlightReelAsGif = async ({
     clearingClasses: computeClearingClasses(s),
     placedSet: new Set(s.placedCellIds),
     clearingSet: new Set(s.clearedCellIds),
+    goldenSet: new Set(s.goldenCellIds ?? []),
     pixelScale,
     canvasWidth,
     canvasHeight,

@@ -3218,8 +3218,19 @@
   stroke: var(--w98-text, #000);
 }
 
+/* Ruby cube in the reel adopts the Win98 ruby red so the replay
+   marks the ruby location in-theme. Reasserted on the placed
+   variant for the same reason the default theme does. */
+[data-theme="win98"] .hexaclear-reel-cube.is-ruby {
+  fill: var(--w98-ruby-fill, #ff0000);
+}
+
 [data-theme="win98"] .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube {
   fill: var(--w98-cube-highlight, #20a0a0);
+}
+
+[data-theme="win98"] .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube.is-ruby {
+  fill: var(--w98-ruby-fill, #ff0000);
 }
 
 [data-theme="win98"] .hexaclear-reel-caption {

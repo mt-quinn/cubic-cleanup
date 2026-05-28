@@ -2120,6 +2120,9 @@ function App() {
       ],
       pointsGained: 240,
       causedBoardClear: false,
+      // Mark one filled line cell as a ruby so the dev reel
+      // exercises the red-hex ruby render.
+      goldenCellIds: validLineCellIds.filter((id) => id !== placedCellId).slice(0, 1),
     })
     setDevReelOpen(true)
   }, [])
@@ -2229,6 +2232,9 @@ function App() {
         ],
         pointsGained: 480,
         causedBoardClear: false,
+        goldenCellIds: validLineCellIds
+          .filter((id) => id !== placedCellId)
+          .slice(0, 1),
       }
       // Seed both the live ref AND the modal-state snapshot. The
       // real gameOver transition effect promotes the ref into
@@ -2262,6 +2268,9 @@ function App() {
         ],
         pointsGained: 480,
         causedBoardClear: false,
+        goldenCellIds: validLineCellIds
+          .filter((id) => id !== placedCellId)
+          .slice(0, 1),
       })
     }, 200)
   }, [])
@@ -2320,6 +2329,7 @@ function App() {
         ],
         pointsGained: 240 + i * 30,
         causedBoardClear: false,
+        goldenCellIds: [],
       })
     }
     runHistoryRef.current = snapshots
@@ -4313,6 +4323,7 @@ function App() {
           clearedPatterns: result.clearedPatterns,
           pointsGained: result.pointsGained,
           causedBoardClear: result.boardCleared,
+          goldenCellIds: before.goldenCellIds,
         })
       }
 
@@ -4332,6 +4343,7 @@ function App() {
           clearedPatterns: result.clearedPatterns,
           pointsGained: result.pointsGained,
           causedBoardClear: result.boardCleared,
+          goldenCellIds: before.goldenCellIds,
         })
         const history = runHistoryRef.current
         history.push(moveSnapshot)
@@ -4989,10 +5001,29 @@ function App() {
 
       // If we're delaying score update (waiting for particle), don't update score yet
       const scoreToUse = shouldDelayScoreUpdate ? current.score : finalScore
-      
+
+      // Tutorial cleanup: the stages run in endless mode, which
+      // respawns a fresh ruby every time one clears. In the
+      // controlled tutorial we don't want a stray ruby (a lone
+      // filled cell) popping onto the otherwise-empty board after
+      // the teaching clear — it would muddy the "you cleared the
+      // line AND grabbed the ruby" beat and briefly sit there
+      // before the next stage crossfades in. Strip the respawn:
+      // drop all golden ids and revert their freshly-filled home
+      // cells back to empty.
+      let committedBoard = result.board
+      let committedGoldenCellIds = result.goldenCellIds
+      if (tutorialStageRef.current !== 0 && result.rubiesCleared > 0) {
+        committedBoard = { ...result.board }
+        for (const id of result.goldenCellIds) {
+          if (before.board[id] === 'empty') committedBoard[id] = 'empty'
+        }
+        committedGoldenCellIds = []
+      }
+
       return {
         ...current,
-        board: result.board,
+        board: committedBoard,
         score: scoreToUse,
         streak: result.clearedPatterns.length > 0 ? newStreak : 0,
         hand: newHand,
@@ -5005,7 +5036,7 @@ function App() {
         dailyRemainingHits: result.dailyRemainingHits,
         dailyCompleted: result.dailyCompleted,
         dailyHandDealCount: nextHandDealCount,
-        goldenCellIds: result.goldenCellIds,
+        goldenCellIds: committedGoldenCellIds,
       }
     })
   }
@@ -8834,7 +8865,8 @@ function App() {
                   patterns pop at once. */}
               {tutorialStage === 1 && !tutorialToastVisible && (
                 <div className="hexaclear-tutorial-prompt">
-                  Drag the cube to fill the line.
+                  Drag the cube to fill the line. Clearing it grabs the
+                  ruby for bonus points!
                 </div>
               )}
               {tutorialStage === 2 && !tutorialToastVisible && (
