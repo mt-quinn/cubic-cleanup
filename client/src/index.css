@@ -6437,7 +6437,14 @@ body {
 
 .hexaclear-tutorial-prompt {
   position: absolute;
-  top: 8%;
+  /* Float the prompt up into the empty band above the board (the
+     wrapper doesn't clip overflow), so it sits between the title and
+     the playfield instead of covering the top hex rows the player
+     drops onto. Anchored bottom-up so however many lines the copy
+     wraps to, it grows upward and its lower edge stays just above the
+     board's top padding. */
+  top: auto;
+  bottom: calc(100% - 1.75rem);
   left: 50%;
   transform: translateX(-50%);
   /* Wrap to as many lines as the copy needs to stay legible — the
