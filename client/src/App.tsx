@@ -2190,6 +2190,8 @@ function App() {
   const [dailyIntroSeen, setDailyIntroSeen] = useState(() =>
     getStorageFlag(FTUE_DAILY_INTRO_KEY),
   )
+  const [tutorialEndScreenPending, setTutorialEndScreenPending] =
+    useState(false)
 
   const [game, setGame] = useState<GameState>(() =>
     tutorialStage === 1
@@ -3749,7 +3751,7 @@ function App() {
 
   useEffect(() => {
     if (holdHintSeenRef.current) return
-    if (tutorialStage > 0) return
+    if (tutorialStage === 0) return
     if (isMultiplayer) return
     if (game.gameOver) return
     if (game.mode !== 'endless') return
@@ -5452,6 +5454,7 @@ function App() {
     lastScheduledCubeParticleActionIdRef.current = null
     setScoreParticles([])
     setPendingCubesDelta(0)
+    setTutorialEndScreenPending(false)
     if (game.mode === 'daily') {
       // Preserve the active daily date key when resetting — if the
       // player is replaying an archive day from history, "Reset"
@@ -5473,6 +5476,7 @@ function App() {
     }
     setSelectedPieceId(null)
     setHover(null)
+    setFtueHint(null)
     setUndoStack([])
     setUndoAnimation(null)
     setPendingUndoRestoreSlotIndex(null)
@@ -5498,7 +5502,7 @@ function App() {
   // `clearingCells` to drain back to empty is the cleanest "the
   // animation just ended" signal that already exists.
 
-  const exitTutorial = useCallback(() => {
+  const exitTutorial = useCallback((completed = false) => {
     // Wipe any visual artifacts from the tutorial board (particles,
     // ripples, popups, etc.) before swapping in the real game state.
     scoreParticleGenerationRef.current += 1
@@ -5508,6 +5512,7 @@ function App() {
     setPendingCubesDelta(0)
     setSelectedPieceId(null)
     setHover(null)
+    setFtueHint(null)
     setUndoStack([])
     setUndoAnimation(null)
     setPendingUndoRestoreSlotIndex(null)
@@ -5520,21 +5525,16 @@ function App() {
     const fresh = createInitialGameState()
     setGame(fresh)
     setSavedEndlessGame(fresh)
+    setTutorialEndScreenPending(completed)
     setTutorialStage(0)
     setHandFlyInToken((t) => t + 1)
-    showFtueHint(
-      'hold',
-      "Pieces can be moved into Hold instead of played on the board if you don't want to or can't play them right now.",
-      FTUE_HOLD_HINT_KEY,
-      holdHintSeenRef,
-    )
     try {
       window.localStorage.setItem(TUTORIAL_COMPLETED_KEY, '1')
     } catch {
       // Best-effort; if storage is unavailable, the tutorial will
       // re-fire next session, which is harmless.
     }
-  }, [showFtueHint])
+  }, [])
 
   const skipTutorial = useCallback(() => {
     if (tutorialStageRef.current === 0) return
@@ -5572,7 +5572,7 @@ function App() {
         setTutorialStage(2)
         setHandFlyInToken((t) => t + 1)
       } else {
-        exitTutorial()
+        exitTutorial(true)
       }
     }, tutorialStage === 1 ? 360 : 620)
     return () => window.clearTimeout(handle)
@@ -6415,6 +6415,7 @@ function App() {
     }
 
     setGame(nextGame)
+    setTutorialEndScreenPending(false)
     setSelectedPieceId(null)
     setHover(null)
     // Any in-flight cube-counter delay belongs to the run we're leaving.
@@ -8168,6 +8169,8 @@ function App() {
   // preview, and partner-tint child. Tier 0 falls through to the
   // :root defaults (no inline style needed).
   const tierPaletteStyle = paletteForTier(scoreTier, scoreOctave, theme)
+  const showTutorialEndScreen =
+    game.mode === 'endless' && tutorialEndScreenPending && !dailyIntroSeen
   const audiusBeatClass =
     theme === 'audius' && audiusBeatToken > 0
       ? audiusBeatToken % 2 === 0
@@ -9728,7 +9731,7 @@ function App() {
           {ftueHint &&
             ftueHint.kind !== 'hold' &&
             ftueHint.kind !== 'undo' &&
-            tutorialStage === 0 &&
+            tutorialStage > 0 &&
             !game.gameOver && (
             <div
               className={[
@@ -10077,17 +10080,19 @@ function App() {
                   </div>
                 </div>
 
-                {dailyIntroSeen && modalHighlightSnapshot && (
+                {!showTutorialEndScreen && modalHighlightSnapshot && (
                   <HighlightReel snapshot={modalHighlightSnapshot} />
                 )}
 
-                {dailyIntroSeen && renderRunStatsSection()}
+                {!showTutorialEndScreen && renderRunStatsSection()}
 
-                <div className="hexaclear-gameover-ftue-reason">
-                  No valid moves remaining!
-                </div>
+                {showTutorialEndScreen && (
+                  <div className="hexaclear-gameover-ftue-reason">
+                    No valid moves remaining!
+                  </div>
+                )}
 
-                {!dailyIntroSeen && (
+                {showTutorialEndScreen && (
                   <div className="hexaclear-gameover-section hexaclear-gameover-daily-intro">
                     <div className="hexaclear-gameover-section-label">
                       Quick puzzle
@@ -10106,6 +10111,7 @@ function App() {
                           handleSaveHighScore()
                         }
                         markDailyIntroSeen()
+                        setTutorialEndScreenPending(false)
                         toggleMode('daily')
                       }}
                     >
@@ -10679,11 +10685,14 @@ function App() {
                       if (pendingHighScore) {
                         handleSaveHighScore()
                       }
-                      markDailyIntroSeen()
+                      if (showTutorialEndScreen) {
+                        markDailyIntroSeen()
+                        setTutorialEndScreenPending(false)
+                      }
                       resetGame()
                     }}
                   >
-                    {dailyIntroSeen ? 'Play again' : 'Play Endless Again'}
+                    {showTutorialEndScreen ? 'Play Endless Again' : 'Play again'}
                   </button>
                 </div>
               </div>
@@ -14776,7 +14785,7 @@ function App() {
             </div>
           )}
           {ftueHint?.kind === 'hold' &&
-            tutorialStage === 0 &&
+            tutorialStage > 0 &&
             !game.gameOver && (
             <div
               className={[
@@ -14822,7 +14831,9 @@ function App() {
                   displayPiece && !isPlayable ? 'unplayable' : '',
                   isFailedDrop ? 'failed-drop' : '',
                   rescueAnimation ? 'is-rescue-flash' : '',
-                  ftueHint?.kind === 'hold' ? 'is-ftue-highlighted' : '',
+                  ftueHint?.kind === 'hold' && tutorialStage > 0
+                    ? 'is-ftue-highlighted'
+                    : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
