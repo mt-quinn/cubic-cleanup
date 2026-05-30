@@ -330,22 +330,14 @@ This should feel like "my relationship with these weird little shapes," not like
 
 MVP stats per piece variant:
 
-- **Times dealt** — how often this exact piece variant appeared in a hand.
 - **Times played** — how often the player placed it.
 - **Killing hands** — how many times this piece was part of the final hand before game over. Use gentle copy; this is flavorful, not shaming.
 - **Clears caused** — number of placements with this piece that cleared at least one pattern.
 - **Combos joined** — number of multi-clear placements involving this piece.
 - **Average score** — average points gained when this piece is played.
 - **Best clear** — highest single-placement score produced by this piece.
-- **Rubies captured** — rubies cleared by placements using this piece.
-- **Board clears** — full-board clears caused by this piece.
 
 Nice-to-have later:
-
-- "Most common landing flower"
-- "Favorite mode"
-- "Best daily solve contribution"
-- "Longest streak extended"
 - Tiny sparkline of average score over time
 
 #### Flavor copy

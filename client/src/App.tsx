@@ -25,7 +25,7 @@ import {
   dealDailyHand,
   hasAnyValidMove,
   TUTORIAL_STAGE_1_TARGET_CELL_IDS,
-  TUTORIAL_STAGE_2_TARGET_CELL_ID,
+  TUTORIAL_STAGE_2_TARGET_CELL_IDS,
 } from './game/gameLogic'
 import type {
   ActivePiece,
@@ -1541,15 +1541,49 @@ const PERSIST_KEY_BY_MODE: Record<GameMode, string> = {
 const ACTIVE_MODE_KEY = 'cubic-active-mode'
 
 // Set once the first-launch micro-tutorial has been completed or
-// explicitly skipped. Used to gate the two-stage guided opening so
-// returning players never see it again.
+// explicitly skipped. Used to gate the guided opening so returning
+// players never see it again.
 const TUTORIAL_COMPLETED_KEY = 'cubic-tutorial-completed'
+const FTUE_UNDO_HINT_KEY = 'cubic-ftue-undo-hint-seen'
+const FTUE_HOLD_HINT_KEY = 'cubic-ftue-hold-hint-seen'
+const FTUE_FLOWER_HINT_KEY = 'cubic-ftue-flower-hint-seen'
+const FTUE_COMBO_HINT_KEY = 'cubic-ftue-combo-hint-seen'
+const FTUE_DAILY_INTRO_KEY = 'cubic-ftue-daily-intro-seen'
 
-// 0 = not in tutorial. 1 / 2 = currently running the corresponding
-// tutorial stage. The advancement is driven by a post-placement
-// effect that watches the hand-cleared + clear-animation-finished
-// state and swaps to the next stage / exits.
+// 0 = not in tutorial. 1 = line/ruby beat. 2 = rosette beat on the
+// same board after the line clear has finished animating.
 type TutorialStage = 0 | 1 | 2
+
+type FtueHintKind = 'undo' | 'hold' | 'flower' | 'combo'
+
+type FtueHint = {
+  kind: FtueHintKind
+  text: string
+}
+
+const getStorageFlag = (key: string): boolean => {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+
+const setStorageFlag = (key: string) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(key, '1')
+  } catch {
+    // Ignore storage failures; hints can safely reappear next session.
+  }
+}
+
+const isDevForceTutorial = (): boolean => {
+  if (!import.meta.env.DEV) return false
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('forceTutorial') === '1'
+}
 
 // Belt-and-suspenders check for "this player has never played before."
 // Requires both no completion flag AND no evidence of prior play in
@@ -1564,10 +1598,7 @@ type TutorialStage = 0 | 1 | 2
 const isFirstLaunchEver = (): boolean => {
   if (typeof window === 'undefined') return false
   try {
-    if (import.meta.env.DEV) {
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('forceTutorial') === '1') return true
-    }
+    if (isDevForceTutorial()) return true
     if (window.localStorage.getItem(TUTORIAL_COMPLETED_KEY)) return false
     for (const key of Object.values(PERSIST_KEY_BY_MODE)) {
       if (window.localStorage.getItem(key)) return false
@@ -2049,13 +2080,63 @@ function App() {
   useEffect(() => {
     tutorialStageRef.current = tutorialStage
   }, [tutorialStage])
-  const [tutorialToastVisible, setTutorialToastVisible] = useState(false)
+  const [ftueHint, setFtueHint] = useState<FtueHint | null>(null)
+  const ignoreFtueHintStorage = isDevForceTutorial()
+  const undoHintSeenRef = useRef(
+    ignoreFtueHintStorage ? false : getStorageFlag(FTUE_UNDO_HINT_KEY),
+  )
+  const holdHintSeenRef = useRef(
+    ignoreFtueHintStorage ? false : getStorageFlag(FTUE_HOLD_HINT_KEY),
+  )
+  const flowerHintSeenRef = useRef(
+    ignoreFtueHintStorage ? false : getStorageFlag(FTUE_FLOWER_HINT_KEY),
+  )
+  const comboHintSeenRef = useRef(
+    ignoreFtueHintStorage ? false : getStorageFlag(FTUE_COMBO_HINT_KEY),
+  )
+  const [dailyIntroSeen, setDailyIntroSeen] = useState(() =>
+    getStorageFlag(FTUE_DAILY_INTRO_KEY),
+  )
 
   const [game, setGame] = useState<GameState>(() =>
     tutorialStage === 1
       ? createTutorialStage1State()
       : loadInitialGameFromStorage(),
   )
+  const showFtueHint = useCallback(
+    (
+      kind: FtueHintKind,
+      text: string,
+      storageKey: string,
+      seenRef: { current: boolean },
+    ) => {
+      if (seenRef.current) return
+      if (kind !== 'hold' && kind !== 'undo') {
+        seenRef.current = true
+        setStorageFlag(storageKey)
+      }
+      setFtueHint({ kind, text })
+    },
+    [],
+  )
+  const dismissActionFtueHint = useCallback(() => {
+    setFtueHint((prev) => {
+      if (prev?.kind !== 'hold' && prev?.kind !== 'undo') return prev
+      if (prev.kind === 'hold') {
+        holdHintSeenRef.current = true
+        setStorageFlag(FTUE_HOLD_HINT_KEY)
+      } else {
+        undoHintSeenRef.current = true
+        setStorageFlag(FTUE_UNDO_HINT_KEY)
+      }
+      return null
+    })
+  }, [])
+  const markDailyIntroSeen = useCallback(() => {
+    if (dailyIntroSeen) return
+    setDailyIntroSeen(true)
+    setStorageFlag(FTUE_DAILY_INTRO_KEY)
+  }, [dailyIntroSeen])
   // Dev-only: support `?devScore=N` in the URL to seed the current
   // game's `score` field on load. Lets us visually scrub through
   // every score-tier / octave milestone without grinding to 25k in
@@ -3415,6 +3496,32 @@ function App() {
     return playable
   }, [game.board, game.hand, game.hold, game.mode, boardDef])
 
+  useEffect(() => {
+    if (holdHintSeenRef.current) return
+    if (tutorialStage > 0) return
+    if (isMultiplayer) return
+    if (game.gameOver) return
+    if (game.mode !== 'endless') return
+    if (game.hold !== null) return
+    const hasAwkwardPiece = game.hand.some((p) => !playablePieceIds.has(p.id))
+    if (!hasAwkwardPiece) return
+    showFtueHint(
+      'hold',
+      "Pieces can be moved into Hold instead of played on the board if you don't want to or can't play them right now.",
+      FTUE_HOLD_HINT_KEY,
+      holdHintSeenRef,
+    )
+  }, [
+    game.gameOver,
+    game.hand,
+    game.hold,
+    game.mode,
+    isMultiplayer,
+    playablePieceIds,
+    showFtueHint,
+    tutorialStage,
+  ])
+
   // Co-op only: when one player is stuck (no valid moves) but the
   // other still has options, both players see a small status label
   // above the hand so the stuck player knows they're waiting on the
@@ -3928,6 +4035,7 @@ function App() {
           ? current.hold
           : null
       if (!inHand && !fromHold) return current
+      dismissActionFtueHint()
 
       let newHand: ActivePiece[] = current.hand
       let newHandSlots: (string | null)[] = current.handSlots
@@ -4121,6 +4229,24 @@ function App() {
       const piece = inHand ?? (playFromHold ? current.hold! : null)
       if (!piece) return current
 
+      const activeTutorialStage = tutorialStageRef.current
+      if (activeTutorialStage !== 0) {
+        const requiredCellId =
+          activeTutorialStage === 1
+            ? TUTORIAL_STAGE_1_TARGET_CELL_IDS[0]
+            : TUTORIAL_STAGE_2_TARGET_CELL_IDS[0]
+        if (cellId !== requiredCellId) {
+          setFailedPlacementPieceId(pieceId)
+          setInvalidDropCellIds(
+            attemptedCellIds && attemptedCellIds.length > 0
+              ? attemptedCellIds
+              : [cellId],
+          )
+          playError()
+          return current
+        }
+      }
+
       const before = current
       const result = applyPlacement(current, piece, cellId)
       if (!result) {
@@ -4135,6 +4261,7 @@ function App() {
         playError()
         return current
       }
+      dismissActionFtueHint()
 
       // Identify rubies that respawned onto previously-empty cells in
       // this placement so we can hide each one until the clear animation
@@ -4930,6 +5057,23 @@ function App() {
       // play clear_<streak>_combo_<clearCount-1>, capped at combo_3.
       const clearCount = result.clearedPatterns.length
       if (clearCount > 0) {
+        if (!inTutorial && current.mode === 'endless') {
+          const clearedFlower = result.clearedPatterns.some(
+            (pattern) => pattern.type === 'flower',
+          )
+          if (clearedFlower) {
+            flowerHintSeenRef.current = true
+            setStorageFlag(FTUE_FLOWER_HINT_KEY)
+          } else if (clearCount >= 2) {
+            showFtueHint(
+              'combo',
+              'Combo!',
+              FTUE_COMBO_HINT_KEY,
+              comboHintSeenRef,
+            )
+          }
+        }
+
         // If this placement also ends the run, the game-over SFX fires
         // shortly after and overlapping a celebratory clear hit on top
         // of it sounds chaotic. Cede the moment to game_over.wav.
@@ -4993,6 +5137,14 @@ function App() {
         const capped =
           undoStack.length >= 2 ? undoStack.slice(1) : undoStack
         setUndoStack([...capped, before])
+        if (!inTutorial && current.mode === 'endless') {
+          showFtueHint(
+            'undo',
+            'You can undo moves from the current hand. Playing the last piece locks that hand in.',
+            FTUE_UNDO_HINT_KEY,
+            undoHintSeenRef,
+          )
+        }
       } else {
         setUndoStack([])
       }
@@ -5002,18 +5154,14 @@ function App() {
       // If we're delaying score update (waiting for particle), don't update score yet
       const scoreToUse = shouldDelayScoreUpdate ? current.score : finalScore
 
-      // Tutorial cleanup: the stages run in endless mode, which
-      // respawns a fresh ruby every time one clears. In the
-      // controlled tutorial we don't want a stray ruby (a lone
-      // filled cell) popping onto the otherwise-empty board after
-      // the teaching clear — it would muddy the "you cleared the
-      // line AND grabbed the ruby" beat and briefly sit there
-      // before the next stage crossfades in. Strip the respawn:
-      // drop all golden ids and revert their freshly-filled home
-      // cells back to empty.
+      // Tutorial cleanup: stage 1 intentionally lets the captured ruby
+      // respawn onto one of the already-filled rosette cells so the
+      // player sees it move into the next objective. Stage 2 clears that
+      // rosette; before we exit to free play, strip any post-clear ruby
+      // respawn so a stray cube does not flash on the cleared board.
       let committedBoard = result.board
       let committedGoldenCellIds = result.goldenCellIds
-      if (tutorialStageRef.current !== 0 && result.rubiesCleared > 0) {
+      if (tutorialStageRef.current === 2 && result.rubiesCleared > 0) {
         committedBoard = { ...result.board }
         for (const id of result.goldenCellIds) {
           if (before.board[id] === 'empty') committedBoard[id] = 'empty'
@@ -5094,13 +5242,11 @@ function App() {
 
   // ---- First-launch micro-tutorial -----------------------------------
   //
-  // The tutorial leans on the existing placement pipeline: a stage's
+  // The tutorial leans on the existing placement pipeline: each stage's
   // single hand piece is the player's only legal move, dropping it
   // produces a real clear with full juice (audio, particles, ripple,
-  // shake), and the state-transition effect below detects "stage's
-  // piece played + clear animation finished" and either swaps in the
-  // next stage's prebuilt board (stage 1 -> 2) or exits into a fresh
-  // endless game (stage 2 -> done).
+  // shake), and the state-transition effect below waits for the clear
+  // animation before moving to the next beat.
   //
   // Why an effect rather than a callback on placement? The juice
   // pipeline (clear animations, score particles, ripple, ...) is
@@ -5132,15 +5278,20 @@ function App() {
     setGame(fresh)
     setSavedEndlessGame(fresh)
     setTutorialStage(0)
-    setTutorialToastVisible(false)
     setHandFlyInToken((t) => t + 1)
+    showFtueHint(
+      'hold',
+      "Pieces can be moved into Hold instead of played on the board if you don't want to or can't play them right now.",
+      FTUE_HOLD_HINT_KEY,
+      holdHintSeenRef,
+    )
     try {
       window.localStorage.setItem(TUTORIAL_COMPLETED_KEY, '1')
     } catch {
       // Best-effort; if storage is unavailable, the tutorial will
       // re-fire next session, which is harmless.
     }
-  }, [])
+  }, [showFtueHint])
 
   const skipTutorial = useCallback(() => {
     if (tutorialStageRef.current === 0) return
@@ -5148,54 +5299,40 @@ function App() {
     exitTutorial()
   }, [exitTutorial])
 
-  // Drive the stage 1 -> 2 -> exit progression. Fires only while a
-  // tutorial stage is active and only after the player's single piece
-  // has been placed (hand empty) AND the resulting clear animation
-  // has finished (clearingCells drained).
+  // Drive the line -> rosette -> free-play progression. Fires only
+  // while the tutorial is active and only after the player's single
+  // piece has been placed (hand empty) AND the resulting clear
+  // animation has finished (clearingCells drained).
   //
   // The streak check guards against a clever misclick: nothing
-  // physically prevents the player from dropping the stage 1 pair on
-  // empty cells away from the highlighted line, which is a legal but
-  // non-clearing placement. Without this check we'd happily advance
-  // to stage 2 without the player ever seeing a clear — defeating
-  // the entire point of stage 1. `streak === 0` means the last
-  // placement didn't clear, so we silently restage and let them try
-  // again.
+  // physically prevents the player from dropping a tutorial piece on
+  // empty cells away from the highlighted target. `streak === 0` means
+  // the last placement didn't clear, so we silently restage and let
+  // them try again.
   useEffect(() => {
     if (tutorialStage === 0) return
     if (game.hand.length > 0) return
     if (clearingCells.length > 0) return
-    if (tutorialStage === 1) {
-      if (game.streak === 0) {
-        const handle = window.setTimeout(() => {
-          setGame(createTutorialStage1State())
-        }, 480)
-        return () => window.clearTimeout(handle)
-      }
-      // Small breath after the line clears before the asterisk board
-      // crossfades in, so the satisfaction of stage 1 has a chance to
-      // register.
+    if (game.streak === 0) {
       const handle = window.setTimeout(() => {
-        setGame(createTutorialStage2State())
+        setGame((current) =>
+          tutorialStage === 1
+            ? createTutorialStage1State()
+            : createTutorialStage2State(current),
+        )
+      }, 480)
+      return () => window.clearTimeout(handle)
+    }
+    const handle = window.setTimeout(() => {
+      if (tutorialStage === 1) {
+        setGame((current) => createTutorialStage2State(current))
         setTutorialStage(2)
-      }, 380)
-      return () => window.clearTimeout(handle)
-    }
-    if (tutorialStage === 2) {
-      if (game.streak === 0) {
-        const handle = window.setTimeout(() => {
-          setGame(createTutorialStage2State())
-        }, 480)
-        return () => window.clearTimeout(handle)
-      }
-      // Stage 2 finished. Pop the brief "have fun" toast, then exit
-      // into a fresh endless run.
-      setTutorialToastVisible(true)
-      const handle = window.setTimeout(() => {
+        setHandFlyInToken((t) => t + 1)
+      } else {
         exitTutorial()
-      }, 1400)
-      return () => window.clearTimeout(handle)
-    }
+      }
+    }, tutorialStage === 1 ? 360 : 620)
+    return () => window.clearTimeout(handle)
   }, [
     tutorialStage,
     game.hand.length,
@@ -5845,6 +5982,7 @@ function App() {
 
   const handleUndo = () => {
     if (undoStack.length === 0) return
+    dismissActionFtueHint()
     const previous = undoStack[undoStack.length - 1]
     const remaining = undoStack.slice(0, -1)
 
@@ -6059,6 +6197,43 @@ function App() {
         : null,
     [hover, selectedPiece, game],
   )
+
+  const nearCompleteFlowerHint = useMemo<{
+    index: number
+    targetIds: string[]
+  } | null>(() => {
+    if (flowerHintSeenRef.current) return null
+    if (tutorialStage > 0) return null
+    if (isMultiplayer) return null
+    if (game.mode !== 'endless') return null
+    if (game.gameOver) return null
+
+    const flowers = boardDef.patterns.filter((p) => p.type === 'flower')
+    const candidates = game.hold ? [...game.hand, game.hold] : game.hand
+    for (let index = 0; index < flowers.length; index += 1) {
+      const pattern = flowers[index]
+      const targetIds = pattern.cellIds.filter((id) => game.board[id] === 'empty')
+      if (targetIds.length !== 1) continue
+
+      const canFinishFlower = candidates.some((piece) =>
+        boardDef.cells.some((cell) => {
+          const result = applyPlacement(
+            {
+              ...game,
+              hand: [piece],
+              handSlots: [piece.id],
+              gameOver: false,
+            },
+            piece,
+            cell.id,
+          )
+          return result?.clearedPatterns.some((p) => p.id === pattern.id)
+        }),
+      )
+      if (canFinishFlower) return { index, targetIds }
+    }
+    return null
+  }, [boardDef, game, isMultiplayer, tutorialStage])
 
   // PvP territory-delta preview. PvP has a non-obvious rule: when a
   // cube gets cleared, the *placer of that cube* receives the
@@ -6633,6 +6808,15 @@ function App() {
   }, [scorePopup, scorePopupId])
 
   useEffect(() => {
+    if (!ftueHint) return
+    if (ftueHint.kind === 'hold' || ftueHint.kind === 'undo') return
+    const timeout = window.setTimeout(() => {
+      setFtueHint((prev) => (prev?.kind === ftueHint.kind ? null : prev))
+    }, 5200)
+    return () => window.clearTimeout(timeout)
+  }, [ftueHint])
+
+  useEffect(() => {
     if (!game.gameOver) return
 
     if (game.mode === 'daily' && game.dailyCompleted) {
@@ -7198,9 +7382,11 @@ function App() {
       playClickUp()
 
       if (releasedOverHoldSlot && pieceId) {
+        dismissActionFtueHint()
         handleHoldSwap(pieceId, { kind: 'hold' })
         setSelectedPieceId(null)
       } else if (releasedOverHandSlot >= 0 && pieceId) {
+        dismissActionFtueHint()
         handleHoldSwap(pieceId, {
           kind: 'hand',
           slotIndex: releasedOverHandSlot,
@@ -8462,7 +8648,7 @@ function App() {
                           y={cy - HEX_SIZE * 0.5}
                           className="hexaclear-golden-popup"
                         >
-                          +10
+                          +10 Ruby
                         </text>
                       )}
                     {/* Colorblind-mode ruby glyph. Always rendered
@@ -8723,6 +8909,39 @@ function App() {
               ))}
             </g>
 
+            {nearCompleteFlowerHint &&
+              (() => {
+                const loop =
+                  boardRender.flowerBoundaryLoops[nearCompleteFlowerHint.index]
+                return (
+                  <g
+                    className="hexaclear-ftue-rosette-glow-layer"
+                    aria-hidden="true"
+                    pointerEvents="none"
+                  >
+                    {loop && (
+                      <polygon
+                        className="hexaclear-ftue-rosette-glow"
+                        points={loop.light.map((v) => `${v.x},${v.y}`).join(' ')}
+                      />
+                    )}
+                    {nearCompleteFlowerHint.targetIds.map((id) => {
+                      const pos = boardLayout.positions[id]
+                      if (!pos) return null
+                      return (
+                        <circle
+                          key={id}
+                          cx={pos.x + boardLayout.offsetX}
+                          cy={pos.y + boardLayout.offsetY}
+                          r={HEX_SIZE * 0.92}
+                          className="hexaclear-ftue-rosette-target-pulse"
+                        />
+                      )
+                    })}
+                  </g>
+                )
+              })()}
+
             {preview && selectedPiece && hover?.cellId && !preview.valid && (
               <PlacementGhost
                 originCellId={hover.cellId}
@@ -8816,7 +9035,7 @@ function App() {
               const targetIds: string[] =
                 tutorialStage === 1
                   ? [...TUTORIAL_STAGE_1_TARGET_CELL_IDS]
-                  : [TUTORIAL_STAGE_2_TARGET_CELL_ID]
+                  : [...TUTORIAL_STAGE_2_TARGET_CELL_IDS]
               return (
                 <g
                   className="hexaclear-tutorial-pulse-layer"
@@ -8852,32 +9071,20 @@ function App() {
               className={[
                 'hexaclear-tutorial-overlay',
                 `is-stage-${tutorialStage}`,
-                tutorialToastVisible ? 'is-toast-visible' : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
               aria-live="polite"
             >
-              {/* Stage-specific prompts. Stage 1 teaches "fill a
-                  line to clear it"; stage 2 teaches that combos
-                  multiply each clear's value, so the same single
-                  placement is worth a lot more when several
-                  patterns pop at once. */}
-              {tutorialStage === 1 && !tutorialToastVisible && (
+              {tutorialStage === 1 && (
                 <div className="hexaclear-tutorial-prompt">
-                  Drag the cube to fill the line. Clearing it grabs the
-                  ruby for bonus points!
+                  Drag the piece onto the board to finish the line.
                 </div>
               )}
-              {tutorialStage === 2 && !tutorialToastVisible && (
+              {tutorialStage === 2 && (
                 <div className="hexaclear-tutorial-prompt">
-                  The more clears you get in a single placement, the
-                  more points each clear is worth!
-                </div>
-              )}
-              {tutorialToastVisible && (
-                <div className="hexaclear-tutorial-toast" role="status">
-                  That&apos;s it. Have fun.
+                  Now finish the flower. Clearing the whole board earns a big
+                  bonus!
                 </div>
               )}
               <button
@@ -8888,6 +9095,22 @@ function App() {
               >
                 Skip
               </button>
+            </div>
+          )}
+          {ftueHint &&
+            ftueHint.kind !== 'hold' &&
+            ftueHint.kind !== 'undo' &&
+            tutorialStage === 0 &&
+            !game.gameOver && (
+            <div
+              className={[
+                'hexaclear-ftue-hint',
+                `is-${ftueHint.kind}`,
+              ].join(' ')}
+              role="status"
+              aria-live="polite"
+            >
+              {ftueHint.text}
             </div>
           )}
           <div className="hexaclear-board-hud">
@@ -9019,7 +9242,12 @@ function App() {
           {undoStack.length > 0 && !game.gameOver && (
             <button
               type="button"
-              className="hexaclear-undo-button"
+              className={[
+                'hexaclear-undo-button',
+                ftueHint?.kind === 'undo' ? 'is-ftue-highlighted' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onClick={() => {
                 playUiClick()
                 handleUndo()
@@ -9219,11 +9447,42 @@ function App() {
                   </div>
                 </div>
 
-                {modalHighlightSnapshot && (
+                {dailyIntroSeen && modalHighlightSnapshot && (
                   <HighlightReel snapshot={modalHighlightSnapshot} />
                 )}
 
-                {renderRunStatsSection()}
+                {dailyIntroSeen && renderRunStatsSection()}
+
+                <div className="hexaclear-gameover-ftue-reason">
+                  No valid moves remaining!
+                </div>
+
+                {!dailyIntroSeen && (
+                  <div className="hexaclear-gameover-section hexaclear-gameover-daily-intro">
+                    <div className="hexaclear-gameover-section-label">
+                      Quick puzzle
+                    </div>
+                    <p className="hexaclear-gameover-daily-intro-copy">
+                      Try today&apos;s Daily! Everyone gets the same board and
+                      pieces - you just have to clear some special cubes in the
+                      fewest moves you can.
+                    </p>
+                    <button
+                      type="button"
+                      className="hexaclear-gameover-cta hexaclear-gameover-cta-secondary hexaclear-gameover-daily-intro-cta"
+                      onClick={() => {
+                        playUiClick()
+                        if (pendingHighScore) {
+                          handleSaveHighScore()
+                        }
+                        markDailyIntroSeen()
+                        toggleMode('daily')
+                      }}
+                    >
+                      Try today&apos;s Daily
+                    </button>
+                  </div>
+                )}
 
                 {(() => {
                   // Endless gameover leaderboard. Defaults to a
@@ -9790,10 +10049,11 @@ function App() {
                       if (pendingHighScore) {
                         handleSaveHighScore()
                       }
+                      markDailyIntroSeen()
                       resetGame()
                     }}
                   >
-                    Play again
+                    {dailyIntroSeen ? 'Play again' : 'Play Endless Again'}
                   </button>
                 </div>
               </div>
@@ -13740,6 +14000,20 @@ function App() {
               {mpMoveStatus.message}
             </div>
           )}
+          {(ftueHint?.kind === 'hold' || ftueHint?.kind === 'undo') &&
+            tutorialStage === 0 &&
+            !game.gameOver && (
+            <div
+              className={[
+                'hexaclear-ftue-action-hint',
+                `is-${ftueHint.kind}`,
+              ].join(' ')}
+              role="status"
+              aria-live="polite"
+            >
+              {ftueHint.text}
+            </div>
+          )}
           {/* Hold pocket. Lives on the leftmost edge of the hand tray so
               hand↔hold drags are short and the slot reads as a reserve
               compartment (inset, narrower, dimmer) rather than a 4th
@@ -13773,6 +14047,7 @@ function App() {
                   displayPiece && !isPlayable ? 'unplayable' : '',
                   isFailedDrop ? 'failed-drop' : '',
                   rescueAnimation ? 'is-rescue-flash' : '',
+                  ftueHint?.kind === 'hold' ? 'is-ftue-highlighted' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -13784,7 +14059,14 @@ function App() {
                     : 'Empty hold slot'
                 }
                 onClick={() => {
-                  if (!displayPiece) return
+                  if (!displayPiece) {
+                    if (selectedPiece && game.hand.some((p) => p.id === selectedPiece.id)) {
+                      handleHoldSwap(selectedPiece.id, { kind: 'hold' })
+                      setSelectedPieceId(null)
+                      setHover(null)
+                    }
+                    return
+                  }
                   setSelectedPieceId(
                     selectedPieceId === displayPiece.id
                       ? null

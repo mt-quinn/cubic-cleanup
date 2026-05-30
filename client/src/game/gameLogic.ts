@@ -19,7 +19,6 @@ export type ActivePiece = {
   id: string
   shape: PieceShape
 }
-
 type Hand = ActivePiece[]
 
 // How many bonus rubies (a.k.a. golden cubes) a given mode keeps live on
@@ -163,7 +162,6 @@ const makeSeededRandom = (seed: number): RNG => {
     return state / 0xffffffff
   }
 }
-
 // Hash a YYYY-M-D string into a 32-bit int. Pulled out so today's
 // seed and past-day-replay seeds share the exact same hash, which
 // guarantees a calendar day always maps to the same puzzle.
@@ -841,43 +839,28 @@ export const dealDailyHand = (
   return dealPlayableHand(board, 30, random, 'daily')
 }
 
-// --- Micro-tutorial states ------------------------------------------
+// --- First-session FTUE states --------------------------------------
 //
-// The first-launch tutorial runs as two staged endless-mode boards.
-// Stage 1: a single diagonal scoring line is filled except for two
-// adjacent cells at its center; the player is dealt a single pair piece
-// that exactly fills the gap. Dropping it clears one line — the
-// player's first taste of the satisfaction loop.
-//
-// Stage 2: the board is filled into an asterisk through (0,0) — the
-// three primary-direction lines that all pass through center, plus
-// the central rosette, all filled except for (0,0) itself. A greedy
-// no-pre-existing-clear pass then fills as many remaining cells as
-// possible to make the board look "mostly full". The player is dealt
-// a single singlet at (0,0); placing it clears four patterns at once
-// (three lines + the central flower), teaching that combos exist and
-// feel enormous.
-//
-// Both stages run on the standard 49-cell endless board with rubies
-// disabled. The hand only contains a single slot-0 piece; slots 1 and
-// 2 are intentionally empty so the visual focus is on the one move.
+// The first-launch tutorial uses one board for two forced beats: first
+// complete a line with a pre-filled ruby inside it, then complete a
+// separate rosette that was visible off to the side the whole time.
+// Only the active target glows, so the player has one clear job at a
+// time without a board reset between lessons.
 
-// Diagonal scoring line (q + r = 0) running through the central
-// rosette. All seven cells exist on the standard board; the tutorial
-// piece is dealt to fill the centered gap.
+// Horizontal scoring line (r = 0), kept away from the staged rosette.
 const TUTORIAL_STAGE_1_LINE_CELLS: CellId[] = [
-  '-3,3',
-  '-2,2',
-  '-1,1',
+  '-3,0',
+  '-2,0',
+  '-1,0',
   '0,0',
-  '1,-1',
-  '2,-2',
-  '3,-3',
+  '1,0',
+  '2,0',
+  '3,0',
 ]
 // Two adjacent cells near the center of the line — the gap the player
 // fills. Picked so the pair piece sits centered visually rather than
 // at an end.
-const TUTORIAL_STAGE_1_TARGET_CELLS: CellId[] = ['0,0', '1,-1']
+const TUTORIAL_STAGE_1_TARGET_CELLS: CellId[] = ['0,0', '1,0']
 
 // One pre-filled cell on the stage-1 line is dressed up as a ruby so
 // the player's very first clear also captures a ruby — teaching the
@@ -885,16 +868,15 @@ const TUTORIAL_STAGE_1_TARGET_CELLS: CellId[] = ['0,0', '1,-1']
 // couple cells off-center (not in the gap the player fills) so it's
 // clearly "already on the board" rather than part of the piece they
 // drop. Completing the line clears the whole line, ruby included.
-const TUTORIAL_STAGE_1_RUBY_CELL: CellId = '-2,2'
+const TUTORIAL_STAGE_1_RUBY_CELL: CellId = '-2,0'
 
 const TUTORIAL_PAIR_SHAPE: PieceShape = {
   id: 'shape-tutorial-pair',
-  // Two cells offset along (1, -1) — the same axis as the chosen
-  // diagonal line, so dropping anchored at (0,0) covers (0,0) and
-  // (1,-1).
+  // Two cells offset along (1, 0), so dropping anchored at (0,0)
+  // covers the stage-1 line gap.
   cells: [
     { q: 0, r: 0 },
-    { q: 1, r: -1 },
+    { q: 1, r: 0 },
   ],
   size: 2,
 }
@@ -924,29 +906,22 @@ const baseTutorialState = (): GameState => ({
 
 export const TUTORIAL_STAGE_1_TARGET_CELL_IDS: readonly CellId[] =
   TUTORIAL_STAGE_1_TARGET_CELLS
-export const TUTORIAL_STAGE_2_TARGET_CELL_ID: CellId = '0,0'
 
-// The 3 primary-direction lines that all pass through (0,0). Each is
-// the full length-7 maximal scoring line in its direction.
-const STAGE_2_CROSS_LINE_CELLS: CellId[][] = [
-  // r = 0
-  ['-3,0', '-2,0', '-1,0', '0,0', '1,0', '2,0', '3,0'],
-  // q = 0
-  ['0,-3', '0,-2', '0,-1', '0,0', '0,1', '0,2', '0,3'],
-  // q + r = 0 (same axis as stage 1 — re-used here so the cross is
-  // perfectly symmetric through center)
-  ['-3,3', '-2,2', '-1,1', '0,0', '1,-1', '2,-2', '3,-3'],
+const TUTORIAL_STAGE_2_TARGET_CELL: CellId = '-2,3'
+export const TUTORIAL_STAGE_2_TARGET_CELL_IDS: readonly CellId[] = [
+  TUTORIAL_STAGE_2_TARGET_CELL,
 ]
 
-// Cells of the central rosette around (0,0).
-const STAGE_2_CENTRAL_ROSETTE_CELLS: CellId[] = [
-  '0,0',
-  '1,0',
-  '0,1',
-  '-1,1',
-  '-1,0',
-  '0,-1',
-  '1,-1',
+// Top-left rosette centered at (-2,3), deliberately disjoint from the
+// r = 0 tutorial line.
+const TUTORIAL_STAGE_2_ROSETTE_CELLS: CellId[] = [
+  '-2,3',
+  '-1,3',
+  '-2,4',
+  '-3,4',
+  '-3,3',
+  '-2,2',
+  '-1,2',
 ]
 
 export const createTutorialStage1State = (): GameState => {
@@ -954,6 +929,10 @@ export const createTutorialStage1State = (): GameState => {
   const targetSet = new Set(TUTORIAL_STAGE_1_TARGET_CELLS)
   for (const cellId of TUTORIAL_STAGE_1_LINE_CELLS) {
     if (targetSet.has(cellId)) continue
+    state.board[cellId] = 'filled'
+  }
+  for (const cellId of TUTORIAL_STAGE_2_ROSETTE_CELLS) {
+    if (cellId === TUTORIAL_STAGE_2_TARGET_CELL) continue
     state.board[cellId] = 'filled'
   }
   // Mark one already-filled line cell as a ruby so completing the
@@ -966,49 +945,21 @@ export const createTutorialStage1State = (): GameState => {
     shape: TUTORIAL_PAIR_SHAPE,
   }
   state.hand = [piece]
-  state.handSlots = [piece.id, null, null]
+  state.handSlots = [null, piece.id, null]
   return state
 }
 
-export const createTutorialStage2State = (): GameState => {
-  const state = baseTutorialState()
-  const targetCell = TUTORIAL_STAGE_2_TARGET_CELL_ID
-
-  // Fill the "asterisk": the 3 cross lines through (0,0) plus the
-  // central rosette, every cell except the target.
-  const corePrefill = new Set<CellId>()
-  for (const line of STAGE_2_CROSS_LINE_CELLS) {
-    for (const cellId of line) corePrefill.add(cellId)
-  }
-  for (const cellId of STAGE_2_CENTRAL_ROSETTE_CELLS) {
-    corePrefill.add(cellId)
-  }
-  corePrefill.delete(targetCell)
-  for (const cellId of corePrefill) {
-    state.board[cellId] = 'filled'
-  }
-
-  // Greedy "make the board look mostly full" pass: visit every other
-  // cell and fill it only if doing so doesn't complete any scoring
-  // pattern. This keeps the only legal clear gated on placing the
-  // singlet at (0,0). Iteration order is deterministic so the same
-  // visual lands every time.
-  const boardDef = getBoardDefinitionForMode('endless')
-  for (const cell of boardDef.cells) {
-    if (cell.id === targetCell) continue
-    if (state.board[cell.id] === 'filled') continue
-    state.board[cell.id] = 'filled'
-    const { clearedPatterns } = findClears(state.board, 'endless')
-    if (clearedPatterns.length > 0) {
-      state.board[cell.id] = 'empty'
-    }
-  }
-
+export const createTutorialStage2State = (previous: GameState): GameState => {
   const piece: ActivePiece = {
     id: 'tutorial-singlet-1',
     shape: TUTORIAL_SINGLET_SHAPE,
   }
-  state.hand = [piece]
-  state.handSlots = [piece.id, null, null]
-  return state
+  return {
+    ...previous,
+    hand: [piece],
+    handSlots: [null, piece.id, null],
+    hold: null,
+    gameOver: false,
+    streak: 0,
+  }
 }

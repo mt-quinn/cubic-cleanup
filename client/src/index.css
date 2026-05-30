@@ -5972,6 +5972,34 @@ body {
   padding-top: 0.5rem;
 }
 
+.hexaclear-gameover-ftue-reason {
+  margin: 0.2rem 0 0.1rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(92, 16, 12, 0.42);
+  border: 1px solid rgba(255, 108, 92, 0.42);
+  color: #ffd1c8;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 70, 54, 0.12);
+}
+
+.hexaclear-gameover-daily-intro {
+  gap: 0.25rem;
+}
+
+.hexaclear-gameover-daily-intro-copy {
+  margin: 0;
+  color: #f4d6b5;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.hexaclear-overlay-card button.hexaclear-gameover-daily-intro-cta {
+  margin-top: 0.35rem;
+}
+
 /* Save-score field sits directly above the leaderboard it's saving
    into, so we drop the divider between the two and tighten the gap
    so they read as one banded group instead of two adjacent
@@ -6359,12 +6387,12 @@ body {
 /* ============================================================
    First-launch micro-tutorial
    ------------------------------------------------------------
-   Two-stage guided opening that fires once for brand-new
-   players. Stage 1 teaches "drag a piece to clear a line";
-   stage 2 is a one-shot huge combo as the payoff. The CSS here
-   covers the in-board target pulse, the floating prompt + skip
-   link, and the exit toast, plus a chrome-hiding pass on the
-   viewport-root level when a stage is active.
+   Two-beat guided opening that fires once for brand-new players.
+   It teaches "drag a piece to clear a line", then uses the same
+   board to teach the first flower clear. The CSS here covers the
+   in-board target pulse, the floating prompt + skip link, and a
+   chrome-hiding pass on the viewport-root level while either beat
+   is active.
    ============================================================ */
 
 .cubic-viewport.is-tutorial-active .hexaclear-menu-button,
@@ -6373,9 +6401,12 @@ body {
 .cubic-viewport.is-tutorial-active .hexaclear-live-stat,
 .cubic-viewport.is-tutorial-active .hexaclear-live-stat-placeholder,
 .cubic-viewport.is-tutorial-active .hexaclear-board-hud,
-.cubic-viewport.is-tutorial-active .hexaclear-undo-button,
-.cubic-viewport.is-tutorial-active .hexaclear-hold {
+.cubic-viewport.is-tutorial-active .hexaclear-undo-button {
   visibility: hidden;
+}
+
+.cubic-viewport.is-tutorial-active .hexaclear-hold {
+  display: none;
 }
 
 /* Target pulse rendered inside the board SVG. Stroke-only so the
@@ -6544,6 +6575,165 @@ body {
   color: #fff4cc;
   background: rgba(255, 232, 163, 0.1);
   outline: none;
+}
+
+/* First-session contextual hints: short, non-blocking teaching beats
+   that appear after the required tutorial has handed control back. */
+.hexaclear-ftue-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -0.65rem;
+  transform: translate(-50%, 100%);
+  z-index: 9;
+  width: min(92%, 24rem);
+  padding: 0.55rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(34, 14, 4, 0.88);
+  border: 1px solid rgba(255, 229, 168, 0.5);
+  color: #fff1bf;
+  font-size: clamp(0.82rem, 2.8vw, 0.98rem);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: hexaclear-ftue-hint-in 260ms ease-out both;
+}
+
+.hexaclear-ftue-action-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.42rem);
+  transform: translateX(-50%);
+  z-index: 9;
+  width: min(96%, 29rem);
+  padding: 0.55rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(34, 14, 4, 0.92);
+  border: 1px solid rgba(255, 229, 168, 0.55);
+  color: #fff1bf;
+  font-size: clamp(0.82rem, 2.8vw, 0.98rem);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: hexaclear-ftue-action-hint-in 260ms ease-out both;
+}
+
+.hexaclear-ftue-action-hint.is-undo {
+  left: 0.35rem;
+  transform: none;
+  width: min(calc(100% - 8rem), 28rem);
+  text-align: left;
+  animation-name: hexaclear-ftue-action-hint-in-left;
+}
+
+@keyframes hexaclear-ftue-hint-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(100% + 8px));
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 100%);
+  }
+}
+
+@keyframes hexaclear-ftue-action-hint-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes hexaclear-ftue-action-hint-in-left {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hexaclear-ftue-rosette-glow {
+  fill: none;
+  stroke: rgba(255, 232, 163, 0.95);
+  stroke-width: 4.6;
+  stroke-linejoin: round;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 8px rgba(255, 229, 168, 0.72));
+  animation: hexaclear-ftue-rosette-glow 1500ms ease-in-out infinite;
+}
+
+.hexaclear-ftue-rosette-target-pulse {
+  fill: none;
+  stroke: #ffe5a8;
+  stroke-width: 2.1;
+  opacity: 0.85;
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 0 6px rgba(255, 229, 168, 0.65));
+  animation: hexaclear-tutorial-pulse 1500ms ease-in-out infinite;
+}
+
+@keyframes hexaclear-ftue-rosette-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    stroke-width: 3.2;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 5.6;
+  }
+}
+
+.hexaclear-undo-button.is-ftue-highlighted,
+.hexaclear-hold.is-ftue-highlighted {
+  box-shadow:
+    0 0 0 2px rgba(255, 232, 163, 0.78),
+    0 0 18px rgba(255, 213, 123, 0.52),
+    inset 0 0 0 1px rgba(255, 213, 123, 0.4);
+  animation: hexaclear-ftue-control-glow 1300ms ease-in-out infinite;
+}
+
+@keyframes hexaclear-ftue-control-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+.cubic-viewport.reduced-motion .hexaclear-ftue-hint,
+.cubic-viewport.reduced-motion .hexaclear-ftue-action-hint,
+.cubic-viewport.reduced-motion .hexaclear-ftue-rosette-glow,
+.cubic-viewport.reduced-motion .hexaclear-ftue-rosette-target-pulse,
+.cubic-viewport.reduced-motion .hexaclear-undo-button.is-ftue-highlighted,
+.cubic-viewport.reduced-motion .hexaclear-hold.is-ftue-highlighted {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cubic-viewport .hexaclear-ftue-hint,
+  .cubic-viewport .hexaclear-ftue-action-hint,
+  .cubic-viewport .hexaclear-ftue-rosette-glow,
+  .cubic-viewport .hexaclear-ftue-rosette-target-pulse,
+  .cubic-viewport .hexaclear-undo-button.is-ftue-highlighted,
+  .cubic-viewport .hexaclear-hold.is-ftue-highlighted {
+    animation: none;
+  }
 }
 
 /* ============================================================
