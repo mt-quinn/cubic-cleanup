@@ -2878,7 +2878,15 @@ body {
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
-  animation: hexaclear-audius-shimmer 920ms ease-out infinite;
+}
+.cubic-viewport.is-audius-visualizer.audius-ripple-even
+  .hexaclear-audius-shimmer {
+  animation: hexaclear-audius-shimmer-even 1200ms ease-out both;
+  animation-delay: var(--audius-shimmer-delay, 0ms);
+}
+.cubic-viewport.is-audius-visualizer.audius-ripple-odd
+  .hexaclear-audius-shimmer {
+  animation: hexaclear-audius-shimmer-odd 1200ms ease-out both;
   animation-delay: var(--audius-shimmer-delay, 0ms);
 }
 .cubic-viewport.is-audius-visualizer.reduced-motion .cube-pulse-overlay,
@@ -2916,13 +2924,29 @@ body {
   }
 }
 
-@keyframes hexaclear-audius-shimmer {
+@keyframes hexaclear-audius-shimmer-even {
   0%,
-  64% {
+  58% {
     opacity: 0;
     transform: scale(0.45);
   }
-  72% {
+  68% {
+    opacity: var(--audius-shimmer, 0);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes hexaclear-audius-shimmer-odd {
+  0%,
+  58% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  68% {
     opacity: var(--audius-shimmer, 0);
     transform: scale(1);
   }
@@ -5006,6 +5030,32 @@ body {
 .hexaclear-audius-controls {
   margin-top: 0.45rem;
 }
+.hexaclear-audius-volume {
+  display: grid;
+  grid-template-columns: max-content minmax(7rem, 1fr) 2.8rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid rgba(255, 205, 143, 0.16);
+  border-radius: 0.6rem;
+  background: rgba(255, 205, 143, 0.04);
+  color: rgba(255, 232, 163, 0.72);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hexaclear-audius-volume input[type='range'] {
+  min-width: 0;
+  accent-color: #f7b35a;
+  cursor: pointer;
+}
+.hexaclear-audius-volume output {
+  color: rgba(255, 239, 212, 0.86);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 .hexaclear-audius-meta,
 .hexaclear-audius-error {
   margin: 0.45rem 0 0;
@@ -5017,66 +5067,6 @@ body {
 }
 .hexaclear-audius-error {
   color: #ffb2a6;
-}
-.hexaclear-audius-debug {
-  margin-top: 0.55rem;
-  padding: 0.55rem;
-  border: 1px solid rgba(255, 205, 143, 0.18);
-  border-radius: 0.65rem;
-  background: rgba(20, 8, 2, 0.32);
-}
-.hexaclear-audius-debug-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem;
-  margin-bottom: 0.45rem;
-  color: #ffe8a3;
-  font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.hexaclear-audius-meter {
-  height: 0.42rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 232, 195, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(255, 205, 143, 0.12);
-}
-.hexaclear-audius-meter-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #f9a23f, #ffeaa3);
-  transition: width 80ms linear;
-}
-.hexaclear-audius-debug-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.28rem 0.45rem;
-  margin: 0.5rem 0 0;
-}
-.hexaclear-audius-debug-grid > div {
-  min-width: 0;
-}
-.hexaclear-audius-debug-grid dt {
-  color: rgba(255, 232, 163, 0.5);
-  font-size: 0.58rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.hexaclear-audius-debug-grid dd {
-  margin: 0.04rem 0 0;
-  overflow: hidden;
-  color: rgba(255, 239, 212, 0.82);
-  font-size: 0.68rem;
-  font-weight: 800;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Visual toggles — one toggle row per a11y option. */
