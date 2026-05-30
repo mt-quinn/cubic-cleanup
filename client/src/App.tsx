@@ -120,15 +120,131 @@ type HoverInfo = {
 
 // Theme engine: the set of identifiers a user can pick from in the
 // menu's theme selector. Wood is the original warm cream/gold theme;
-// win98 is the Minesweeper / Windows 98 homage. The active id lives on
-// <html data-theme="..."> and every theme-specific CSS rule is scoped
-// under that attribute so switching is a single DOM write.
-type ThemeId = 'wood' | 'win98'
+// win98 is the Minesweeper / Windows 98 homage; audius is a lightweight
+// music-reactive POC layered on top of the Cubekill palette. The active
+// id lives on <html data-theme="..."> and every theme-specific CSS rule
+// is scoped under that attribute so switching is a single DOM write.
+type ThemeId = 'wood' | 'win98' | 'audius'
 
 const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
   { id: 'wood', label: 'Cubekill (default)' },
   { id: 'win98', label: 'Windows 98' },
+  { id: 'audius', label: 'Audius Visualizer (POC)' },
 ]
+
+type AudiusTrack = {
+  id: string
+  title: string
+  duration: number
+  bpm: number | null
+  user?: {
+    name?: string
+    handle?: string
+  }
+}
+
+type AudiusDebugSnapshot = {
+  source: 'idle' | 'analyser' | 'css-test' | 'silent'
+  contextState: string
+  readyState: number
+  networkState: number
+  currentTime: number
+  energy: number
+  floor: number
+  peak: number
+  bass: number
+  mid: number
+  treble: number
+  onset: number
+  pulse: number
+  nonZeroBins: number
+  maxBin: number
+  lightOverlay: number
+  darkOverlay: number
+  crossOrigin: string
+  srcHost: string
+}
+
+const AUDIUS_APP_NAME = 'cubekill-visualizer-poc'
+const AUDIUS_API_BASE = 'https://discoveryprovider.audius.co/v1'
+const AUDIUS_ANALYSER_SILENT_FRAME_LIMIT = 90
+const AUDIUS_ANALYSER_SILENCE_EPSILON = 1
+const AUDIUS_DEBUG_UPDATE_MS = 180
+const AUDIUS_MIN_DYNAMIC_RANGE = 14
+
+const createInitialAudiusDebugSnapshot = (): AudiusDebugSnapshot => ({
+  source: 'idle',
+  contextState: 'none',
+  readyState: 0,
+  networkState: 0,
+  currentTime: 0,
+  energy: 0,
+  floor: 0,
+  peak: 0,
+  bass: 0,
+  mid: 0,
+  treble: 0,
+  onset: 0,
+  pulse: 0,
+  nonZeroBins: 0,
+  maxBin: 0,
+  lightOverlay: 0,
+  darkOverlay: 0,
+  crossOrigin: 'unset',
+  srcHost: 'none',
+})
+
+const getUrlHost = (url: string): string => {
+  if (!url) return 'none'
+  try {
+    return new URL(url).host
+  } catch {
+    return 'unparseable'
+  }
+}
+
+const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
+  if (!Array.isArray(data)) return []
+  return data
+    .map((raw): AudiusTrack | null => {
+      if (!raw || typeof raw !== 'object') return null
+      const item = raw as {
+        id?: unknown
+        title?: unknown
+        duration?: unknown
+        bpm?: unknown
+        user?: unknown
+        is_stream_gated?: unknown
+      }
+      if (item.is_stream_gated === true) return null
+      if (typeof item.id !== 'string') return null
+      if (typeof item.title !== 'string' || item.title.trim() === '') return null
+      const user =
+        item.user && typeof item.user === 'object'
+          ? (item.user as { name?: unknown; handle?: unknown })
+          : undefined
+      return {
+        id: item.id,
+        title: item.title,
+        duration: typeof item.duration === 'number' ? item.duration : 0,
+        bpm: typeof item.bpm === 'number' && item.bpm > 0 ? item.bpm : null,
+        user: user
+          ? {
+              name: typeof user.name === 'string' ? user.name : undefined,
+              handle: typeof user.handle === 'string' ? user.handle : undefined,
+            }
+          : undefined,
+      }
+    })
+    .filter((track): track is AudiusTrack => track != null)
+}
+
+const formatAudiusDuration = (seconds: number): string => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '--:--'
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${String(secs).padStart(2, '0')}`
+}
 
 // === Procedural score-tier palette =================================
 // The cube color palette used to be a four-step lookup table in CSS
@@ -876,6 +992,37 @@ const CubeLines = ({
         <polygon
           className="cube-face cube-top"
           points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
+        />
+        <g className="cube-pulse-overlays" aria-hidden="true">
+          <polygon
+            className="cube-pulse-overlay cube-pulse-dark cube-pulse-right"
+            points={`${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`}
+          />
+          <polygon
+            className="cube-pulse-overlay cube-pulse-dark cube-pulse-left"
+            points={`${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`}
+          />
+          <polygon
+            className="cube-pulse-overlay cube-pulse-dark cube-pulse-top"
+            points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
+          />
+          <polygon
+            className="cube-pulse-overlay cube-pulse-light cube-pulse-right"
+            points={`${cx},${cy} ${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`}
+          />
+          <polygon
+            className="cube-pulse-overlay cube-pulse-light cube-pulse-left"
+            points={`${cx},${cy} ${v3.x},${v3.y} ${v4.x},${v4.y} ${v5.x},${v5.y}`}
+          />
+          <polygon
+            className="cube-pulse-overlay cube-pulse-light cube-pulse-top"
+            points={`${cx},${cy} ${v5.x},${v5.y} ${v0.x},${v0.y} ${v1.x},${v1.y}`}
+          />
+        </g>
+        <polygon
+          className="cube-ripple-overlay"
+          points={vertices.map((v) => `${v.x},${v.y}`).join(' ')}
+          aria-hidden="true"
         />
         {variant === 'golden' && (
           <text
@@ -3064,8 +3211,144 @@ function App() {
   const [theme, setTheme] = useState<ThemeId>(() => {
     if (typeof window === 'undefined') return 'wood'
     const raw = window.localStorage.getItem('cubic-theme')
-    return raw === 'win98' ? 'win98' : 'wood'
+    return raw === 'win98' || raw === 'audius' ? raw : 'wood'
   })
+  const audiusAudioRef = useRef<HTMLAudioElement | null>(null)
+  const audiusAudioContextRef = useRef<AudioContext | null>(null)
+  const audiusAnalyserRef = useRef<AnalyserNode | null>(null)
+  const audiusMediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
+  const audiusFrequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
+  const audiusEnergyFloorRef = useRef(0)
+  const audiusEnergyPeakRef = useRef(64)
+  const audiusPulseEnvelopeRef = useRef(0)
+  const audiusBassEnvelopeRef = useRef(0)
+  const audiusMidEnvelopeRef = useRef(0)
+  const audiusTrebleEnvelopeRef = useRef(0)
+  const audiusOnsetEnvelopeRef = useRef(0)
+  const audiusHueRef = useRef(0)
+  const audiusLastBeatAtRef = useRef(0)
+  const audiusSilentFrameCountRef = useRef(0)
+  const audiusAnalyserWarningShownRef = useRef(false)
+  const audiusLastDebugUpdateRef = useRef(0)
+  const [audiusTracks, setAudiusTracks] = useState<AudiusTrack[]>([])
+  const [audiusSelectedTrackId, setAudiusSelectedTrackId] = useState<
+    string | null
+  >(null)
+  const [audiusSearchQuery, setAudiusSearchQuery] = useState('electronic')
+  const [audiusStatus, setAudiusStatus] = useState<
+    'idle' | 'loading' | 'playing' | 'paused' | 'error'
+  >('idle')
+  const [audiusError, setAudiusError] = useState<string | null>(null)
+  const [audiusAnalyserLive, setAudiusAnalyserLive] = useState(false)
+  const [audiusTestPulseActive, setAudiusTestPulseActive] = useState(false)
+  const [audiusBeatToken, setAudiusBeatToken] = useState(0)
+  const [audiusDebug, setAudiusDebug] = useState<AudiusDebugSnapshot>(
+    createInitialAudiusDebugSnapshot,
+  )
+  const loadAudiusTracks = useCallback(async (query?: string) => {
+    setAudiusStatus((current) => (current === 'playing' ? current : 'loading'))
+    setAudiusError(null)
+    const trimmed = query?.trim() ?? ''
+    const endpoint = trimmed
+      ? `${AUDIUS_API_BASE}/tracks/search?query=${encodeURIComponent(
+          trimmed,
+        )}&app_name=${AUDIUS_APP_NAME}&limit=8`
+      : `${AUDIUS_API_BASE}/tracks/trending?app_name=${AUDIUS_APP_NAME}&limit=8`
+    try {
+      const res = await fetch(endpoint)
+      if (!res.ok) throw new Error(`Audius returned ${res.status}`)
+      const json = (await res.json()) as { data?: unknown }
+      const tracks = normalizeAudiusTracks(json.data)
+      if (tracks.length === 0) {
+        throw new Error('No playable public tracks returned.')
+      }
+      setAudiusTracks(tracks)
+      setAudiusSelectedTrackId((prev) =>
+        prev && tracks.some((track) => track.id === prev) ? prev : tracks[0].id,
+      )
+      setAudiusStatus((current) => (current === 'playing' ? current : 'idle'))
+    } catch (error) {
+      setAudiusError(
+        error instanceof Error ? error.message : 'Unable to load Audius tracks.',
+      )
+      setAudiusStatus('error')
+    }
+  }, [])
+  const ensureAudiusAnalyser = useCallback((): AnalyserNode | null => {
+    if (audiusAnalyserRef.current) return audiusAnalyserRef.current
+    if (typeof window === 'undefined') return null
+    const audio = audiusAudioRef.current
+    if (!audio) return null
+    const Ctor =
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext
+    if (!Ctor) return null
+    try {
+      audio.crossOrigin = 'anonymous'
+      const ctx = new Ctor()
+      const source = ctx.createMediaElementSource(audio)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      analyser.minDecibels = -85
+      analyser.maxDecibels = -8
+      analyser.smoothingTimeConstant = 0.58
+      source.connect(analyser)
+      analyser.connect(ctx.destination)
+      audiusAudioContextRef.current = ctx
+      audiusMediaSourceRef.current = source
+      audiusAnalyserRef.current = analyser
+      audiusFrequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount)
+      return analyser
+    } catch {
+      return null
+    }
+  }, [])
+  const playAudiusTrack = useCallback(
+    async (trackId?: string | null) => {
+      const id = trackId ?? audiusSelectedTrackId ?? audiusTracks[0]?.id
+      const audio = audiusAudioRef.current
+      if (!id || !audio) return
+      setAudiusSelectedTrackId(id)
+      setAudiusError(null)
+      setAudiusStatus('loading')
+      audiusEnergyFloorRef.current = 0
+      audiusEnergyPeakRef.current = 64
+      audiusPulseEnvelopeRef.current = 0
+      audiusBassEnvelopeRef.current = 0
+      audiusMidEnvelopeRef.current = 0
+      audiusTrebleEnvelopeRef.current = 0
+      audiusOnsetEnvelopeRef.current = 0
+      audiusHueRef.current = 0
+      audiusLastBeatAtRef.current = 0
+      audiusSilentFrameCountRef.current = 0
+      audiusAnalyserWarningShownRef.current = false
+      setAudiusAnalyserLive(false)
+      audio.crossOrigin = 'anonymous'
+      audio.src = `${AUDIUS_API_BASE}/tracks/${id}/stream?app_name=${AUDIUS_APP_NAME}`
+      try {
+        const analyser = ensureAudiusAnalyser()
+        if (!analyser) {
+          throw new Error('Browser could not create an Audius audio analyser.')
+        }
+        const ctx = audiusAudioContextRef.current
+        if (analyser && ctx && (ctx.state as string) === 'suspended') {
+          await ctx.resume()
+        }
+        await audio.play()
+        setAudiusStatus('playing')
+      } catch (error) {
+        setAudiusError(
+          error instanceof Error
+            ? error.message
+            : 'Browser blocked Audius playback.',
+        )
+        setAudiusStatus('error')
+      }
+    },
+    [audiusSelectedTrackId, audiusTracks, ensureAudiusAnalyser],
+  )
   const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
     () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
   )
@@ -5137,14 +5420,6 @@ function App() {
         const capped =
           undoStack.length >= 2 ? undoStack.slice(1) : undoStack
         setUndoStack([...capped, before])
-        if (!inTutorial && current.mode === 'endless') {
-          showFtueHint(
-            'undo',
-            'You can undo moves from the current hand. Playing the last piece locks that hand in.',
-            FTUE_UNDO_HINT_KEY,
-            undoHintSeenRef,
-          )
-        }
       } else {
         setUndoStack([])
       }
@@ -6202,8 +6477,7 @@ function App() {
     index: number
     targetIds: string[]
   } | null>(() => {
-    if (flowerHintSeenRef.current) return null
-    if (tutorialStage > 0) return null
+    if (tutorialStage !== 2) return null
     if (isMultiplayer) return null
     if (game.mode !== 'endless') return null
     if (game.gameOver) return null
@@ -6629,6 +6903,343 @@ function App() {
     }
   }, [theme])
 
+  useEffect(() => {
+    if (theme !== 'audius') {
+      rootRef.current?.style.removeProperty('--audius-pulse')
+      rootRef.current?.style.removeProperty('--audius-brightness')
+      rootRef.current?.style.removeProperty('--audius-saturation')
+      rootRef.current?.style.removeProperty('--audius-scale')
+      rootRef.current?.style.removeProperty('--audius-light-overlay')
+      rootRef.current?.style.removeProperty('--audius-dark-overlay')
+      rootRef.current?.style.removeProperty('--audius-bass')
+      rootRef.current?.style.removeProperty('--audius-mid')
+      rootRef.current?.style.removeProperty('--audius-treble')
+      rootRef.current?.style.removeProperty('--audius-onset')
+      rootRef.current?.style.removeProperty('--audius-top-light')
+      rootRef.current?.style.removeProperty('--audius-left-warm')
+      rootRef.current?.style.removeProperty('--audius-right-shadow')
+      rootRef.current?.style.removeProperty('--audius-ripple')
+      rootRef.current?.style.removeProperty('--audius-board-glow')
+      rootRef.current?.style.removeProperty('--audius-shimmer')
+      rootRef.current?.style.removeProperty('--audius-cube-scale')
+      rootRef.current?.style.removeProperty('--audius-cube-top')
+      rootRef.current?.style.removeProperty('--audius-cube-left')
+      rootRef.current?.style.removeProperty('--audius-cube-right')
+      setAudiusDebug(createInitialAudiusDebugSnapshot())
+      return
+    }
+    if (audiusTracks.length === 0 && audiusStatus === 'idle') {
+      void loadAudiusTracks()
+    }
+  }, [audiusStatus, audiusTracks.length, loadAudiusTracks, theme])
+
+  useEffect(() => {
+    const rootEl = rootRef.current
+    if (theme !== 'audius' || reducedMotion) {
+      rootEl?.style.removeProperty('--audius-pulse')
+      rootEl?.style.removeProperty('--audius-brightness')
+      rootEl?.style.removeProperty('--audius-saturation')
+      rootEl?.style.removeProperty('--audius-scale')
+      rootEl?.style.removeProperty('--audius-light-overlay')
+      rootEl?.style.removeProperty('--audius-dark-overlay')
+      rootEl?.style.removeProperty('--audius-bass')
+      rootEl?.style.removeProperty('--audius-mid')
+      rootEl?.style.removeProperty('--audius-treble')
+      rootEl?.style.removeProperty('--audius-onset')
+      rootEl?.style.removeProperty('--audius-top-light')
+      rootEl?.style.removeProperty('--audius-left-warm')
+      rootEl?.style.removeProperty('--audius-right-shadow')
+      rootEl?.style.removeProperty('--audius-ripple')
+      rootEl?.style.removeProperty('--audius-board-glow')
+      rootEl?.style.removeProperty('--audius-shimmer')
+      rootEl?.style.removeProperty('--audius-cube-scale')
+      rootEl?.style.removeProperty('--audius-cube-top')
+      rootEl?.style.removeProperty('--audius-cube-left')
+      rootEl?.style.removeProperty('--audius-cube-right')
+      return
+    }
+    let frame = 0
+    const publishDebug = (
+      pulse: number,
+      energy: number,
+      floor: number,
+      peak: number,
+      bass: number,
+      mid: number,
+      treble: number,
+      onset: number,
+      nonZeroBins: number,
+      maxBin: number,
+      source: AudiusDebugSnapshot['source'],
+      now: number,
+    ) => {
+      if (now - audiusLastDebugUpdateRef.current < AUDIUS_DEBUG_UPDATE_MS) {
+        return
+      }
+      audiusLastDebugUpdateRef.current = now
+      const audio = audiusAudioRef.current
+      const lightOverlay = pulse * 0.68
+      const darkOverlay = (1 - pulse) * 0.28
+      setAudiusDebug({
+        source,
+        contextState: audiusAudioContextRef.current?.state ?? 'none',
+        readyState: audio?.readyState ?? 0,
+        networkState: audio?.networkState ?? 0,
+        currentTime: audio?.currentTime ?? 0,
+        energy,
+        floor,
+        peak,
+        bass,
+        mid,
+        treble,
+        onset,
+        pulse,
+        nonZeroBins,
+        maxBin,
+        lightOverlay,
+        darkOverlay,
+        crossOrigin: audio?.crossOrigin || 'unset',
+        srcHost: getUrlHost(audio?.currentSrc || audio?.src || ''),
+      })
+    }
+    const smoothBand = (
+      ref: { current: number },
+      target: number,
+      attack = 0.34,
+      release = 0.09,
+    ) => {
+      const rate = target > ref.current ? attack : release
+      ref.current += (target - ref.current) * rate
+      return Math.max(0, Math.min(1, ref.current))
+    }
+    const tick = () => {
+      const now = performance.now()
+      const audio = audiusAudioRef.current
+      const playing = audio != null && !audio.paused && !audio.ended
+      let pulse = 0
+      let energy = 0
+      let bass = 0
+      let mid = 0
+      let treble = 0
+      let onset = 0
+      let nonZeroBins = 0
+      let maxBin = 0
+      let source: AudiusDebugSnapshot['source'] = playing ? 'silent' : 'idle'
+      const analyser = audiusAnalyserRef.current
+      const data = audiusFrequencyDataRef.current
+      if (audiusTestPulseActive) {
+        pulse = 0.5 + Math.sin(now / 115) * 0.5
+        bass = pulse
+        mid = 0.5 + Math.sin(now / 580) * 0.5
+        treble = 0.5 + Math.sin(now / 83) * 0.5
+        onset = pulse > 0.86 ? 1 : 0
+        source = 'css-test'
+      } else if (playing && analyser && data) {
+        analyser.getByteFrequencyData(data)
+        let sum = 0
+        let bassSum = 0
+        let bassCount = 0
+        let midSum = 0
+        let midCount = 0
+        let trebleSum = 0
+        let trebleCount = 0
+        let weightedCount = 0
+        const sampleCount = Math.min(96, data.length)
+        for (let i = 1; i < sampleCount; i++) {
+          // Favor bass and low-mid energy, where kick/snare movement is
+          // most useful for a simple cube-lightness visualizer.
+          const weight = i < 8 ? 1.6 : i < 24 ? 1.15 : 0.65
+          const value = data[i]
+          if (value > 0) nonZeroBins += 1
+          if (value > maxBin) maxBin = value
+          if (i < 10) {
+            bassSum += value * value
+            bassCount += 1
+          } else if (i < 42) {
+            midSum += value
+            midCount += 1
+          } else {
+            trebleSum += value * value
+            trebleCount += 1
+          }
+          if (i < 48) {
+            sum += value * weight
+            weightedCount += weight
+          }
+        }
+        const weightedEnergy = sum / Math.max(1, weightedCount)
+        const bassEnergy = Math.sqrt(bassSum / Math.max(1, bassCount))
+        const midEnergy = midSum / Math.max(1, midCount)
+        const trebleEnergy = Math.sqrt(trebleSum / Math.max(1, trebleCount))
+        bass = smoothBand(audiusBassEnvelopeRef, Math.min(1, bassEnergy / 255))
+        mid = smoothBand(audiusMidEnvelopeRef, Math.min(1, midEnergy / 205), 0.22, 0.055)
+        treble = smoothBand(
+          audiusTrebleEnvelopeRef,
+          Math.min(1, trebleEnergy / 190),
+          0.42,
+          0.18,
+        )
+        energy = weightedEnergy * 0.55 + bassEnergy * 0.45
+        if (energy > AUDIUS_ANALYSER_SILENCE_EPSILON) {
+          const currentFloor = audiusEnergyFloorRef.current
+          const currentPeak = audiusEnergyPeakRef.current
+          if (currentFloor === 0 && currentPeak === 64) {
+            audiusEnergyFloorRef.current = Math.max(0, energy * 0.84)
+            audiusEnergyPeakRef.current = Math.max(
+              energy * 1.28,
+              audiusEnergyFloorRef.current + AUDIUS_MIN_DYNAMIC_RANGE,
+            )
+          } else {
+            const floorRate = energy < currentFloor ? 0.14 : 0.018
+            const peakRate = energy > currentPeak ? 0.12 : 0.012
+            audiusEnergyFloorRef.current += (energy - currentFloor) * floorRate
+            audiusEnergyPeakRef.current += (energy - currentPeak) * peakRate
+          }
+          if (
+            audiusEnergyPeakRef.current - audiusEnergyFloorRef.current <
+            AUDIUS_MIN_DYNAMIC_RANGE
+          ) {
+            audiusEnergyPeakRef.current =
+              audiusEnergyFloorRef.current + AUDIUS_MIN_DYNAMIC_RANGE
+          }
+          const range =
+            audiusEnergyPeakRef.current - audiusEnergyFloorRef.current
+          const normalized = Math.max(
+            0,
+            Math.min(1, (energy - audiusEnergyFloorRef.current) / range),
+          )
+          const previousPulse = audiusPulseEnvelopeRef.current
+          const motion = Math.max(0, (normalized - 0.24) / 0.76)
+          const curvedMotion = Math.pow(motion, 1.8)
+          const onsetRaw = Math.max(0, motion - previousPulse)
+          onset = smoothBand(audiusOnsetEnvelopeRef, Math.min(1, onsetRaw * 2.4), 0.65, 0.12)
+          const targetPulse = Math.min(1, curvedMotion * 0.58 + onsetRaw * 1.2)
+          const envelopeRate = targetPulse > previousPulse ? 0.46 : 0.16
+          audiusPulseEnvelopeRef.current +=
+            (targetPulse - previousPulse) * envelopeRate
+          pulse = Math.max(0, Math.min(1, audiusPulseEnvelopeRef.current))
+          if (onset > 0.42 && now - audiusLastBeatAtRef.current > 220) {
+            audiusLastBeatAtRef.current = now
+            setAudiusBeatToken((token) => (token + 1) % 1000)
+          }
+        } else {
+          audiusPulseEnvelopeRef.current *= 0.9
+          audiusOnsetEnvelopeRef.current *= 0.86
+          pulse = audiusPulseEnvelopeRef.current
+          onset = audiusOnsetEnvelopeRef.current
+        }
+        if (energy > AUDIUS_ANALYSER_SILENCE_EPSILON) {
+          source = 'analyser'
+          audiusSilentFrameCountRef.current = 0
+          audiusAnalyserWarningShownRef.current = false
+          setAudiusAnalyserLive((live) => (live ? live : true))
+        } else if (audio.currentTime > 0.5) {
+          audiusSilentFrameCountRef.current += 1
+          if (
+            audiusSilentFrameCountRef.current >=
+              AUDIUS_ANALYSER_SILENT_FRAME_LIMIT &&
+            !audiusAnalyserWarningShownRef.current
+          ) {
+            audiusAnalyserWarningShownRef.current = true
+            setAudiusAnalyserLive(false)
+            setAudiusError(
+              'Audius playback started, but the browser returned no analyser data for this stream.',
+            )
+          }
+        }
+      }
+      const floor = audiusEnergyFloorRef.current
+      const peak = audiusEnergyPeakRef.current
+      audiusHueRef.current =
+        (audiusHueRef.current + 0.06 + mid * 0.22 + treble * 0.08) % 360
+      const hue = (32 + audiusHueRef.current + mid * 36 - bass * 12) % 360
+      const rightHue = (hue + 334) % 360
+      const leftHue = (hue + 18 + treble * 24) % 360
+      rootEl?.style.setProperty('--audius-pulse', pulse.toFixed(3))
+      rootEl?.style.setProperty('--audius-bass', bass.toFixed(3))
+      rootEl?.style.setProperty('--audius-mid', mid.toFixed(3))
+      rootEl?.style.setProperty('--audius-treble', treble.toFixed(3))
+      rootEl?.style.setProperty('--audius-onset', onset.toFixed(3))
+      rootEl?.style.setProperty(
+        '--audius-light-overlay',
+        Math.min(0.78, pulse * 0.5 + onset * 0.28 + treble * 0.1).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-dark-overlay',
+        Math.min(0.36, (1 - pulse) * 0.16 + bass * 0.18).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-top-light',
+        Math.min(0.86, pulse * 0.42 + onset * 0.34 + treble * 0.12).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-left-warm',
+        Math.min(0.48, mid * 0.34 + treble * 0.08).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-right-shadow',
+        Math.min(0.42, (1 - pulse) * 0.12 + bass * 0.24).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-ripple',
+        Math.min(1, onset * 0.9 + pulse * 0.24).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-board-glow',
+        Math.min(0.72, pulse * 0.24 + mid * 0.22 + onset * 0.26).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-shimmer',
+        Math.min(0.8, treble * 0.62 + onset * 0.18).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-cube-scale',
+        (1 + pulse * 0.018 + bass * 0.018 + onset * 0.026).toFixed(3),
+      )
+      rootEl?.style.setProperty('--audius-cube-top', `hsl(${hue.toFixed(1)} 96% ${(62 + bass * 8 + treble * 6).toFixed(1)}%)`)
+      rootEl?.style.setProperty('--audius-cube-left', `hsl(${leftHue.toFixed(1)} 86% ${(42 + mid * 13 + pulse * 5).toFixed(1)}%)`)
+      rootEl?.style.setProperty('--audius-cube-right', `hsl(${rightHue.toFixed(1)} 82% ${(22 + bass * 7 + mid * 3).toFixed(1)}%)`)
+      publishDebug(
+        pulse,
+        energy,
+        floor,
+        peak,
+        bass,
+        mid,
+        treble,
+        onset,
+        nonZeroBins,
+        maxBin,
+        source,
+        now,
+      )
+      frame = window.requestAnimationFrame(tick)
+    }
+    frame = window.requestAnimationFrame(tick)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      rootEl?.style.removeProperty('--audius-pulse')
+      rootEl?.style.removeProperty('--audius-brightness')
+      rootEl?.style.removeProperty('--audius-saturation')
+      rootEl?.style.removeProperty('--audius-scale')
+      rootEl?.style.removeProperty('--audius-light-overlay')
+      rootEl?.style.removeProperty('--audius-dark-overlay')
+      rootEl?.style.removeProperty('--audius-bass')
+      rootEl?.style.removeProperty('--audius-mid')
+      rootEl?.style.removeProperty('--audius-treble')
+      rootEl?.style.removeProperty('--audius-onset')
+      rootEl?.style.removeProperty('--audius-top-light')
+      rootEl?.style.removeProperty('--audius-left-warm')
+      rootEl?.style.removeProperty('--audius-right-shadow')
+      rootEl?.style.removeProperty('--audius-ripple')
+      rootEl?.style.removeProperty('--audius-board-glow')
+      rootEl?.style.removeProperty('--audius-shimmer')
+      rootEl?.style.removeProperty('--audius-cube-scale')
+      rootEl?.style.removeProperty('--audius-cube-top')
+      rootEl?.style.removeProperty('--audius-cube-left')
+      rootEl?.style.removeProperty('--audius-cube-right')
+    }
+  }, [audiusTestPulseActive, reducedMotion, theme])
 
   // Measure the live pixel widths of a hand-piece slot and the Hold
   // pocket whenever either resizes (viewport changes, sidebar opens,
@@ -7626,6 +8237,12 @@ function App() {
   // preview, and partner-tint child. Tier 0 falls through to the
   // :root defaults (no inline style needed).
   const tierPaletteStyle = paletteForTier(scoreTier, scoreOctave, theme)
+  const audiusBeatClass =
+    theme === 'audius' && audiusBeatToken > 0
+      ? audiusBeatToken % 2 === 0
+        ? 'audius-ripple-even'
+        : 'audius-ripple-odd'
+      : ''
   return (
     <div
       className={[
@@ -7634,6 +8251,7 @@ function App() {
         reducedMotion ? 'reduced-motion' : '',
         colorblindSupport ? 'is-colorblind' : '',
         tutorialStage > 0 ? 'is-tutorial-active' : '',
+        theme === 'audius' ? 'is-audius-visualizer' : '',
         ...octaveClasses,
       ]
         .filter(Boolean)
@@ -7646,6 +8264,19 @@ function App() {
       }}
     >
       <div className="hexaclear-root" ref={rootRef}>
+      <audio
+        ref={audiusAudioRef}
+        className="hexaclear-audius-audio"
+        crossOrigin="anonymous"
+        onPlay={() => setAudiusStatus('playing')}
+        onPause={() => setAudiusStatus((s) => (s === 'playing' ? 'paused' : s))}
+        onEnded={() => setAudiusStatus('paused')}
+        onError={() => {
+          if (theme !== 'audius') return
+          setAudiusStatus('error')
+          setAudiusError('Audius playback failed for this track.')
+        }}
+      />
       {/* Win98 app titlebar — only visible when [data-theme="win98"] is
           active. Window controls are visual-only; closing/minimizing a
           web app doesn't make sense. Kept always-mounted so theme swaps
@@ -8508,6 +9139,41 @@ function App() {
                   conflictStrokeColor
                     ? { ...(partnerHueStyle ?? {}), ...cellTintStyle }
                     : undefined
+                const audiusDistance =
+                  theme === 'audius'
+                    ? Math.hypot(
+                        cx - boardLayout.width / 2,
+                        cy - boardLayout.height / 2,
+                      )
+                    : 0
+                const audiusDistanceRatio =
+                  theme === 'audius'
+                    ? Math.min(
+                        1,
+                        audiusDistance /
+                          Math.max(boardLayout.width, boardLayout.height) /
+                          0.55,
+                      )
+                    : 0
+                const audiusCubeStyle =
+                  theme === 'audius'
+                    ? ({
+                        '--audius-cell-delay': `${Math.round(
+                          audiusDistanceRatio * 460,
+                        )}ms`,
+                        '--audius-cell-falloff': (
+                          1 -
+                          audiusDistanceRatio * 0.58
+                        ).toFixed(3),
+                        '--audius-cell-phase': `${Math.round(
+                          cell.coord.q * 23 - cell.coord.r * 17,
+                        )}deg`,
+                      } as React.CSSProperties)
+                    : undefined
+                const cubeStyle =
+                  partnerHueStyle || audiusCubeStyle
+                    ? { ...(partnerHueStyle ?? {}), ...(audiusCubeStyle ?? {}) }
+                    : undefined
 
                 return (
                   <g
@@ -8636,8 +9302,9 @@ function App() {
                             ? 'daily-hit-pulse'
                             : '',
                           isPartnerOwned ? 'partner-piece' : '',
+                          audiusBeatClass,
                         ].filter(Boolean)}
-                        style={partnerHueStyle}
+                        style={cubeStyle}
                         playerGlyph={cellGlyphByCellId[cell.id]}
                       />
                     )}
@@ -8993,6 +9660,35 @@ function App() {
               </g>
             )}
 
+            {theme === 'audius' && !reducedMotion && (
+              <g
+                className="hexaclear-audius-shimmer-layer"
+                aria-hidden="true"
+                pointerEvents="none"
+              >
+                {boardDef.cells
+                  .filter((_, idx) => idx % 4 === 0)
+                  .map((cell, idx) => {
+                    const pos = boardLayout.positions[cell.id]
+                    if (!pos) return null
+                    return (
+                      <circle
+                        key={`audius-shimmer-${cell.id}`}
+                        cx={pos.x + boardLayout.offsetX}
+                        cy={pos.y + boardLayout.offsetY}
+                        r={2.1 + (idx % 4) * 0.8}
+                        className="hexaclear-audius-shimmer"
+                        style={
+                          {
+                            '--audius-shimmer-delay': `${(idx % 7) * 130}ms`,
+                          } as React.CSSProperties
+                        }
+                      />
+                    )
+                  })}
+              </g>
+            )}
+
             {/* Ruby capture bursts: a radial spray of small shards
                 that flies out from each cleared ruby's last cell. Big
                 mode often queues several at once when a placement
@@ -9244,7 +9940,9 @@ function App() {
               type="button"
               className={[
                 'hexaclear-undo-button',
-                ftueHint?.kind === 'undo' ? 'is-ftue-highlighted' : '',
+                ftueHint?.kind === 'undo' && tutorialStage > 0
+                  ? 'is-ftue-highlighted'
+                  : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -11390,7 +12088,14 @@ function App() {
                   ? 'Muted'
                   : `${Math.round(volume * 100)}%`
                 const menuThemeSummary =
-                  theme === 'win98' ? 'Win98' : 'Cubekill'
+                  theme === 'win98'
+                    ? 'Win98'
+                    : theme === 'audius'
+                      ? 'Audius'
+                      : 'Cubekill'
+                const selectedAudiusTrack = audiusTracks.find(
+                  (track) => track.id === audiusSelectedTrackId,
+                )
                 const menuAccountSummary = authLoading
                   ? 'Checking…'
                   : isAuthenticated
@@ -11700,6 +12405,220 @@ function App() {
                               ))}
                             </select>
                           </div>
+
+                          {theme === 'audius' && (
+                            <div className="hexaclear-menu-settings-group hexaclear-audius-poc">
+                              <div className="hexaclear-menu-settings-group-label">
+                                Audius POC
+                              </div>
+                              <div className="hexaclear-audius-search-row">
+                                <input
+                                  className="hexaclear-audius-search"
+                                  type="search"
+                                  value={audiusSearchQuery}
+                                  placeholder="Search Audius"
+                                  onChange={(e) =>
+                                    setAudiusSearchQuery(e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key !== 'Enter') return
+                                    playUiClick()
+                                    void loadAudiusTracks(audiusSearchQuery)
+                                  }}
+                                  aria-label="Search Audius tracks"
+                                />
+                                <button
+                                  type="button"
+                                  className="hexaclear-menu-chip"
+                                  onClick={() => {
+                                    playUiClick()
+                                    void loadAudiusTracks(audiusSearchQuery)
+                                  }}
+                                  disabled={audiusStatus === 'loading'}
+                                >
+                                  Search
+                                </button>
+                              </div>
+                              <select
+                                className="hexaclear-menu-settings-select"
+                                value={audiusSelectedTrackId ?? ''}
+                                onChange={(e) => {
+                                  setAudiusSelectedTrackId(e.target.value)
+                                  playUiClick()
+                                }}
+                                aria-label="Audius track"
+                              >
+                                {audiusTracks.length === 0 ? (
+                                  <option value="">Load tracks...</option>
+                                ) : (
+                                  audiusTracks.map((track) => (
+                                    <option key={track.id} value={track.id}>
+                                      {track.title}
+                                    </option>
+                                  ))
+                                )}
+                              </select>
+                              <div className="hexaclear-audius-controls">
+                                <button
+                                  type="button"
+                                  className="hexaclear-menu-chip"
+                                  onClick={() => {
+                                    playUiClick()
+                                    void playAudiusTrack()
+                                  }}
+                                  disabled={
+                                    audiusStatus === 'loading' ||
+                                    audiusTracks.length === 0
+                                  }
+                                >
+                                  {audiusStatus === 'playing'
+                                    ? 'Restart track'
+                                    : 'Play track'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="hexaclear-menu-chip"
+                                  onClick={() => {
+                                    playUiClick()
+                                    audiusAudioRef.current?.pause()
+                                    setAudiusStatus('paused')
+                                  }}
+                                  disabled={audiusStatus !== 'playing'}
+                                >
+                                  Pause
+                                </button>
+                              </div>
+                              <p className="hexaclear-audius-meta">
+                                {selectedAudiusTrack
+                                  ? `${
+                                      selectedAudiusTrack.user?.name ??
+                                      selectedAudiusTrack.user?.handle ??
+                                      'Audius artist'
+                                    } · ${
+                                      selectedAudiusTrack.bpm
+                                        ? `${selectedAudiusTrack.bpm} BPM`
+                                        : 'BPM unknown'
+                                    } · ${formatAudiusDuration(
+                                      selectedAudiusTrack.duration,
+                                    )} · ${
+                                      audiusAnalyserLive
+                                        ? 'Analyser live'
+                                        : audiusStatus === 'playing'
+                                          ? 'Analyser warming up'
+                                          : 'Analyser idle'
+                                    }`
+                                  : 'Search or load trending Audius tracks, then play one to pulse the cubes.'}
+                              </p>
+                              {audiusError && (
+                                <p className="hexaclear-audius-error">
+                                  {audiusError}
+                                </p>
+                              )}
+                              <div className="hexaclear-audius-debug">
+                                <div className="hexaclear-audius-debug-head">
+                                  <span>Visualizer debug</span>
+                                  <button
+                                    type="button"
+                                    className="hexaclear-menu-chip"
+                                    onClick={() => {
+                                      playUiClick()
+                                      setAudiusTestPulseActive((v) => !v)
+                                    }}
+                                  >
+                                    {audiusTestPulseActive
+                                      ? 'Stop CSS test'
+                                      : 'Test board pulse'}
+                                  </button>
+                                </div>
+                                <div
+                                  className="hexaclear-audius-meter"
+                                  aria-label={`Pulse ${Math.round(
+                                    audiusDebug.pulse * 100,
+                                  )}%`}
+                                >
+                                  <div
+                                    className="hexaclear-audius-meter-fill"
+                                    style={{
+                                      width: `${Math.round(
+                                        audiusDebug.pulse * 100,
+                                      )}%`,
+                                    }}
+                                  />
+                                </div>
+                                <dl className="hexaclear-audius-debug-grid">
+                                  <div>
+                                    <dt>Source</dt>
+                                    <dd>{audiusDebug.source}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Pulse</dt>
+                                    <dd>{audiusDebug.pulse.toFixed(3)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Energy</dt>
+                                    <dd>{audiusDebug.energy.toFixed(1)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Range</dt>
+                                    <dd>
+                                      {audiusDebug.floor.toFixed(1)}-
+                                      {audiusDebug.peak.toFixed(1)}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>Bins</dt>
+                                    <dd>
+                                      {audiusDebug.nonZeroBins} / max{' '}
+                                      {audiusDebug.maxBin}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>Bands</dt>
+                                    <dd>
+                                      b {audiusDebug.bass.toFixed(2)} / m{' '}
+                                      {audiusDebug.mid.toFixed(2)} / t{' '}
+                                      {audiusDebug.treble.toFixed(2)}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>Onset</dt>
+                                    <dd>{audiusDebug.onset.toFixed(2)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>AudioContext</dt>
+                                    <dd>{audiusDebug.contextState}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Media</dt>
+                                    <dd>
+                                      ready {audiusDebug.readyState} / net{' '}
+                                      {audiusDebug.networkState}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>Time</dt>
+                                    <dd>{audiusDebug.currentTime.toFixed(2)}s</dd>
+                                  </div>
+                                  <div>
+                                    <dt>CSS vars</dt>
+                                    <dd>
+                                      light{' '}
+                                      {audiusDebug.lightOverlay.toFixed(2)} /
+                                      dark {audiusDebug.darkOverlay.toFixed(2)}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt>CORS</dt>
+                                    <dd>{audiusDebug.crossOrigin}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Host</dt>
+                                    <dd>{audiusDebug.srcHost}</dd>
+                                  </div>
+                                </dl>
+                              </div>
+                            </div>
+                          )}
 
                           <div className="hexaclear-menu-settings-group">
                             <div className="hexaclear-menu-settings-group-label">
@@ -14000,7 +14919,7 @@ function App() {
               {mpMoveStatus.message}
             </div>
           )}
-          {(ftueHint?.kind === 'hold' || ftueHint?.kind === 'undo') &&
+          {ftueHint?.kind === 'hold' &&
             tutorialStage === 0 &&
             !game.gameOver && (
             <div

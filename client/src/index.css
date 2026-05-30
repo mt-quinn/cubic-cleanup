@@ -2740,6 +2740,198 @@ body {
     drop-shadow(0 0 8px rgba(255, 120, 160, 0.65));
 }
 
+.cube-pulse-overlay {
+  display: none;
+  pointer-events: none;
+}
+.cube-ripple-overlay {
+  display: none;
+  pointer-events: none;
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-board-wrapper {
+  background:
+    radial-gradient(
+      circle at 50% 46%,
+      color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 28%, transparent)
+        0%,
+      rgba(50, 14, 4, 0.52) 42%,
+      rgba(18, 5, 2, 0.92) 100%
+    );
+  box-shadow:
+    inset 0 0 38px rgba(255, 196, 102, 0.12),
+    0 18px 42px rgba(0, 0, 0, 0.5);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-board-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: -9%;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      circle at 50% 48%,
+      color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 38%, transparent)
+        0%,
+      transparent 52%
+    ),
+    conic-gradient(
+      from var(--audius-cell-phase, 0deg),
+      rgba(255, 198, 86, 0.2),
+      rgba(223, 76, 146, 0.18),
+      rgba(74, 48, 156, 0.15),
+      rgba(255, 198, 86, 0.2)
+    );
+  mix-blend-mode: screen;
+  opacity: var(--audius-board-glow, 0);
+  filter: blur(16px);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-board {
+  position: relative;
+  z-index: 1;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-top {
+  fill: var(--audius-cube-top, var(--cube-top));
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-left {
+  fill: var(--audius-cube-left, var(--cube-left));
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-right {
+  fill: var(--audius-cube-right, var(--cube-right));
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .hexaclear-cube-wiggle-wrap {
+  transform: scale(var(--audius-cube-scale, 1));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-overlay {
+  display: block;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-dark {
+  fill: #120508;
+  opacity: var(--audius-dark-overlay, 0);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-light {
+  fill: #fff2b8;
+  opacity: var(--audius-light-overlay, 0);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-light.cube-pulse-top {
+  fill: color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 72%, #fff7cb);
+  opacity: var(--audius-top-light, 0);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-light.cube-pulse-left {
+  fill: color-mix(in srgb, var(--audius-cube-left, #f9a23f) 58%, #ff78b8);
+  opacity: var(--audius-left-warm, 0);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-dark.cube-pulse-right {
+  fill: color-mix(in srgb, var(--audius-cube-right, #6b1a22) 62%, #05010d);
+  opacity: var(--audius-right-shadow, 0);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-ripple-overlay {
+  display: block;
+  fill: none;
+  stroke: color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 70%, #ffffff);
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube.audius-ripple-even
+  .cube-ripple-overlay {
+  animation: hexaclear-audius-ripple-even 760ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  animation-delay: var(--audius-cell-delay, 0ms);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube.audius-ripple-odd
+  .cube-ripple-overlay {
+  animation: hexaclear-audius-ripple-odd 760ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  animation-delay: var(--audius-cell-delay, 0ms);
+}
+.hexaclear-audius-shimmer {
+  fill: color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 62%, #ffffff);
+  filter: drop-shadow(0 0 5px rgba(255, 238, 186, 0.8));
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-audius-shimmer 920ms ease-out infinite;
+  animation-delay: var(--audius-shimmer-delay, 0ms);
+}
+.cubic-viewport.is-audius-visualizer.reduced-motion .cube-pulse-overlay,
+.cubic-viewport.is-audius-visualizer.reduced-motion .cube-ripple-overlay,
+.cubic-viewport.is-audius-visualizer.reduced-motion
+  .hexaclear-audius-shimmer-layer {
+  display: none;
+}
+
+@keyframes hexaclear-audius-ripple-even {
+  0% {
+    opacity: var(--audius-ripple, 0);
+    transform: scale(0.86);
+  }
+  55% {
+    opacity: var(--audius-ripple, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+
+@keyframes hexaclear-audius-ripple-odd {
+  0% {
+    opacity: var(--audius-ripple, 0);
+    transform: scale(0.86);
+  }
+  55% {
+    opacity: var(--audius-ripple, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+
+@keyframes hexaclear-audius-shimmer {
+  0%,
+  64% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  72% {
+    opacity: var(--audius-shimmer, 0);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
 /* MP partner-tinted cubes (wood theme). Each face takes its tinted
    fill from an inline CSS variable computed in JS (HSL hue rotation
    + small lightness/saturation tweak). We deliberately bake the
@@ -4771,6 +4963,120 @@ body {
 .hexaclear-menu-settings-select:focus {
   outline: 2px solid rgba(255, 205, 143, 0.55);
   outline-offset: 1px;
+}
+
+/* Audius visualizer POC controls. Kept inside Settings so the feature
+   remains opt-in while we learn whether this direction is worth productizing. */
+.hexaclear-audius-audio {
+  display: none;
+}
+.hexaclear-audius-poc {
+  align-items: start;
+}
+.hexaclear-audius-poc > :not(.hexaclear-menu-settings-group-label) {
+  min-width: 0;
+}
+.hexaclear-audius-search-row,
+.hexaclear-audius-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.hexaclear-audius-search-row {
+  margin-bottom: 0.45rem;
+}
+.hexaclear-audius-search {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 205, 143, 0.28);
+  background: rgba(56, 26, 12, 0.85);
+  color: #ffe8c7;
+}
+.hexaclear-audius-search::placeholder {
+  color: rgba(255, 232, 195, 0.45);
+}
+.hexaclear-audius-search:focus {
+  outline: 2px solid rgba(255, 205, 143, 0.55);
+  outline-offset: 1px;
+}
+.hexaclear-audius-controls {
+  margin-top: 0.45rem;
+}
+.hexaclear-audius-meta,
+.hexaclear-audius-error {
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.hexaclear-audius-meta {
+  color: rgba(255, 239, 212, 0.68);
+}
+.hexaclear-audius-error {
+  color: #ffb2a6;
+}
+.hexaclear-audius-debug {
+  margin-top: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 205, 143, 0.18);
+  border-radius: 0.65rem;
+  background: rgba(20, 8, 2, 0.32);
+}
+.hexaclear-audius-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+  color: #ffe8a3;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.hexaclear-audius-meter {
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 232, 195, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 205, 143, 0.12);
+}
+.hexaclear-audius-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f9a23f, #ffeaa3);
+  transition: width 80ms linear;
+}
+.hexaclear-audius-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem 0.45rem;
+  margin: 0.5rem 0 0;
+}
+.hexaclear-audius-debug-grid > div {
+  min-width: 0;
+}
+.hexaclear-audius-debug-grid dt {
+  color: rgba(255, 232, 163, 0.5);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hexaclear-audius-debug-grid dd {
+  margin: 0.04rem 0 0;
+  overflow: hidden;
+  color: rgba(255, 239, 212, 0.82);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Visual toggles — one toggle row per a11y option. */
