@@ -120,8 +120,8 @@ type HoverInfo = {
 
 // Theme engine: the set of identifiers a user can pick from in the
 // menu's theme selector. Wood is the original warm cream/gold theme;
-// win98 is the Minesweeper / Windows 98 homage; audius is a lightweight
-// music-reactive POC layered on top of the Cubekill palette. The active
+// win98 is the Minesweeper / Windows 98 homage; audius is the
+// music-reactive visualizer layered on top of the Cubekill palette. The active
 // id lives on <html data-theme="..."> and every theme-specific CSS rule
 // is scoped under that attribute so switching is a single DOM write.
 type ThemeId = 'wood' | 'win98' | 'audius'
@@ -129,7 +129,7 @@ type ThemeId = 'wood' | 'win98' | 'audius'
 const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
   { id: 'wood', label: 'Cubekill (default)' },
   { id: 'win98', label: 'Windows 98' },
-  { id: 'audius', label: 'Audius Visualizer (POC)' },
+  { id: 'audius', label: 'Music Visualizer' },
 ]
 
 type AudiusTrack = {
@@ -12341,125 +12341,138 @@ function App() {
                           {theme === 'audius' && (
                             <div className="hexaclear-menu-settings-group hexaclear-audius-poc">
                               <div className="hexaclear-menu-settings-group-label">
-                                Audius POC
+                                Music
                               </div>
-                              <div className="hexaclear-audius-search-row">
-                                <input
-                                  className="hexaclear-audius-search"
-                                  type="search"
-                                  value={audiusSearchQuery}
-                                  placeholder="Search Audius"
-                                  onChange={(e) =>
-                                    setAudiusSearchQuery(e.target.value)
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key !== 'Enter') return
-                                    playUiClick()
-                                    void loadAudiusTracks(audiusSearchQuery)
-                                  }}
-                                  aria-label="Search Audius tracks"
-                                />
-                                <button
-                                  type="button"
-                                  className="hexaclear-menu-chip"
-                                  onClick={() => {
-                                    playUiClick()
-                                    void loadAudiusTracks(audiusSearchQuery)
-                                  }}
-                                  disabled={audiusStatus === 'loading'}
-                                >
-                                  Search
-                                </button>
-                              </div>
-                              <select
-                                className="hexaclear-menu-settings-select"
-                                value={audiusSelectedTrackId ?? ''}
-                                onChange={(e) => {
-                                  setAudiusSelectedTrackId(e.target.value)
-                                  playUiClick()
-                                }}
-                                aria-label="Audius track"
-                              >
-                                {audiusTracks.length === 0 ? (
-                                  <option value="">Load tracks...</option>
-                                ) : (
-                                  audiusTracks.map((track) => (
-                                    <option key={track.id} value={track.id}>
-                                      {track.title}
-                                    </option>
-                                  ))
-                                )}
-                              </select>
-                              <div className="hexaclear-audius-controls">
-                                <button
-                                  type="button"
-                                  className="hexaclear-menu-chip"
-                                  onClick={() => {
-                                    playUiClick()
-                                    void playAudiusTrack()
-                                  }}
-                                  disabled={
-                                    audiusStatus === 'loading' ||
-                                    audiusTracks.length === 0
-                                  }
-                                >
-                                  {audiusStatus === 'playing'
-                                    ? 'Restart track'
-                                    : 'Play track'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="hexaclear-menu-chip"
-                                  onClick={() => {
-                                    playUiClick()
-                                    audiusAudioRef.current?.pause()
-                                    setAudiusStatus('paused')
-                                  }}
-                                  disabled={audiusStatus !== 'playing'}
-                                >
-                                  Pause
-                                </button>
-                              </div>
-                              <label className="hexaclear-audius-volume">
-                                <span>Music volume</span>
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="100"
-                                  value={Math.round(audiusVolume * 100)}
-                                  onChange={(e) => {
-                                    setAudiusVolume(Number(e.target.value) / 100)
-                                  }}
-                                  aria-label="Audius music volume"
-                                />
-                                <output>{Math.round(audiusVolume * 100)}%</output>
-                              </label>
-                              <p className="hexaclear-audius-meta">
-                                {selectedAudiusTrack
-                                  ? `${
-                                      selectedAudiusTrack.user?.name ??
-                                      selectedAudiusTrack.user?.handle ??
-                                      'Audius artist'
-                                    } · ${
-                                      selectedAudiusTrack.bpm
-                                        ? `${selectedAudiusTrack.bpm} BPM`
-                                        : 'BPM unknown'
-                                    } · ${formatAudiusDuration(
-                                      selectedAudiusTrack.duration,
-                                    )} · ${
-                                      audiusAnalyserLive
-                                        ? 'Analyser live'
-                                        : audiusStatus === 'playing'
-                                          ? 'Analyser warming up'
-                                          : 'Analyser idle'
-                                    }`
-                                  : 'Search or load trending Audius tracks, then play one to pulse the cubes.'}
-                              </p>
-                              {audiusError && (
-                                <p className="hexaclear-audius-error">
-                                  {audiusError}
+                              <div className="hexaclear-audius-panel">
+                                <div className="hexaclear-audius-panel-head">
+                                  <span>Music source</span>
+                                  <span>Audius</span>
+                                </div>
+                                <div className="hexaclear-audius-search-row">
+                                  <input
+                                    className="hexaclear-audius-search"
+                                    type="search"
+                                    value={audiusSearchQuery}
+                                    placeholder="Search Audius tracks"
+                                    onChange={(e) =>
+                                      setAudiusSearchQuery(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key !== 'Enter') return
+                                      playUiClick()
+                                      void loadAudiusTracks(audiusSearchQuery)
+                                    }}
+                                    aria-label="Search Audius tracks"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="hexaclear-menu-chip"
+                                    onClick={() => {
+                                      playUiClick()
+                                      void loadAudiusTracks(audiusSearchQuery)
+                                    }}
+                                    disabled={audiusStatus === 'loading'}
+                                  >
+                                    Search
+                                  </button>
+                                </div>
+                                <label className="hexaclear-audius-field">
+                                  <span>Track</span>
+                                  <select
+                                    className="hexaclear-menu-settings-select"
+                                    value={audiusSelectedTrackId ?? ''}
+                                    onChange={(e) => {
+                                      setAudiusSelectedTrackId(e.target.value)
+                                      playUiClick()
+                                    }}
+                                    aria-label="Audius track"
+                                  >
+                                    {audiusTracks.length === 0 ? (
+                                      <option value="">Load tracks...</option>
+                                    ) : (
+                                      audiusTracks.map((track) => (
+                                        <option key={track.id} value={track.id}>
+                                          {track.title}
+                                        </option>
+                                      ))
+                                    )}
+                                  </select>
+                                </label>
+                                <div className="hexaclear-audius-controls">
+                                  <button
+                                    type="button"
+                                    className="hexaclear-menu-chip"
+                                    onClick={() => {
+                                      playUiClick()
+                                      void playAudiusTrack()
+                                    }}
+                                    disabled={
+                                      audiusStatus === 'loading' ||
+                                      audiusTracks.length === 0
+                                    }
+                                  >
+                                    {audiusStatus === 'playing'
+                                      ? 'Restart track'
+                                      : 'Play track'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="hexaclear-menu-chip"
+                                    onClick={() => {
+                                      playUiClick()
+                                      audiusAudioRef.current?.pause()
+                                      setAudiusStatus('paused')
+                                    }}
+                                    disabled={audiusStatus !== 'playing'}
+                                  >
+                                    Pause
+                                  </button>
+                                </div>
+                                <label className="hexaclear-audius-volume">
+                                  <span>Music volume</span>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={Math.round(audiusVolume * 100)}
+                                    onChange={(e) => {
+                                      setAudiusVolume(
+                                        Number(e.target.value) / 100,
+                                      )
+                                    }}
+                                    aria-label="Audius music volume"
+                                  />
+                                  <output>
+                                    {Math.round(audiusVolume * 100)}%
+                                  </output>
+                                </label>
+                                <p className="hexaclear-audius-meta">
+                                  {selectedAudiusTrack
+                                    ? `${
+                                        selectedAudiusTrack.user?.name ??
+                                        selectedAudiusTrack.user?.handle ??
+                                        'Audius artist'
+                                      } · ${
+                                        selectedAudiusTrack.bpm
+                                          ? `${selectedAudiusTrack.bpm} BPM`
+                                          : 'BPM unknown'
+                                      } · ${formatAudiusDuration(
+                                        selectedAudiusTrack.duration,
+                                      )} · ${
+                                        audiusAnalyserLive
+                                          ? 'Analyser live'
+                                          : audiusStatus === 'playing'
+                                            ? 'Analyser warming up'
+                                            : 'Analyser idle'
+                                      }`
+                                    : 'Search Audius, choose a track, then press Play.'}
                                 </p>
-                              )}
+                                {audiusError && (
+                                  <p className="hexaclear-audius-error">
+                                    {audiusError}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           )}
 

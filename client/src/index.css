@@ -4989,25 +4989,42 @@ body {
   outline-offset: 1px;
 }
 
-/* Audius visualizer POC controls. Kept inside Settings so the feature
-   remains opt-in while we learn whether this direction is worth productizing. */
+/* Music Visualizer controls. Everything sits inside one right-column
+   panel so the settings grid cannot auto-place controls into the
+   left label column. */
 .hexaclear-audius-audio {
   display: none;
 }
 .hexaclear-audius-poc {
   align-items: start;
 }
-.hexaclear-audius-poc > :not(.hexaclear-menu-settings-group-label) {
+.hexaclear-audius-panel {
+  display: grid;
+  gap: 0.55rem;
   min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 205, 143, 0.16);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(180deg, rgba(255, 205, 143, 0.06), rgba(40, 12, 4, 0.1)),
+    rgba(255, 205, 143, 0.025);
+}
+.hexaclear-audius-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: rgba(255, 232, 163, 0.64);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 .hexaclear-audius-search-row,
 .hexaclear-audius-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-}
-.hexaclear-audius-search-row {
-  margin-bottom: 0.45rem;
 }
 .hexaclear-audius-search {
   flex: 1 1 10rem;
@@ -5027,15 +5044,25 @@ body {
   outline: 2px solid rgba(255, 205, 143, 0.55);
   outline-offset: 1px;
 }
-.hexaclear-audius-controls {
-  margin-top: 0.45rem;
+.hexaclear-audius-field {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+  color: rgba(255, 232, 163, 0.56);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.hexaclear-audius-controls .hexaclear-menu-chip {
+  flex: 1 1 8rem;
 }
 .hexaclear-audius-volume {
   display: grid;
   grid-template-columns: max-content minmax(7rem, 1fr) 2.8rem;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.55rem;
+  min-width: 0;
   padding: 0.42rem 0.5rem;
   border: 1px solid rgba(255, 205, 143, 0.16);
   border-radius: 0.6rem;
@@ -5058,7 +5085,7 @@ body {
 }
 .hexaclear-audius-meta,
 .hexaclear-audius-error {
-  margin: 0.45rem 0 0;
+  margin: 0;
   font-size: 0.72rem;
   line-height: 1.35;
 }
