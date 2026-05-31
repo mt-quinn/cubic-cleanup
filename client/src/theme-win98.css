@@ -2146,6 +2146,10 @@
   min-width: 320px;
 }
 
+[data-theme="win98"] .hexaclear-menu-card .hexaclear-menu-hero {
+  padding-top: 12px;
+}
+
 /* Settings panels and the Sign-out / danger button get the inverted
    sunken bevel so they read as containers (vs. the raised buttons
    they share the card with). */

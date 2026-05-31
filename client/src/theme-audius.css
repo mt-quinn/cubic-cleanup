@@ -1,0 +1,1435 @@
+/* =====================================================================
+   Music Visualizer / Light Table Deck theme
+   ---------------------------------------------------------------------
+   The active theme is set on <html data-theme="audius"> from App.tsx.
+   This theme reframes the app as a backlit music instrument: a compact
+   transport deck feeds the board, side meters flank the light table,
+   and the hand tray becomes a playable keybed.
+   ===================================================================== */
+
+:root[data-theme="audius"] {
+  --audius-shell: #040309;
+  --audius-glass: #080b12;
+  --audius-glass-deep: #030107;
+  --audius-ink: #d7fff7;
+  --audius-muted: #7ea8a2;
+  --audius-rail: #162e35;
+  --audius-amber: #c8732c;
+  --audius-pulse: 0;
+  --audius-bass: 0;
+  --audius-mid: 0;
+  --audius-treble: 0;
+  --audius-onset: 0;
+  --audius-intensity: 0.18;
+  --audius-breath: 0.18;
+  --audius-board-glow: 0.18;
+  --audius-shimmer: 0;
+  --audius-cube-scale: 1;
+  --audius-title-glow: 11px;
+  --audius-board-inner-glow: 32px;
+  --audius-board-outer-glow: 28px;
+  --audius-score-glow-a: 6px;
+  --audius-score-glow-b: 19px;
+  --audius-score-scale: 1.008;
+  --audius-outline-glow: 3px;
+  --audius-face-glow: 3px;
+  --audius-empty-stroke-opacity: 0.46;
+  --audius-slot-fill-opacity: 0.74;
+  --audius-top-opacity: 0.85;
+  --audius-left-opacity: 0.83;
+  --audius-right-opacity: 0.86;
+  --audius-face-stroke-opacity: 0.42;
+  --audius-deck-hot: 0;
+  --audius-meter-bass: 0;
+  --audius-meter-mid: 0;
+  --audius-meter-treble: 0;
+  --audius-meter-onset: 0;
+  --audius-keybed-energy: 0;
+  --audius-cube-top: #cffff2;
+  --audius-cube-left: #42d6bd;
+  --audius-cube-right: #115a67;
+  color: var(--audius-ink);
+}
+
+.hexaclear-audius-deck,
+.hexaclear-audius-title-card,
+.hexaclear-audius-vu {
+  display: none;
+}
+
+[data-theme="audius"] body,
+[data-theme="audius"] .cubic-viewport {
+  background:
+    radial-gradient(
+      circle at 50% -14%,
+      color-mix(in srgb, var(--audius-cube-top) 20%, transparent) 0%,
+      transparent 38%
+    ),
+    radial-gradient(circle at 50% 66%, #16101f 0%, #08050e 58%, #030106 100%);
+  color: var(--audius-ink);
+}
+
+[data-theme="audius"] .hexaclear-root {
+  width: min(100%, 860px);
+  max-width: min(860px, calc(100vw - 1rem));
+  padding: clamp(0.45rem, 1.1dvh, 0.7rem);
+  gap: clamp(0.42rem, 0.9dvh, 0.62rem);
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      color-mix(in srgb, var(--audius-cube-top) 10%, transparent),
+      transparent 30%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
+    var(--audius-shell);
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 16%, #242033);
+  border-radius: 1.4rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 -30px 70px rgba(0, 0, 0, 0.46),
+    0 0 var(--audius-board-outer-glow)
+      color-mix(in srgb, var(--audius-cube-left) 22%, transparent),
+    0 24px 80px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="audius"] .hexaclear-header {
+  display: none;
+}
+
+[data-theme="audius"] .hexaclear-win98-lcds {
+  display: none;
+}
+
+[data-theme="audius"] .hexaclear-audius-deck {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "utility"
+    "modes"
+    "readouts";
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  padding: 0.32rem;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 22%, #30263b);
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 38%),
+    rgba(4, 3, 9, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 0 14px color-mix(in srgb, var(--audius-cube-left) 14%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-audius-brand {
+  display: grid;
+  line-height: 1;
+}
+
+[data-theme="audius"] .hexaclear-audius-brand-kicker,
+[data-theme="audius"] .readout-label,
+[data-theme="audius"] .track-label,
+[data-theme="audius"] .spectrum-state {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--audius-cube-top) 48%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-audius-brand-title {
+  font-family: 'Monoton', system-ui, sans-serif;
+  font-size: clamp(1.25rem, 3.4dvh, 2rem);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--audius-cube-top) 76%, #fff5ca);
+  text-shadow:
+    0 0 1px rgba(255, 255, 255, 0.8),
+    0 0 var(--audius-title-glow)
+      color-mix(in srgb, var(--audius-cube-left) 65%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-audius-mode-bank,
+[data-theme="audius"] .hexaclear-audius-transport-actions,
+[data-theme="audius"] .hexaclear-audius-utility-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+[data-theme="audius"] .hexaclear-audius-utility-row {
+  grid-area: utility;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+}
+
+[data-theme="audius"] .hexaclear-audius-mode-bank {
+  grid-area: modes;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+[data-theme="audius"] .hexaclear-audius-menu-button {
+  width: 100%;
+}
+
+[data-theme="audius"] .hexaclear-audius-mode,
+[data-theme="audius"] .hexaclear-audius-menu-button,
+[data-theme="audius"] .hexaclear-audius-history-button,
+[data-theme="audius"] .hexaclear-audius-transport-button {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 30%, #3a3347);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent),
+    rgba(5, 4, 11, 0.76);
+  color: color-mix(in srgb, var(--audius-cube-top) 66%, #f2d8a6);
+  font-family: inherit;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.36rem 0.58rem;
+  min-height: 2rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 8px color-mix(in srgb, var(--audius-cube-left) 18%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-audius-mode.active,
+[data-theme="audius"] .hexaclear-audius-history-button.is-archive,
+[data-theme="audius"] .hexaclear-audius-transport-button.is-primary {
+  color: #061114;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.42), transparent 48%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--audius-cube-top) 76%, #f7de86),
+      color-mix(in srgb, var(--audius-cube-left) 64%, var(--audius-amber))
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 0 16px color-mix(in srgb, var(--audius-cube-left) 28%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-audius-transport-button:disabled {
+  opacity: 0.46;
+  filter: grayscale(0.5);
+}
+
+[data-theme="audius"] .hexaclear-audius-readouts {
+  grid-area: readouts;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(4.5rem, 1fr));
+  gap: 0.24rem;
+  min-width: min(22rem, 34vw);
+}
+
+[data-theme="audius"] .hexaclear-audius-readout {
+  position: relative;
+  display: grid;
+  gap: 0.08rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 18%, #2c2736);
+  border-radius: 0.72rem;
+  background:
+    radial-gradient(
+      circle at 50% 100%,
+      color-mix(in srgb, var(--audius-cube-left) 9%, transparent),
+      transparent 58%
+    ),
+    rgba(2, 2, 6, 0.68);
+  overflow: hidden;
+}
+
+[data-theme="audius"] .hexaclear-audius-readout-live {
+  transform: scale(var(--audius-score-scale));
+  transform-origin: right center;
+}
+
+[data-theme="audius"] .readout-value {
+  font-size: clamp(1rem, 2.5dvh, 1.38rem);
+  font-weight: 900;
+  line-height: 1;
+  color: color-mix(in srgb, var(--audius-cube-top) 78%, #fff5c8);
+  text-shadow:
+    0 0 var(--audius-score-glow-a)
+      color-mix(in srgb, var(--audius-cube-top) 70%, transparent),
+    0 0 var(--audius-score-glow-b)
+      color-mix(in srgb, var(--audius-cube-left) 42%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-audius-transport {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(6rem, 0.42fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem;
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055), transparent 54%),
+    rgba(3, 3, 8, 0.66);
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card {
+  position: absolute;
+  left: clamp(0.75rem, 2.4vw, 1.25rem);
+  bottom: clamp(0.75rem, 2.4vw, 1.25rem);
+  z-index: 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "copy"
+    "spectrum"
+    "actions";
+  align-items: start;
+  gap: 0.42rem;
+  width: min(23rem, 45%);
+  max-width: calc(100% - 1.5rem);
+  min-width: 0;
+  padding: 0.72rem 3.7rem 0.68rem 0.82rem;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 18%, transparent);
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(90deg, rgba(3, 2, 7, 0.88), rgba(3, 2, 7, 0.58) 72%, transparent),
+    radial-gradient(
+      circle at 18% 50%,
+      color-mix(in srgb, var(--audius-cube-left) 10%, transparent),
+      transparent 54%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 10px 26px rgba(0, 0, 0, 0.38);
+  pointer-events: auto;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    width 180ms ease;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card::before {
+  content: '';
+  position: absolute;
+  left: 0.8rem;
+  right: 20%;
+  bottom: 0.42rem;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--audius-cube-top) 64%, transparent);
+  opacity: var(--audius-deck-hot);
+  pointer-events: none;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-copy {
+  grid-area: copy;
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-toggle {
+  grid-area: toggle;
+  position: absolute;
+  top: 0.52rem;
+  right: 0.52rem;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: color-mix(in srgb, var(--audius-cube-top) 66%, #ffffff);
+  font: inherit;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.48rem;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card .hexaclear-audius-spectrum {
+  grid-area: spectrum;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card .hexaclear-audius-transport-actions {
+  grid-area: actions;
+  justify-self: start;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card.is-collapsed {
+  width: auto;
+  min-width: 0;
+  grid-template-columns: auto;
+  grid-template-areas: "toggle";
+  padding: 0.35rem;
+  opacity: 0.78;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card.is-collapsed .hexaclear-audius-title-toggle {
+  position: static;
+}
+
+[data-theme="audius"] .hexaclear-audius-title-card.is-collapsed::before,
+[data-theme="audius"] .hexaclear-audius-title-card.is-collapsed .hexaclear-audius-title-copy,
+[data-theme="audius"] .hexaclear-audius-title-card.is-collapsed .hexaclear-audius-spectrum,
+[data-theme="audius"] .hexaclear-audius-title-card.is-collapsed .hexaclear-audius-transport-actions {
+  display: none;
+}
+
+[data-theme="audius"] .hexaclear-audius-track {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+[data-theme="audius"] .track-title,
+[data-theme="audius"] .track-artist {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-theme="audius"] .track-title {
+  font-weight: 900;
+  color: var(--audius-ink);
+}
+
+[data-theme="audius"] .track-artist {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--audius-cube-top) 42%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-audius-spectrum {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  align-items: end;
+  gap: 0.22rem;
+  min-height: 2.1rem;
+}
+
+[data-theme="audius"] .spectrum-bar {
+  display: block;
+  width: 0.5rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--audius-cube-left) 74%, #ffffff);
+  transform-origin: bottom center;
+  opacity: 0.38;
+}
+
+[data-theme="audius"] .spectrum-bass {
+  transform: scaleY(var(--audius-meter-bass));
+  opacity: var(--audius-meter-bass);
+}
+
+[data-theme="audius"] .spectrum-mid {
+  transform: scaleY(var(--audius-meter-mid));
+  opacity: var(--audius-meter-mid);
+}
+
+[data-theme="audius"] .spectrum-treble {
+  transform: scaleY(var(--audius-meter-treble));
+  opacity: var(--audius-meter-treble);
+}
+
+[data-theme="audius"] .spectrum-onset {
+  transform: scaleY(var(--audius-meter-onset));
+  opacity: var(--audius-meter-onset);
+}
+
+[data-theme="audius"] .spectrum-state {
+  align-self: center;
+  white-space: nowrap;
+}
+
+[data-theme="audius"] .hexaclear-main {
+  justify-content: start;
+  gap: clamp(0.42rem, 0.9dvh, 0.62rem);
+}
+
+[data-theme="audius"] .hexaclear-board-wrapper {
+  min-height: 0;
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(
+      circle at 50% 44%,
+      color-mix(in srgb, var(--audius-cube-top) 22%, transparent) 0%,
+      rgba(8, 10, 18, 0.84) 48%,
+      rgba(2, 1, 6, 0.98) 100%
+    ),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 38%),
+    var(--audius-glass-deep);
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 30%, #2f2738);
+  box-shadow:
+    inset 0 0 var(--audius-board-inner-glow)
+      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 18px 42px rgba(0, 0, 0, 0.68);
+}
+
+[data-theme="audius"] .hexaclear-board-wrapper::before,
+[data-theme="audius"] .hexaclear-board-wrapper::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+[data-theme="audius"] .hexaclear-board-wrapper::before {
+  inset: -6%;
+  background:
+    radial-gradient(
+      circle at 50% 48%,
+      color-mix(in srgb, var(--audius-cube-top) 42%, transparent) 0%,
+      transparent 52%
+    ),
+    conic-gradient(
+      from var(--audius-cell-phase, 0deg),
+      color-mix(in srgb, var(--audius-cube-top) 18%, transparent),
+      color-mix(in srgb, var(--audius-cube-left) 20%, transparent),
+      rgba(74, 48, 156, 0.18),
+      color-mix(in srgb, var(--audius-cube-top) 18%, transparent)
+    );
+  mix-blend-mode: screen;
+  opacity: var(--audius-board-glow);
+  filter: blur(10px);
+}
+
+[data-theme="audius"] .hexaclear-board-wrapper::after {
+  inset: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 15%, transparent);
+  box-shadow:
+    inset 0 0 var(--audius-face-glow)
+      color-mix(in srgb, var(--audius-cube-left) 26%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-board {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+}
+
+[data-theme="audius"] .hexaclear-audius-vu {
+  position: absolute;
+  top: 11%;
+  bottom: 11%;
+  z-index: 3;
+  width: 0.82rem;
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  gap: 0.34rem;
+  pointer-events: none;
+}
+
+[data-theme="audius"] .hexaclear-audius-vu-left {
+  left: 0.7rem;
+}
+
+[data-theme="audius"] .hexaclear-audius-vu-right {
+  right: 0.7rem;
+}
+
+[data-theme="audius"] .vu-tick {
+  display: block;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--audius-cube-top) 62%, transparent);
+  transform-origin: center bottom;
+  opacity: 0.24;
+}
+
+[data-theme="audius"] .vu-bass {
+  transform: scaleY(var(--audius-meter-bass));
+  opacity: var(--audius-meter-bass);
+}
+
+[data-theme="audius"] .vu-mid {
+  transform: scaleY(var(--audius-meter-mid));
+  opacity: var(--audius-meter-mid);
+}
+
+[data-theme="audius"] .vu-treble {
+  transform: scaleY(var(--audius-meter-treble));
+  opacity: var(--audius-meter-treble);
+}
+
+[data-theme="audius"] .vu-onset {
+  transform: scaleY(var(--audius-meter-onset));
+  opacity: var(--audius-meter-onset);
+}
+
+[data-theme="audius"] .vu-intensity {
+  transform: scaleY(var(--audius-intensity));
+  opacity: var(--audius-intensity);
+}
+
+[data-theme="audius"] .vu-breath {
+  transform: scaleY(var(--audius-breath));
+  opacity: var(--audius-breath);
+}
+
+[data-theme="audius"] .hexaclear-board-outline-back {
+  stroke: rgba(0, 0, 0, 0.92);
+  stroke-width: 12;
+  filter:
+    drop-shadow(0 3px 8px rgba(0, 0, 0, 0.75))
+    blur(0.45px);
+}
+
+[data-theme="audius"] .hexaclear-board-outline-front {
+  stroke: color-mix(in srgb, var(--audius-cube-top) 52%, var(--audius-amber));
+  stroke-width: 4.8;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+
+[data-theme="audius"] .hexaclear-hex.empty {
+  fill: rgba(5, 2, 8, 0.34);
+  stroke: color-mix(in srgb, var(--audius-cube-top) 25%, #5b3545);
+  stroke-opacity: var(--audius-empty-stroke-opacity);
+  stroke-width: 2.7;
+}
+
+[data-theme="audius"] .hexaclear-slot-fill {
+  fill: color-mix(in srgb, var(--audius-cube-right) 12%, #050209);
+  fill-opacity: var(--audius-slot-fill-opacity);
+  stroke: color-mix(in srgb, var(--audius-cube-left) 18%, transparent);
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-top {
+  fill: var(--audius-cube-top, var(--cube-top));
+  fill-opacity: var(--audius-top-opacity);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-left {
+  fill: var(--audius-cube-left, var(--cube-left));
+  fill-opacity: var(--audius-left-opacity);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-right {
+  fill: var(--audius-cube-right, var(--cube-right));
+  fill-opacity: var(--audius-right-opacity);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-face {
+  stroke: color-mix(in srgb, var(--audius-cube-top) 58%, #ffffff);
+  stroke-opacity: var(--audius-face-stroke-opacity);
+  stroke-width: 1.05;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.46));
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .hexaclear-cube-wiggle-wrap {
+  transform: scale(var(--audius-cube-scale));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-overlay,
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-ripple-overlay {
+  display: block;
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-dark {
+  fill: color-mix(in srgb, var(--audius-cube-right) 34%, #030006);
+  opacity: var(--audius-dark-overlay, 0);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-light {
+  fill: color-mix(in srgb, var(--audius-cube-top) 78%, #fff8c6);
+  opacity: var(--audius-light-overlay, 0);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-light.cube-pulse-top {
+  fill: color-mix(in srgb, var(--audius-cube-top) 72%, #fff7cb);
+  opacity: var(--audius-top-light, 0);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-light.cube-pulse-left {
+  fill: color-mix(in srgb, var(--audius-cube-left) 58%, #ff78b8);
+  opacity: var(--audius-left-warm, 0);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-pulse-dark.cube-pulse-right {
+  fill: color-mix(in srgb, var(--audius-cube-right) 62%, #05010d);
+  opacity: var(--audius-right-shadow, 0);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-ripple-overlay {
+  fill: none;
+  stroke: color-mix(in srgb, var(--audius-cube-top) 70%, #ffffff);
+  stroke-width: 2.4;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube.audius-ripple-even
+  .cube-ripple-overlay {
+  animation: hexaclear-audius-ripple-even 760ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  animation-delay: var(--audius-cell-delay, 0ms);
+}
+
+[data-theme="audius"]
+  .hexaclear-hex-cube.audius-ripple-odd
+  .cube-ripple-overlay {
+  animation: hexaclear-audius-ripple-odd 760ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  animation-delay: var(--audius-cell-delay, 0ms);
+}
+
+[data-theme="audius"] .hexaclear-audius-shimmer {
+  fill: color-mix(in srgb, var(--audius-cube-top) 62%, #ffffff);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+[data-theme="audius"] .audius-ripple-even .hexaclear-audius-shimmer {
+  animation: hexaclear-audius-shimmer-even 1200ms ease-out both;
+  animation-delay: var(--audius-shimmer-delay, 0ms);
+}
+
+[data-theme="audius"] .audius-ripple-odd .hexaclear-audius-shimmer {
+  animation: hexaclear-audius-shimmer-odd 1200ms ease-out both;
+  animation-delay: var(--audius-shimmer-delay, 0ms);
+}
+
+[data-theme="audius"] .hexaclear-hand {
+  min-height: 0;
+  height: clamp(80px, 18dvh, 180px);
+  padding: 0.35rem;
+  border-color: color-mix(in srgb, var(--audius-cube-top) 28%, #46384f);
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(180deg, rgba(229, 255, 243, 0.055), rgba(5, 1, 8, 0.72)),
+    var(--audius-glass-deep);
+  box-shadow:
+    inset 0 0 var(--audius-board-inner-glow)
+      color-mix(in srgb, var(--audius-cube-left) 8%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 var(--audius-board-outer-glow)
+      color-mix(in srgb, var(--audius-cube-left) 22%, transparent),
+    0 12px 28px rgba(0, 0, 0, 0.62);
+}
+
+[data-theme="audius"] .hexaclear-hold,
+[data-theme="audius"] .hexaclear-piece-button {
+  border-radius: 0.85rem;
+}
+
+[data-theme="audius"] .hexaclear-hold {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 28%, #47313f);
+  background:
+    radial-gradient(
+      circle at 50% 64%,
+      color-mix(in srgb, var(--audius-cube-left) 8%, transparent),
+      transparent 60%
+    ),
+    rgba(4, 1, 7, 0.62);
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.72),
+    inset 0 0 var(--audius-face-glow)
+      color-mix(in srgb, var(--audius-cube-left) 18%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-piece-button {
+  background:
+    radial-gradient(
+      circle at 50% 62%,
+      color-mix(in srgb, var(--audius-cube-left) 9%, transparent),
+      transparent 58%
+    );
+}
+
+[data-theme="audius"] .hexaclear-piece-button .hexaclear-piece-svg,
+[data-theme="audius"] .hexaclear-hold-piece .hexaclear-piece-svg {
+  filter: drop-shadow(0 5px 12px rgba(0, 0, 0, 0.34));
+}
+
+[data-theme="audius"] .hexaclear-piece-button .hexaclear-hex.piece,
+[data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex.piece {
+  fill: var(--audius-cube-top);
+  fill-opacity: var(--audius-top-opacity);
+  stroke: color-mix(in srgb, var(--audius-cube-right) 70%, #ffffff);
+  stroke-opacity: var(--audius-face-stroke-opacity);
+}
+
+[data-theme="audius"] .hexaclear-piece-button .hexaclear-hex-bevels,
+[data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex-bevels {
+  display: block;
+}
+
+[data-theme="audius"] .hexaclear-piece-button .hexaclear-hex-bevel-highlight,
+[data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex-bevel-highlight {
+  stroke: color-mix(in srgb, var(--audius-cube-top) 74%, #ffffff);
+  stroke-opacity: var(--audius-face-stroke-opacity);
+}
+
+[data-theme="audius"] .hexaclear-piece-button .hexaclear-hex-bevel-shadow,
+[data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex-bevel-shadow {
+  stroke: color-mix(in srgb, var(--audius-cube-right) 70%, #020106);
+  stroke-opacity: var(--audius-right-opacity);
+}
+
+[data-theme="audius"] .hexaclear-piece-button + .hexaclear-piece-button::before {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--audius-cube-top) 26%, transparent) 25%,
+    color-mix(in srgb, var(--audius-cube-left) 22%, transparent) 75%,
+    transparent
+  );
+}
+
+[data-theme="audius"] .hexaclear-piece-button.selected,
+[data-theme="audius"] .hexaclear-hold.is-drop-active,
+[data-theme="audius"] .hexaclear-hold.selected {
+  background:
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--audius-cube-top) 14%, transparent),
+      rgba(4, 1, 7, 0.54) 70%
+    );
+  box-shadow:
+    inset 0 0 0 1px
+      color-mix(in srgb, var(--audius-cube-top) 62%, transparent),
+    0 0 16px color-mix(in srgb, var(--audius-cube-left) 26%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-hold-label {
+  color: color-mix(in srgb, var(--audius-cube-top) 52%, #d7b773);
+}
+
+[data-theme="audius"] .hexaclear-hold.unplayable .hexaclear-piece-svg,
+[data-theme="audius"] .hexaclear-piece-button.unplayable {
+  filter: grayscale(0.35) brightness(0.78);
+  opacity: 0.48;
+}
+
+[data-theme="audius"] .hexaclear-audius-panel {
+  background:
+    linear-gradient(180deg, rgba(229, 255, 243, 0.06), rgba(5, 1, 8, 0.22)),
+    rgba(3, 3, 8, 0.52);
+  border-color: color-mix(in srgb, var(--audius-cube-top) 28%, #594654);
+}
+
+[data-theme="audius"] .hexaclear-overlay {
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+      rgba(0, 0, 0, 0.72) 44%,
+      rgba(0, 0, 0, 0.94)
+    );
+}
+
+[data-theme="audius"] .hexaclear-overlay-card,
+[data-theme="audius"] .hexaclear-audio-unlock-card {
+  color: var(--audius-ink);
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 24%, #30263b);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 36%),
+    radial-gradient(
+      circle at 20% 10%,
+      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+      transparent 42%
+    ),
+    rgba(4, 3, 9, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 34px color-mix(in srgb, var(--audius-cube-left) 7%, transparent),
+    0 24px 62px rgba(0, 0, 0, 0.82),
+    0 0 28px color-mix(in srgb, var(--audius-cube-left) 16%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-overlay-card .title,
+[data-theme="audius"] .hexaclear-audio-unlock-title {
+  color: color-mix(in srgb, var(--audius-cube-top) 78%, #fff4c7);
+  text-shadow:
+    0 0 1px rgba(255, 255, 255, 0.8),
+    0 0 var(--audius-title-glow)
+      color-mix(in srgb, var(--audius-cube-left) 56%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-overlay-card .score,
+[data-theme="audius"] .hexaclear-scores-empty,
+[data-theme="audius"] .hexaclear-scores-your-rank,
+[data-theme="audius"] .hexaclear-history-legend,
+[data-theme="audius"] .hexaclear-coop-instructions,
+[data-theme="audius"] .hexaclear-coop-code,
+[data-theme="audius"] .hexaclear-menu-nav-tease,
+[data-theme="audius"] .hexaclear-menu-settings-account-text {
+  color: color-mix(in srgb, var(--audius-cube-top) 42%, var(--audius-muted));
+  opacity: 1;
+}
+
+[data-theme="audius"] .hexaclear-input,
+[data-theme="audius"] .hexaclear-menu-settings-select,
+[data-theme="audius"] .hexaclear-menu-settings-text,
+[data-theme="audius"] .hexaclear-audius-search,
+[data-theme="audius"] .hexaclear-coop-share-input,
+[data-theme="audius"] .hexaclear-account-form input {
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 24%, #30263b);
+  background: rgba(2, 2, 7, 0.78);
+  color: var(--audius-ink);
+}
+
+[data-theme="audius"] .hexaclear-input:focus,
+[data-theme="audius"] .hexaclear-menu-settings-select:focus,
+[data-theme="audius"] .hexaclear-menu-settings-text:focus,
+[data-theme="audius"] .hexaclear-audius-search:focus,
+[data-theme="audius"] .hexaclear-coop-share-input:focus,
+[data-theme="audius"] .hexaclear-account-form input:focus {
+  outline: 2px solid color-mix(in srgb, var(--audius-cube-left) 46%, transparent);
+  outline-offset: 2px;
+}
+
+[data-theme="audius"] .hexaclear-audius-search::placeholder {
+  color: color-mix(in srgb, var(--audius-cube-top) 34%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio,
+[data-theme="audius"] .hexaclear-audius-volume {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 18%, #30263b);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+    rgba(2, 2, 7, 0.62);
+  color: color-mix(in srgb, var(--audius-cube-top) 52%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-audius-panel-head,
+[data-theme="audius"] .hexaclear-audius-field,
+[data-theme="audius"] .hexaclear-audius-volume > span {
+  color: color-mix(in srgb, var(--audius-cube-top) 48%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio-readout,
+[data-theme="audius"] .hexaclear-audius-volume output {
+  color: color-mix(in srgb, var(--audius-cube-top) 76%, #fff5c8);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio input[type='range'],
+[data-theme="audius"] .hexaclear-audius-volume input[type='range'] {
+  accent-color: color-mix(in srgb, var(--audius-cube-left) 76%, #ffffff);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio input[type='range']::-webkit-slider-runnable-track,
+[data-theme="audius"] .hexaclear-audius-volume input[type='range']::-webkit-slider-runnable-track {
+  height: 0.34rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--audius-cube-left) 68%, #ffffff), color-mix(in srgb, var(--audius-cube-top) 62%, #ffffff)),
+    rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio input[type='range']::-webkit-slider-thumb,
+[data-theme="audius"] .hexaclear-audius-volume input[type='range']::-webkit-slider-thumb {
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 50%, transparent);
+  box-shadow:
+    0 0 0 3px rgba(2, 2, 7, 0.72),
+    0 0 12px color-mix(in srgb, var(--audius-cube-left) 32%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio input[type='range']::-moz-range-track,
+[data-theme="audius"] .hexaclear-audius-volume input[type='range']::-moz-range-track {
+  height: 0.34rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio input[type='range']::-moz-range-progress,
+[data-theme="audius"] .hexaclear-audius-volume input[type='range']::-moz-range-progress {
+  height: 0.34rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--audius-cube-left) 72%, #ffffff);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-audio input[type='range']::-moz-range-thumb,
+[data-theme="audius"] .hexaclear-audius-volume input[type='range']::-moz-range-thumb {
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 50%, transparent);
+  background: color-mix(in srgb, var(--audius-cube-top) 72%, #ffffff);
+  box-shadow:
+    0 0 0 3px rgba(2, 2, 7, 0.72),
+    0 0 12px color-mix(in srgb, var(--audius-cube-left) 32%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-overlay-card
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle),
+[data-theme="audius"] .hexaclear-menu-chip,
+[data-theme="audius"] .hexaclear-coop-cta,
+[data-theme="audius"] .hexaclear-coop-share-copy,
+[data-theme="audius"] .hexaclear-account-mode-row button,
+[data-theme="audius"] .hexaclear-menu-settings-account-button {
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 28%, #30263b) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent),
+    rgba(5, 4, 11, 0.82) !important;
+  color: color-mix(in srgb, var(--audius-cube-top) 66%, #f2d8a6) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 10px color-mix(in srgb, var(--audius-cube-left) 16%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-menu-new-game-hero,
+[data-theme="audius"] .hexaclear-menu-resume-hero,
+[data-theme="audius"] .hexaclear-menu-chip.is-primary,
+[data-theme="audius"] .hexaclear-coop-mode-pill.is-active,
+[data-theme="audius"] .hexaclear-account-mode-row button.is-active,
+[data-theme="audius"] .hexaclear-scoring-tab.is-active,
+[data-theme="audius"] .hexaclear-scores-tab.is-active,
+[data-theme="audius"] .hexaclear-history-button.is-archive,
+[data-theme="audius"] .hexaclear-history-cell.is-active {
+  color: #061114 !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.42), transparent 48%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--audius-cube-top) 76%, #f7de86),
+      color-mix(in srgb, var(--audius-cube-left) 64%, var(--audius-amber))
+    ) !important;
+  border-color: color-mix(in srgb, var(--audius-cube-top) 54%, transparent) !important;
+}
+
+[data-theme="audius"] .hexaclear-menu-chip-danger,
+[data-theme="audius"] .hexaclear-menu-link.is-danger {
+  border-color: rgba(255, 96, 124, 0.54) !important;
+  color: #ffd7df !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
+    rgba(64, 5, 22, 0.76) !important;
+}
+
+[data-theme="audius"] .hexaclear-menu-card,
+[data-theme="audius"] .hexaclear-scores-card,
+[data-theme="audius"] .hexaclear-stats-card,
+[data-theme="audius"] .hexaclear-account-card,
+[data-theme="audius"] .hexaclear-scoring-card,
+[data-theme="audius"] .hexaclear-history-card,
+[data-theme="audius"] .hexaclear-gameover-card,
+[data-theme="audius"] .hexaclear-coop-waiting-card,
+[data-theme="audius"] .hexaclear-coop-error-card {
+  border-radius: 1.05rem;
+}
+
+[data-theme="audius"] .hexaclear-menu-zone,
+[data-theme="audius"] .hexaclear-menu-settings-zone,
+[data-theme="audius"] .hexaclear-menu-settings-body,
+[data-theme="audius"] .hexaclear-menu-nav-card,
+[data-theme="audius"] .hexaclear-menu-settings-group,
+[data-theme="audius"] .hexaclear-stats-section,
+[data-theme="audius"] .hexaclear-scores-section,
+[data-theme="audius"] .hexaclear-account-copy,
+[data-theme="audius"] .hexaclear-account-summary,
+[data-theme="audius"] .hexaclear-account-stat,
+[data-theme="audius"] .hexaclear-account-online,
+[data-theme="audius"] .hexaclear-scoring-rule,
+[data-theme="audius"] .hexaclear-piecetiary-cell,
+[data-theme="audius"] .hexaclear-coop-status,
+[data-theme="audius"] .hexaclear-pvp-hud,
+[data-theme="audius"] .hexaclear-pvp-tracks,
+[data-theme="audius"] .hexaclear-pvp-standings {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 18%, #30263b);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
+    rgba(2, 2, 7, 0.62);
+  color: var(--audius-ink);
+}
+
+[data-theme="audius"] .hexaclear-menu-settings-strip,
+[data-theme="audius"] .hexaclear-history-button,
+[data-theme="audius"] .hexaclear-scoring-tab,
+[data-theme="audius"] .hexaclear-scores-tab,
+[data-theme="audius"] .hexaclear-scores-date-step,
+[data-theme="audius"] .hexaclear-scores-page-step,
+[data-theme="audius"] .hexaclear-scores-expand-toggle,
+[data-theme="audius"] .hexaclear-coop-mode-toggle {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 22%, #30263b) !important;
+  background: rgba(3, 3, 8, 0.72) !important;
+  color: color-mix(in srgb, var(--audius-cube-top) 58%, var(--audius-ink)) !important;
+}
+
+[data-theme="audius"] .hexaclear-menu-zone-label,
+[data-theme="audius"] .hexaclear-menu-settings-group-label,
+[data-theme="audius"] .hexaclear-scores-section-label,
+[data-theme="audius"] .hexaclear-stats-section-label,
+[data-theme="audius"] .hexaclear-scoring-rule-title,
+[data-theme="audius"] .hexaclear-history-weekday,
+[data-theme="audius"] .hexaclear-pvp-standings-label,
+[data-theme="audius"] .hexaclear-coop-status .label {
+  color: color-mix(in srgb, var(--audius-cube-top) 48%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-menu-nav-title,
+[data-theme="audius"] .hexaclear-scores-value,
+[data-theme="audius"] .hexaclear-stats-section strong,
+[data-theme="audius"] .hexaclear-account-stat span,
+[data-theme="audius"] .hexaclear-account-online span,
+[data-theme="audius"] .hexaclear-coop-status .value {
+  color: color-mix(in srgb, var(--audius-cube-top) 78%, #fff5c8);
+}
+
+[data-theme="audius"] .hexaclear-scores-row + .hexaclear-scores-row,
+[data-theme="audius"] .hexaclear-scores-section + .hexaclear-scores-section {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 14%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-scores-row.recent,
+[data-theme="audius"] .hexaclear-scores-row-pinned,
+[data-theme="audius"] .hexaclear-pvp-standings-row.is-winner {
+  background: color-mix(in srgb, var(--audius-cube-left) 12%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-history-cell {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 15%, #30263b);
+  border-radius: 0.6rem !important;
+  background: rgba(2, 2, 7, 0.66);
+  color: var(--audius-ink);
+}
+
+[data-theme="audius"] .hexaclear-overlay-card button.hexaclear-history-cell {
+  border-radius: 0.6rem !important;
+}
+
+[data-theme="audius"] .hexaclear-history-cell:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--audius-cube-left) 14%, rgba(2, 2, 7, 0.76));
+  border-color: color-mix(in srgb, var(--audius-cube-top) 34%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-history-cell.is-today {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 62%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--audius-cube-left) 35%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-history-cell.is-cleared {
+  background:
+    linear-gradient(180deg, rgba(116, 255, 188, 0.28), rgba(24, 105, 88, 0.62)),
+    rgba(2, 2, 7, 0.76);
+  border-color: color-mix(in srgb, var(--audius-cube-left) 48%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-history-card > .hexaclear-reset {
+  margin-top: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 36%, #30263b);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.34), transparent 48%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--audius-cube-top) 72%, #f7de86),
+      color-mix(in srgb, var(--audius-cube-left) 58%, var(--audius-amber))
+    );
+  color: #061114;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 16px color-mix(in srgb, var(--audius-cube-left) 24%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-coop-mode-toggle {
+  padding: 2px;
+}
+
+[data-theme="audius"] .hexaclear-coop-mode-pill {
+  color: color-mix(in srgb, var(--audius-cube-top) 48%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-coop-cta.is-copied,
+[data-theme="audius"] .hexaclear-account-message {
+  border-color: color-mix(in srgb, var(--audius-cube-left) 38%, transparent) !important;
+  background:
+    linear-gradient(180deg, rgba(116, 255, 188, 0.22), rgba(24, 105, 88, 0.5)),
+    rgba(2, 2, 7, 0.76) !important;
+  color: #d7fff7 !important;
+}
+
+[data-theme="audius"] .hexaclear-account-message.is-error,
+[data-theme="audius"] .hexaclear-coop-error-message {
+  border-color: rgba(255, 96, 124, 0.45);
+  color: #ffd7df;
+}
+
+[data-theme="audius"] .hexaclear-pvp-row-track {
+  background: rgba(2, 2, 7, 0.7);
+  border-color: color-mix(in srgb, var(--audius-cube-top) 16%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-pvp-row-track-threshold {
+  background: color-mix(in srgb, var(--audius-cube-top) 72%, #fff5c8);
+}
+
+[data-theme="audius"] .hexaclear-pvp-win-tag,
+[data-theme="audius"] .hexaclear-pvp-banner {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 24%, #30263b);
+  background: rgba(2, 2, 7, 0.72);
+  color: var(--audius-ink);
+}
+
+/* This theme file loads before the shared stylesheet. Keep these
+   high-specificity bridges until the legacy visualizer block is fully
+   retired from index.css, so the deck geometry wins the cascade. */
+[data-theme="audius"] .cubic-viewport.is-audius-visualizer {
+  background:
+    radial-gradient(
+      circle at 50% -14%,
+      color-mix(in srgb, var(--audius-cube-top) 20%, transparent) 0%,
+      transparent 38%
+    ),
+    radial-gradient(circle at 50% 66%, #16101f 0%, #08050e 58%, #030106 100%);
+}
+
+[data-theme="audius"] .cubic-viewport.is-audius-visualizer .hexaclear-root {
+  width: min(100%, 860px);
+  max-width: min(860px, calc(100vw - 1rem));
+  padding: clamp(0.45rem, 1.1dvh, 0.7rem);
+  gap: clamp(0.42rem, 0.9dvh, 0.62rem);
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      color-mix(in srgb, var(--audius-cube-top) 10%, transparent),
+      transparent 30%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
+    var(--audius-shell);
+}
+
+[data-theme="audius"]
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-board-wrapper {
+  background:
+    radial-gradient(
+      circle at 50% 44%,
+      color-mix(in srgb, var(--audius-cube-top) 22%, transparent) 0%,
+      rgba(8, 10, 18, 0.84) 48%,
+      rgba(2, 1, 6, 0.98) 100%
+    ),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), transparent 38%),
+    var(--audius-glass-deep);
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 30%, #2f2738);
+  box-shadow:
+    inset 0 0 var(--audius-board-inner-glow)
+      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 18px 42px rgba(0, 0, 0, 0.68),
+    0 0 var(--audius-board-outer-glow)
+      color-mix(in srgb, var(--audius-cube-left) 32%, transparent);
+}
+
+[data-theme="audius"] .cubic-viewport.is-audius-visualizer .hexaclear-board {
+  width: 100%;
+  height: 100%;
+}
+
+[data-theme="audius"] .cubic-viewport.is-audius-visualizer .hexaclear-hand {
+  height: clamp(80px, 18dvh, 180px);
+  padding: 0.35rem;
+  border-color: color-mix(in srgb, var(--audius-cube-top) 28%, #46384f);
+  background:
+    radial-gradient(
+      circle at 20% 20%,
+      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(180deg, rgba(229, 255, 243, 0.055), rgba(5, 1, 8, 0.72)),
+    var(--audius-glass-deep);
+}
+
+[data-theme="audius"] .cubic-viewport.is-audius-visualizer .hexaclear-hold,
+[data-theme="audius"]
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button {
+  border-radius: 0.85rem;
+}
+
+[data-theme="audius"].reduced-motion .cube-pulse-overlay,
+[data-theme="audius"] .reduced-motion .cube-pulse-overlay,
+[data-theme="audius"].reduced-motion .cube-ripple-overlay,
+[data-theme="audius"] .reduced-motion .cube-ripple-overlay,
+[data-theme="audius"].reduced-motion .hexaclear-audius-shimmer-layer,
+[data-theme="audius"] .reduced-motion .hexaclear-audius-shimmer-layer {
+  display: none;
+}
+
+@keyframes hexaclear-audius-ripple-even {
+  0% {
+    opacity: var(--audius-ripple, 0);
+    transform: scale(0.86);
+  }
+  55% {
+    opacity: var(--audius-ripple, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+
+@keyframes hexaclear-audius-ripple-odd {
+  0% {
+    opacity: var(--audius-ripple, 0);
+    transform: scale(0.86);
+  }
+  55% {
+    opacity: var(--audius-ripple, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+
+@keyframes hexaclear-audius-shimmer-even {
+  0%,
+  58% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  68% {
+    opacity: var(--audius-shimmer, 0);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes hexaclear-audius-shimmer-odd {
+  0%,
+  58% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  68% {
+    opacity: var(--audius-shimmer, 0);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@media (max-width: 720px) {
+  [data-theme="audius"] .hexaclear-root {
+    max-width: min(100%, calc(100vw - 0.5rem));
+    padding: 0.32rem;
+    gap: 0.32rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-deck {
+    grid-template-columns: 1fr;
+    gap: 0.28rem;
+    padding: 0.32rem;
+    border-radius: 0.95rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-mode-bank {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  [data-theme="audius"] .hexaclear-audius-readouts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-transport {
+    grid-template-columns: 1fr;
+    gap: 0.28rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-mode,
+  [data-theme="audius"] .hexaclear-audius-menu-button,
+  [data-theme="audius"] .hexaclear-audius-transport-button {
+    min-height: 1.65rem;
+    padding: 0.22rem 0.5rem;
+    font-size: 0.58rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-readout {
+    padding: 0.28rem 0.42rem;
+  }
+
+  [data-theme="audius"] .readout-value {
+    font-size: 1.18rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-transport {
+    padding: 0.3rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-transport-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  [data-theme="audius"] .hexaclear-audius-title-card {
+    left: 0.65rem;
+    bottom: 0.65rem;
+    width: min(21rem, calc(100% - 1.3rem));
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.62rem 3.4rem 0.6rem 0.7rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-spectrum {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 0;
+  }
+
+  [data-theme="audius"] .spectrum-bar {
+    display: none;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-mode-bank,
+  [data-theme="audius"] .hexaclear-audius-transport-actions {
+    justify-content: stretch;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-mode,
+  [data-theme="audius"] .hexaclear-audius-transport-button {
+    flex: 1 1 0;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-vu {
+    display: none;
+  }
+
+  [data-theme="audius"] .hexaclear-board {
+    width: 100%;
+    height: 100%;
+  }
+}

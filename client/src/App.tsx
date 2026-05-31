@@ -410,6 +410,13 @@ function getScoreCounterEl(): Element | null {
       document.querySelector('.hexaclear-live-stat .value')
     )
   }
+  if (theme === 'audius') {
+    return (
+      document.querySelector(
+        '.hexaclear-audius-readout-live .readout-value',
+      ) ?? document.querySelector('.hexaclear-live-stat .value')
+    )
+  }
   return document.querySelector('.hexaclear-live-stat .value')
 }
 const DEBUG_SHOW_COORDS = false
@@ -3178,6 +3185,7 @@ function App() {
   const audiusBreathPhaseRef = useRef(0)
   const audiusHueRef = useRef(0)
   const audiusLastBeatAtRef = useRef(0)
+  const audiusLastVisualFrameAtRef = useRef(0)
   const audiusSilentFrameCountRef = useRef(0)
   const audiusAnalyserWarningShownRef = useRef(false)
   const [audiusTracks, setAudiusTracks] = useState<AudiusTrack[]>([])
@@ -3191,6 +3199,8 @@ function App() {
   const [audiusError, setAudiusError] = useState<string | null>(null)
   const [audiusAnalyserLive, setAudiusAnalyserLive] = useState(false)
   const [audiusBeatToken, setAudiusBeatToken] = useState(0)
+  const [audiusTitleCardCollapsed, setAudiusTitleCardCollapsed] =
+    useState(false)
   const [audiusVolume, setAudiusVolume] = useState(() => {
     if (typeof window === 'undefined') return 0.65
     const raw = window.localStorage.getItem('cubic-audius-volume')
@@ -6893,6 +6903,26 @@ function App() {
       rootRef.current?.style.removeProperty('--audius-board-glow')
       rootRef.current?.style.removeProperty('--audius-shimmer')
       rootRef.current?.style.removeProperty('--audius-cube-scale')
+      rootRef.current?.style.removeProperty('--audius-title-glow')
+      rootRef.current?.style.removeProperty('--audius-board-inner-glow')
+      rootRef.current?.style.removeProperty('--audius-board-outer-glow')
+      rootRef.current?.style.removeProperty('--audius-score-glow-a')
+      rootRef.current?.style.removeProperty('--audius-score-glow-b')
+      rootRef.current?.style.removeProperty('--audius-score-scale')
+      rootRef.current?.style.removeProperty('--audius-outline-glow')
+      rootRef.current?.style.removeProperty('--audius-face-glow')
+      rootRef.current?.style.removeProperty('--audius-empty-stroke-opacity')
+      rootRef.current?.style.removeProperty('--audius-slot-fill-opacity')
+      rootRef.current?.style.removeProperty('--audius-top-opacity')
+      rootRef.current?.style.removeProperty('--audius-left-opacity')
+      rootRef.current?.style.removeProperty('--audius-right-opacity')
+      rootRef.current?.style.removeProperty('--audius-face-stroke-opacity')
+      rootRef.current?.style.removeProperty('--audius-deck-hot')
+      rootRef.current?.style.removeProperty('--audius-meter-bass')
+      rootRef.current?.style.removeProperty('--audius-meter-mid')
+      rootRef.current?.style.removeProperty('--audius-meter-treble')
+      rootRef.current?.style.removeProperty('--audius-meter-onset')
+      rootRef.current?.style.removeProperty('--audius-keybed-energy')
       rootRef.current?.style.removeProperty('--audius-cube-top')
       rootRef.current?.style.removeProperty('--audius-cube-left')
       rootRef.current?.style.removeProperty('--audius-cube-right')
@@ -6925,6 +6955,26 @@ function App() {
       rootEl?.style.removeProperty('--audius-board-glow')
       rootEl?.style.removeProperty('--audius-shimmer')
       rootEl?.style.removeProperty('--audius-cube-scale')
+      rootEl?.style.removeProperty('--audius-title-glow')
+      rootEl?.style.removeProperty('--audius-board-inner-glow')
+      rootEl?.style.removeProperty('--audius-board-outer-glow')
+      rootEl?.style.removeProperty('--audius-score-glow-a')
+      rootEl?.style.removeProperty('--audius-score-glow-b')
+      rootEl?.style.removeProperty('--audius-score-scale')
+      rootEl?.style.removeProperty('--audius-outline-glow')
+      rootEl?.style.removeProperty('--audius-face-glow')
+      rootEl?.style.removeProperty('--audius-empty-stroke-opacity')
+      rootEl?.style.removeProperty('--audius-slot-fill-opacity')
+      rootEl?.style.removeProperty('--audius-top-opacity')
+      rootEl?.style.removeProperty('--audius-left-opacity')
+      rootEl?.style.removeProperty('--audius-right-opacity')
+      rootEl?.style.removeProperty('--audius-face-stroke-opacity')
+      rootEl?.style.removeProperty('--audius-deck-hot')
+      rootEl?.style.removeProperty('--audius-meter-bass')
+      rootEl?.style.removeProperty('--audius-meter-mid')
+      rootEl?.style.removeProperty('--audius-meter-treble')
+      rootEl?.style.removeProperty('--audius-meter-onset')
+      rootEl?.style.removeProperty('--audius-keybed-energy')
       rootEl?.style.removeProperty('--audius-cube-top')
       rootEl?.style.removeProperty('--audius-cube-left')
       rootEl?.style.removeProperty('--audius-cube-right')
@@ -7090,10 +7140,18 @@ function App() {
         }
       }
       audiusHueRef.current =
-        (audiusHueRef.current + 0.06 + mid * 0.22 + treble * 0.08) % 360
-      const hue = (32 + audiusHueRef.current + mid * 36 - bass * 12) % 360
-      const rightHue = (hue + 334) % 360
-      const leftHue = (hue + 18 + treble * 24) % 360
+        (audiusHueRef.current + (playing ? 0.025 + mid * 0.3 + treble * 0.12 : 0)) %
+        360
+      const hue =
+        (188 + audiusHueRef.current + mid * 55 + treble * 18 - bass * 24) %
+        360
+      const rightHue = (hue + 334 + bass * 18) % 360
+      const leftHue = (hue + 20 + treble * 30) % 360
+      if (now - audiusLastVisualFrameAtRef.current < 20) {
+        frame = window.requestAnimationFrame(tick)
+        return
+      }
+      audiusLastVisualFrameAtRef.current = now
       rootEl?.style.setProperty('--audius-pulse', pulse.toFixed(3))
       rootEl?.style.setProperty('--audius-bass', bass.toFixed(3))
       rootEl?.style.setProperty('--audius-mid', mid.toFixed(3))
@@ -7140,9 +7198,114 @@ function App() {
         '--audius-cube-scale',
         (1 + breath * 0.052 + pulse * 0.012 + onset * 0.018).toFixed(3),
       )
-      rootEl?.style.setProperty('--audius-cube-top', `hsl(${hue.toFixed(1)} 96% ${(58 + intensity * 9 + breath * 8 + onset * 5).toFixed(1)}%)`)
-      rootEl?.style.setProperty('--audius-cube-left', `hsl(${leftHue.toFixed(1)} 86% ${(38 + mid * 8 + intensity * 9 + breath * 5).toFixed(1)}%)`)
-      rootEl?.style.setProperty('--audius-cube-right', `hsl(${rightHue.toFixed(1)} 82% ${(18 + bass * 5 + intensity * 7).toFixed(1)}%)`)
+      rootEl?.style.setProperty(
+        '--audius-title-glow',
+        `${(8 + intensity * 18).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-board-inner-glow',
+        `${(24 + breath * 44).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-board-outer-glow',
+        `${(
+          18 +
+          Math.min(0.72, intensity * 0.42 + breath * 0.18 + onset * 0.22) *
+            54
+        ).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-score-glow-a',
+        `${(6 + onset * 20).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-score-glow-b',
+        `${(14 + intensity * 26).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-score-scale',
+        (1 + breath * 0.045).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-outline-glow',
+        `${(3 + onset * 9).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-face-glow',
+        `${(2 + breath * 5).toFixed(1)}px`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-empty-stroke-opacity',
+        (0.42 + breath * 0.24).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-slot-fill-opacity',
+        (0.72 + intensity * 0.12).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-top-opacity',
+        (0.82 + breath * 0.14).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-left-opacity',
+        (0.8 + intensity * 0.15).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-right-opacity',
+        (0.86 + bass * 0.12).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-face-stroke-opacity',
+        (0.42 + onset * 0.34).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-deck-hot',
+        Math.min(1, onset * 0.62 + intensity * 0.34 + treble * 0.16).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-meter-bass',
+        Math.min(1, bass * 0.94 + intensity * 0.12).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-meter-mid',
+        Math.min(1, mid * 0.88 + intensity * 0.18).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-meter-treble',
+        Math.min(1, treble * 0.86 + onset * 0.22).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-meter-onset',
+        Math.min(1, onset * 0.92 + pulse * 0.2).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-keybed-energy',
+        Math.min(1, intensity * 0.56 + mid * 0.24 + onset * 0.22).toFixed(3),
+      )
+      rootEl?.style.setProperty(
+        '--audius-cube-top',
+        `hsl(${hue.toFixed(1)} 94% ${(
+          52 +
+          intensity * 11 +
+          breath * 9 +
+          onset * 6
+        ).toFixed(1)}%)`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-cube-left',
+        `hsl(${leftHue.toFixed(1)} 86% ${(
+          32 +
+          mid * 10 +
+          intensity * 10 +
+          breath * 6
+        ).toFixed(1)}%)`,
+      )
+      rootEl?.style.setProperty(
+        '--audius-cube-right',
+        `hsl(${rightHue.toFixed(1)} 82% ${(14 + bass * 7 + intensity * 8).toFixed(
+          1,
+        )}%)`,
+      )
       frame = window.requestAnimationFrame(tick)
     }
     frame = window.requestAnimationFrame(tick)
@@ -7167,6 +7330,26 @@ function App() {
       rootEl?.style.removeProperty('--audius-board-glow')
       rootEl?.style.removeProperty('--audius-shimmer')
       rootEl?.style.removeProperty('--audius-cube-scale')
+      rootEl?.style.removeProperty('--audius-title-glow')
+      rootEl?.style.removeProperty('--audius-board-inner-glow')
+      rootEl?.style.removeProperty('--audius-board-outer-glow')
+      rootEl?.style.removeProperty('--audius-score-glow-a')
+      rootEl?.style.removeProperty('--audius-score-glow-b')
+      rootEl?.style.removeProperty('--audius-score-scale')
+      rootEl?.style.removeProperty('--audius-outline-glow')
+      rootEl?.style.removeProperty('--audius-face-glow')
+      rootEl?.style.removeProperty('--audius-empty-stroke-opacity')
+      rootEl?.style.removeProperty('--audius-slot-fill-opacity')
+      rootEl?.style.removeProperty('--audius-top-opacity')
+      rootEl?.style.removeProperty('--audius-left-opacity')
+      rootEl?.style.removeProperty('--audius-right-opacity')
+      rootEl?.style.removeProperty('--audius-face-stroke-opacity')
+      rootEl?.style.removeProperty('--audius-deck-hot')
+      rootEl?.style.removeProperty('--audius-meter-bass')
+      rootEl?.style.removeProperty('--audius-meter-mid')
+      rootEl?.style.removeProperty('--audius-meter-treble')
+      rootEl?.style.removeProperty('--audius-meter-onset')
+      rootEl?.style.removeProperty('--audius-keybed-energy')
       rootEl?.style.removeProperty('--audius-cube-top')
       rootEl?.style.removeProperty('--audius-cube-left')
       rootEl?.style.removeProperty('--audius-cube-right')
@@ -7281,7 +7464,12 @@ function App() {
     if (!rippleCenter || rippleCells.length === 0) return
 
     const durationMs = rippleIsClear ? CLEAR_RIPPLE_DURATION_MS : 600
-    const maxRadius = rippleMaxRadiusRef.current
+    const maxRadius = Math.max(
+      0,
+      Number.isFinite(rippleMaxRadiusRef.current)
+        ? rippleMaxRadiusRef.current
+        : boardRender.rippleRadius * 2,
+    )
     const start = performance.now()
     let frame: number
 
@@ -7319,7 +7507,7 @@ function App() {
       if (frame) window.cancelAnimationFrame(frame)
       window.clearTimeout(clearTimeoutId)
     }
-  }, [rippleCenter, rippleToken, rippleCells.length, rippleIsClear])
+  }, [boardRender.rippleRadius, rippleCenter, rippleToken, rippleCells.length, rippleIsClear])
 
   useEffect(() => {
     if (!failedPlacementPieceId && invalidDropCellIds.length === 0) return
@@ -8177,6 +8365,34 @@ function App() {
         ? 'audius-ripple-even'
         : 'audius-ripple-odd'
       : ''
+  const selectedAudiusDeckTrack = audiusTracks.find(
+    (track) => track.id === audiusSelectedTrackId,
+  )
+  const audiusDeckBestValue =
+    game.mode === 'daily'
+      ? currentDailyBestMoves
+      : game.mode === 'big'
+        ? null
+        : bestScore
+  const audiusDeckLiveLabel = game.mode === 'daily' ? 'Cubes' : 'Score'
+  const audiusDeckLiveValue =
+    game.mode === 'daily' ? displayedCubesRemaining : game.score
+  const audiusDeckTrackTitle =
+    selectedAudiusDeckTrack?.title ?? 'Choose a track in Settings'
+  const audiusDeckTrackArtist =
+    selectedAudiusDeckTrack?.user?.name ??
+    selectedAudiusDeckTrack?.user?.handle ??
+    'Audius'
+  const audiusDeckStatus =
+    audiusStatus === 'playing'
+      ? audiusAnalyserLive
+        ? 'Analyser live'
+        : 'Warming analyser'
+      : audiusStatus === 'loading'
+        ? 'Loading'
+        : audiusStatus === 'error'
+          ? 'Stream error'
+          : 'Ready'
   return (
     <div
       className={[
@@ -8595,6 +8811,145 @@ function App() {
         )
       })()}
 
+      <section
+        className="hexaclear-audius-deck"
+        aria-label="Music visualizer game controls"
+        aria-hidden={theme !== 'audius'}
+      >
+        <div className="hexaclear-audius-mode-bank">
+          {isMultiplayer ? (
+            <span className="hexaclear-audius-mode active" aria-disabled="true">
+              Multi
+            </span>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={[
+                  'hexaclear-audius-mode',
+                  game.mode === 'endless' ? 'active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  if (game.mode !== 'endless') {
+                    playUiClick()
+                    toggleMode('endless')
+                  }
+                }}
+              >
+                Endless
+              </button>
+              <button
+                type="button"
+                className={[
+                  'hexaclear-audius-mode',
+                  game.mode === 'daily' ? 'active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  if (game.mode !== 'daily') {
+                    playUiClick()
+                    toggleMode('daily')
+                  }
+                }}
+              >
+                Daily
+              </button>
+              <button
+                type="button"
+                className={[
+                  'hexaclear-audius-mode',
+                  game.mode === 'big' ? 'active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  if (game.mode !== 'big') {
+                    playUiClick()
+                    toggleMode('big')
+                  }
+                }}
+              >
+                Multi
+              </button>
+            </>
+          )}
+        </div>
+        <div className="hexaclear-audius-readouts" aria-hidden="true">
+          <div className="hexaclear-audius-readout">
+            <span className="readout-label">Best</span>
+            <span className="readout-value">{audiusDeckBestValue ?? '--'}</span>
+          </div>
+          <div
+            className={[
+              'hexaclear-audius-readout',
+              'hexaclear-audius-readout-live',
+              tierPulseActive && game.mode !== 'daily' ? 'is-tier-pulsing' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            <span className="readout-label">{audiusDeckLiveLabel}</span>
+            <span className="readout-value">{audiusDeckLiveValue}</span>
+            {tierPulseToken > 0 && game.mode !== 'daily' && (
+              <span
+                key={tierPulseToken}
+                className={[
+                  'hexaclear-tier-pulse',
+                  tierPulseVariant === 'octave' ? 'is-octave-pulse' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-hidden="true"
+              />
+            )}
+          </div>
+        </div>
+        <div className="hexaclear-audius-utility-row">
+          <button
+            type="button"
+            className="hexaclear-audius-menu-button"
+            onClick={() => {
+              playUiClick()
+              setShowDailyHistory(false)
+              setShowHighScores(false)
+              setShowStats(false)
+              setShowAccount(false)
+              setShowScoring(false)
+              setShowMenu(true)
+            }}
+          >
+            Menu
+          </button>
+          {!isMultiplayer && game.mode === 'daily' && (() => {
+            const archive =
+              game.dailyDateKey !== undefined &&
+              game.dailyDateKey !== getTodayKey()
+            return (
+              <button
+                type="button"
+                className={[
+                  'hexaclear-audius-history-button',
+                  archive ? 'is-archive' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => {
+                  playUiClick()
+                  setShowDailyHistory(true)
+                }}
+              >
+                {archive && game.dailyDateKey
+                  ? formatFriendlyDateKey(game.dailyDateKey)
+                  : 'History'}
+              </button>
+            )
+          })()}
+        </div>
+      </section>
+
       <main className="hexaclear-main">
         {/* "You are spectating" banner. Surfaces when the viewer
             joined a PvP room after the first move and got parked on
@@ -8784,6 +9139,91 @@ function App() {
           }}
           ref={boardWrapperRef}
         >
+          <div className="hexaclear-audius-vu hexaclear-audius-vu-left" aria-hidden="true">
+            <span className="vu-tick vu-bass" />
+            <span className="vu-tick vu-mid" />
+            <span className="vu-tick vu-treble" />
+            <span className="vu-tick vu-onset" />
+            <span className="vu-tick vu-intensity" />
+            <span className="vu-tick vu-breath" />
+          </div>
+          <div className="hexaclear-audius-vu hexaclear-audius-vu-right" aria-hidden="true">
+            <span className="vu-tick vu-breath" />
+            <span className="vu-tick vu-intensity" />
+            <span className="vu-tick vu-onset" />
+            <span className="vu-tick vu-treble" />
+            <span className="vu-tick vu-mid" />
+            <span className="vu-tick vu-bass" />
+          </div>
+          <section
+            className={[
+              'hexaclear-audius-title-card',
+              audiusTitleCardCollapsed ? 'is-collapsed' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            aria-label="Music visualizer track"
+            aria-hidden={theme !== 'audius'}
+          >
+            <button
+              type="button"
+              className="hexaclear-audius-title-toggle"
+              onClick={() => {
+                playUiClick()
+                setAudiusTitleCardCollapsed((collapsed) => !collapsed)
+              }}
+              aria-expanded={!audiusTitleCardCollapsed}
+            >
+              {audiusTitleCardCollapsed ? 'Show track' : 'Hide'}
+            </button>
+            <div className="hexaclear-audius-title-copy">
+              <span className="track-label">Now playing</span>
+              <span className="track-title">{audiusDeckTrackTitle}</span>
+              <span className="track-artist">
+                {audiusDeckTrackArtist}
+                {selectedAudiusDeckTrack
+                  ? ` · ${formatAudiusDuration(selectedAudiusDeckTrack.duration)}`
+                  : ''}
+              </span>
+            </div>
+            <div
+              className="hexaclear-audius-spectrum"
+              aria-label={`Music visualizer status: ${audiusDeckStatus}`}
+            >
+              <span className="spectrum-bar spectrum-bass" />
+              <span className="spectrum-bar spectrum-mid" />
+              <span className="spectrum-bar spectrum-treble" />
+              <span className="spectrum-bar spectrum-onset" />
+              <span className="spectrum-state">{audiusDeckStatus}</span>
+            </div>
+            <div className="hexaclear-audius-transport-actions">
+              <button
+                type="button"
+                className="hexaclear-audius-transport-button is-primary"
+                onClick={() => {
+                  playUiClick()
+                  void playAudiusTrack()
+                }}
+                disabled={
+                  audiusStatus === 'loading' || audiusTracks.length === 0
+                }
+              >
+                {audiusStatus === 'playing' ? 'Restart' : 'Play'}
+              </button>
+              <button
+                type="button"
+                className="hexaclear-audius-transport-button"
+                onClick={() => {
+                  playUiClick()
+                  audiusAudioRef.current?.pause()
+                  setAudiusStatus('paused')
+                }}
+                disabled={audiusStatus !== 'playing'}
+              >
+                Pause
+              </button>
+            </div>
+          </section>
           {previewTerritoryDelta && (() => {
             // PvP territory-delta chip. Floats above the board near
             // the top edge so it doesn't overlap the placement ghost
@@ -12069,9 +12509,6 @@ function App() {
                           >
                             Resume
                           </button>
-                          <div className="hexaclear-menu-hero-hint">
-                            Esc · or tap outside to dismiss
-                          </div>
                         </>
                       ) : (
                         <button

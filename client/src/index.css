@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Monoton&family=Nunito:wght@400;600;700;800&display=swap');
 @import url('./theme-win98.css');
+@import url('./theme-audius.css');
 
 :root {
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
@@ -2748,18 +2749,99 @@ body {
   display: none;
   pointer-events: none;
 }
+.cubic-viewport.is-audius-visualizer .hexaclear-root {
+  --audius-pulse: 0;
+  --audius-bass: 0;
+  --audius-mid: 0;
+  --audius-treble: 0;
+  --audius-onset: 0;
+  --audius-intensity: 0.18;
+  --audius-breath: 0.18;
+  --audius-board-glow: 0.18;
+  --audius-shimmer: 0;
+  --audius-cube-scale: 1;
+  --audius-title-glow: 11px;
+  --audius-board-inner-glow: 32px;
+  --audius-board-outer-glow: 28px;
+  --audius-score-glow-a: 6px;
+  --audius-score-glow-b: 19px;
+  --audius-score-scale: 1.008;
+  --audius-outline-glow: 3px;
+  --audius-face-glow: 3px;
+  --audius-empty-stroke-opacity: 0.46;
+  --audius-slot-fill-opacity: 0.74;
+  --audius-top-opacity: 0.85;
+  --audius-left-opacity: 0.83;
+  --audius-right-opacity: 0.86;
+  --audius-face-stroke-opacity: 0.42;
+  --audius-cube-top: #cffff2;
+  --audius-cube-left: #42d6bd;
+  --audius-cube-right: #115a67;
+}
+.cubic-viewport.is-audius-visualizer {
+  background:
+    radial-gradient(
+      circle at 50% -12%,
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 18%, transparent)
+        0%,
+      transparent 42%
+    ),
+    radial-gradient(circle at 50% 64%, #21091a 0%, #10050d 54%, #050207 100%);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-title {
+  color: color-mix(in srgb, var(--audius-cube-top, #cffff2) 68%, #fff3ba);
+  text-shadow:
+    0 0 1px rgba(255, 255, 255, 0.85),
+    0 0 var(--audius-title-glow, 11px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 70%, transparent),
+    0 2px 0 rgba(120, 38, 60, 0.85);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-best-banner,
+.cubic-viewport.is-audius-visualizer .hexaclear-menu-button,
+.cubic-viewport.is-audius-visualizer .hexaclear-mode-toggle {
+  background:
+    linear-gradient(180deg, rgba(229, 255, 243, 0.08), rgba(7, 2, 12, 0.42)),
+    rgba(8, 2, 12, 0.68);
+  border-color:
+    color-mix(in srgb, var(--audius-cube-top, #cffff2) 36%, #70424b);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    0 0 var(--audius-title-glow, 11px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 34%, transparent),
+    0 8px 22px rgba(0, 0, 0, 0.45);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-live-stat .label {
+  color: color-mix(in srgb, var(--audius-cube-top, #cffff2) 56%, #d7b773);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-live-stat .value {
+  color: color-mix(in srgb, var(--audius-cube-top, #cffff2) 74%, #fff7d8);
+  text-shadow:
+    0 0 var(--audius-score-glow-a, 6px)
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 70%, transparent),
+    0 0 var(--audius-score-glow-b, 19px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 45%, transparent);
+  transform: scale(var(--audius-score-scale, 1.008));
+}
 .cubic-viewport.is-audius-visualizer .hexaclear-board-wrapper {
   background:
     radial-gradient(
-      circle at 50% 46%,
-      color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 28%, transparent)
+      circle at 50% 44%,
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 22%, transparent)
         0%,
-      rgba(50, 14, 4, 0.52) 42%,
-      rgba(18, 5, 2, 0.92) 100%
-    );
+      rgba(19, 7, 20, 0.7) 44%,
+      rgba(4, 2, 8, 0.96) 100%
+    ),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 38%),
+    #08030a;
+  border: 1px solid
+    color-mix(in srgb, var(--audius-cube-top, #cffff2) 26%, #51333f);
   box-shadow:
-    inset 0 0 38px rgba(255, 196, 102, 0.12),
-    0 18px 42px rgba(0, 0, 0, 0.5);
+    inset 0 0 var(--audius-board-inner-glow, 32px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 12%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 18px 42px rgba(0, 0, 0, 0.62),
+    0 0 var(--audius-board-outer-glow, 28px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 30%, transparent);
 }
 .cubic-viewport.is-audius-visualizer .hexaclear-board-wrapper::before {
   content: '';
@@ -2770,16 +2852,16 @@ body {
   background:
     radial-gradient(
       circle at 50% 48%,
-      color-mix(in srgb, var(--audius-cube-top, #ffeaa3) 38%, transparent)
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 42%, transparent)
         0%,
       transparent 52%
     ),
     conic-gradient(
       from var(--audius-cell-phase, 0deg),
-      rgba(255, 198, 86, 0.2),
-      rgba(223, 76, 146, 0.18),
-      rgba(74, 48, 156, 0.15),
-      rgba(255, 198, 86, 0.2)
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 18%, transparent),
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 20%, transparent),
+      rgba(74, 48, 156, 0.18),
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 18%, transparent)
     );
   mix-blend-mode: screen;
   opacity: var(--audius-board-glow, 0);
@@ -2789,20 +2871,66 @@ body {
   position: relative;
   z-index: 1;
 }
+.cubic-viewport.is-audius-visualizer .hexaclear-board-outline-back {
+  stroke: rgba(0, 0, 0, 0.92);
+  stroke-width: 12;
+  filter:
+    drop-shadow(0 3px 8px rgba(0, 0, 0, 0.75))
+    blur(0.45px);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-board-outline-front {
+  stroke: color-mix(in srgb, var(--audius-cube-top, #cffff2) 52%, #9c683e);
+  stroke-width: 4.8;
+  filter:
+    drop-shadow(
+      0 0 var(--audius-outline-glow, 3px)
+        color-mix(in srgb, var(--audius-cube-top, #cffff2) 54%, transparent)
+    )
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-hex.empty {
+  fill: rgba(5, 2, 8, 0.34);
+  stroke: color-mix(in srgb, var(--audius-cube-top, #cffff2) 25%, #5b3545);
+  stroke-opacity: var(--audius-empty-stroke-opacity, 0.46);
+  stroke-width: 2.7;
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-slot-fill {
+  fill: color-mix(in srgb, var(--audius-cube-right, #115a67) 12%, #050209);
+  fill-opacity: var(--audius-slot-fill-opacity, 0.74);
+  stroke: color-mix(in srgb, var(--audius-cube-left, #42d6bd) 18%, transparent);
+  stroke-width: 0.9;
+  vector-effect: non-scaling-stroke;
+}
 .cubic-viewport.is-audius-visualizer
   .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
   .cube-top {
   fill: var(--audius-cube-top, var(--cube-top));
+  fill-opacity: var(--audius-top-opacity, 0.85);
 }
 .cubic-viewport.is-audius-visualizer
   .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
   .cube-left {
   fill: var(--audius-cube-left, var(--cube-left));
+  fill-opacity: var(--audius-left-opacity, 0.83);
 }
 .cubic-viewport.is-audius-visualizer
   .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
   .cube-right {
   fill: var(--audius-cube-right, var(--cube-right));
+  fill-opacity: var(--audius-right-opacity, 0.86);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-face {
+  stroke: color-mix(in srgb, var(--audius-cube-top, #cffff2) 58%, #ffffff);
+  stroke-opacity: var(--audius-face-stroke-opacity, 0.42);
+  stroke-width: 1.05;
+  filter:
+    drop-shadow(
+      0 0 var(--audius-face-glow, 3px)
+        color-mix(in srgb, var(--audius-cube-left, #42d6bd) 32%, transparent)
+    )
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.52));
 }
 .cubic-viewport.is-audius-visualizer
   .hexaclear-hex-cube:not(.golden):not(.daily-target)
@@ -2819,13 +2947,13 @@ body {
 .cubic-viewport.is-audius-visualizer
   .hexaclear-hex-cube:not(.golden):not(.daily-target)
   .cube-pulse-dark {
-  fill: #120508;
+  fill: color-mix(in srgb, var(--audius-cube-right, #115a67) 34%, #030006);
   opacity: var(--audius-dark-overlay, 0);
 }
 .cubic-viewport.is-audius-visualizer
   .hexaclear-hex-cube:not(.golden):not(.daily-target)
   .cube-pulse-light {
-  fill: #fff2b8;
+  fill: color-mix(in srgb, var(--audius-cube-top, #cffff2) 78%, #fff8c6);
   opacity: var(--audius-light-overlay, 0);
 }
 .cubic-viewport.is-audius-visualizer
@@ -2888,6 +3016,137 @@ body {
   .hexaclear-audius-shimmer {
   animation: hexaclear-audius-shimmer-odd 1200ms ease-out both;
   animation-delay: var(--audius-shimmer-delay, 0ms);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-hand {
+  border-color:
+    color-mix(in srgb, var(--audius-cube-top, #cffff2) 24%, #5e3748);
+  background:
+    radial-gradient(
+      circle at 28% 12%,
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 10%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(180deg, rgba(229, 255, 243, 0.055), rgba(5, 1, 8, 0.66)),
+    #08030a;
+  box-shadow:
+    inset 0 0 var(--audius-board-inner-glow, 32px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 8%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 var(--audius-board-outer-glow, 28px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 22%, transparent),
+    0 12px 28px rgba(0, 0, 0, 0.6);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-piece-svg,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-piece-svg {
+  filter:
+    drop-shadow(
+      0 0 var(--audius-face-glow, 3px)
+        color-mix(in srgb, var(--audius-cube-left, #42d6bd) 38%, transparent)
+    )
+    drop-shadow(0 5px 12px rgba(0, 0, 0, 0.38));
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex.piece,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-hex.piece {
+  fill: var(--audius-cube-top, #cffff2);
+  fill-opacity: var(--audius-top-opacity, 0.85);
+  stroke: color-mix(in srgb, var(--audius-cube-right, #115a67) 70%, #ffffff);
+  stroke-opacity: var(--audius-face-stroke-opacity, 0.42);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex-bevels,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-hex-bevels {
+  display: block;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex-bevel-highlight,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-hex-bevel-highlight {
+  stroke: color-mix(in srgb, var(--audius-cube-top, #cffff2) 74%, #ffffff);
+  stroke-opacity: var(--audius-face-stroke-opacity, 0.42);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex-bevel-shadow,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-hex-bevel-shadow {
+  stroke: color-mix(in srgb, var(--audius-cube-right, #115a67) 70%, #020106);
+  stroke-opacity: var(--audius-right-opacity, 0.86);
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  + .hexaclear-piece-button::before {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--audius-cube-top, #cffff2) 26%, transparent) 25%,
+    color-mix(in srgb, var(--audius-cube-left, #42d6bd) 22%, transparent) 75%,
+    transparent
+  );
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-piece-button.selected {
+  background:
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 12%, transparent),
+      transparent 68%
+    );
+  box-shadow:
+    inset 0 0 0 1px
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 62%, transparent),
+    0 0 var(--audius-score-glow-b, 19px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 28%, transparent);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-hold {
+  border-color:
+    color-mix(in srgb, var(--audius-cube-top, #cffff2) 28%, #47313f);
+  background:
+    radial-gradient(
+      circle at 50% 64%,
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 8%, transparent),
+      transparent 60%
+    ),
+    rgba(4, 1, 7, 0.58);
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.72),
+    inset 0 0 var(--audius-face-glow, 3px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 18%, transparent);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-hold-label {
+  color: color-mix(in srgb, var(--audius-cube-top, #cffff2) 52%, #d7b773);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-hold.is-drop-active,
+.cubic-viewport.is-audius-visualizer .hexaclear-hold.selected {
+  border-color:
+    color-mix(in srgb, var(--audius-cube-top, #cffff2) 72%, #ffffff);
+  background:
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--audius-cube-top, #cffff2) 16%, transparent),
+      rgba(4, 1, 7, 0.54) 70%
+    );
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.68),
+    0 0 var(--audius-score-glow-b, 19px)
+      color-mix(in srgb, var(--audius-cube-left, #42d6bd) 38%, transparent);
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-hold.unplayable .hexaclear-piece-svg,
+.cubic-viewport.is-audius-visualizer .hexaclear-piece-button.unplayable {
+  filter: grayscale(0.35) brightness(0.78);
+  opacity: 0.48;
 }
 .cubic-viewport.is-audius-visualizer.reduced-motion .cube-pulse-overlay,
 .cubic-viewport.is-audius-visualizer.reduced-motion .cube-ripple-overlay,
@@ -5059,7 +5318,7 @@ body {
 }
 .hexaclear-audius-volume {
   display: grid;
-  grid-template-columns: max-content minmax(7rem, 1fr) 2.8rem;
+  grid-template-columns: max-content minmax(0, 1fr) 2.8rem;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
@@ -5074,6 +5333,8 @@ body {
   text-transform: uppercase;
 }
 .hexaclear-audius-volume input[type='range'] {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   accent-color: #f7b35a;
   cursor: pointer;
@@ -5094,6 +5355,16 @@ body {
 }
 .hexaclear-audius-error {
   color: #ffb2a6;
+}
+
+@media (max-width: 420px) {
+  .hexaclear-audius-volume {
+    grid-template-columns: minmax(0, 1fr) 2.8rem;
+  }
+
+  .hexaclear-audius-volume > span {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Visual toggles — one toggle row per a11y option. */
