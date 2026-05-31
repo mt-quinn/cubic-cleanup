@@ -10379,6 +10379,17 @@ function App() {
                     {!isFilledVisible && !inPreview && !willClearInPreview && (
                       <SlotGeometry cx={cx} cy={cy} />
                     )}
+                    {theme === 'audius' && inPreview && previewValid && (
+                      <CubeLines
+                        cx={cx}
+                        cy={cy}
+                        variant="normal"
+                        extraClasses={[
+                          'preview-piece',
+                          willClearInPreview ? 'preview-clear' : '',
+                        ].filter(Boolean)}
+                      />
+                    )}
                     {/* Colorblind-mode territory glyph on empty PvP-
                         tinted cells. Always rendered (cheap) and
                         hidden via CSS unless `.is-colorblind` is on,
