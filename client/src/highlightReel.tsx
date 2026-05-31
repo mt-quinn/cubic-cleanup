@@ -274,7 +274,7 @@ export const HighlightReel = ({
   useEffect(() => {
     timeoutsRef.current.forEach((id) => window.clearTimeout(id))
     timeoutsRef.current = []
-    setPhase('before')
+    const reset = window.setTimeout(() => setPhase('before'), 0)
     const t1 = window.setTimeout(
       () => setPhase('placed'),
       Math.max(40, PHASE_PLACE_MS * 0.4),
@@ -283,7 +283,7 @@ export const HighlightReel = ({
       () => setPhase('cleared'),
       PHASE_PLACE_MS,
     )
-    timeoutsRef.current.push(t1, t2)
+    timeoutsRef.current.push(reset, t1, t2)
     return () => {
       timeoutsRef.current.forEach((id) => window.clearTimeout(id))
       timeoutsRef.current = []

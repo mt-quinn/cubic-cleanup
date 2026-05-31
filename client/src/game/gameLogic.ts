@@ -433,7 +433,7 @@ export const applyPlacement = (
   // Start from current daily state; we may update it below if any of the
   // cleared patterns include numbered daily targets.
   let dailyHits = current.dailyHits
-  let dailyTotalHits = current.dailyTotalHits
+  const dailyTotalHits = current.dailyTotalHits
   let dailyRemainingHits = current.dailyRemainingHits
   let dailyCompleted = current.dailyCompleted
   let goldenCellIds = [...current.goldenCellIds]

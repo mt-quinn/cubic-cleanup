@@ -15,36 +15,21 @@
   --audius-muted: #7ea8a2;
   --audius-rail: #162e35;
   --audius-amber: #c8732c;
-  --audius-pulse: 0;
   --audius-bass: 0;
   --audius-mid: 0;
   --audius-treble: 0;
   --audius-onset: 0;
   --audius-intensity: 0.18;
   --audius-breath: 0.18;
-  --audius-board-glow: 0.18;
-  --audius-shimmer: 0;
-  --audius-cube-scale: 1;
-  --audius-title-glow: 11px;
-  --audius-board-inner-glow: 32px;
-  --audius-board-outer-glow: 28px;
-  --audius-score-glow-a: 6px;
-  --audius-score-glow-b: 19px;
-  --audius-score-scale: 1.008;
-  --audius-outline-glow: 3px;
-  --audius-face-glow: 3px;
-  --audius-empty-stroke-opacity: 0.46;
-  --audius-slot-fill-opacity: 0.74;
-  --audius-top-opacity: 0.85;
-  --audius-left-opacity: 0.83;
-  --audius-right-opacity: 0.86;
-  --audius-face-stroke-opacity: 0.42;
+  --audius-board-ambience: 0.18;
+  --audius-stage-scale: 1;
+  --audius-viz-hue: 188deg;
+  --audius-cube-hue-rotate: 0deg;
   --audius-deck-hot: 0;
   --audius-meter-bass: 0;
   --audius-meter-mid: 0;
   --audius-meter-treble: 0;
   --audius-meter-onset: 0;
-  --audius-keybed-energy: 0;
   --audius-cube-top: #cffff2;
   --audius-cube-left: #42d6bd;
   --audius-cube-right: #115a67;
@@ -87,8 +72,7 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.055),
     inset 0 -30px 70px rgba(0, 0, 0, 0.46),
-    0 0 var(--audius-board-outer-glow)
-      color-mix(in srgb, var(--audius-cube-left) 22%, transparent),
+    0 0 22px color-mix(in srgb, var(--audius-cube-left) 14%, transparent),
     0 24px 80px rgba(0, 0, 0, 0.7);
 }
 
@@ -144,8 +128,7 @@
   color: color-mix(in srgb, var(--audius-cube-top) 76%, #fff5ca);
   text-shadow:
     0 0 1px rgba(255, 255, 255, 0.8),
-    0 0 var(--audius-title-glow)
-      color-mix(in srgb, var(--audius-cube-left) 65%, transparent);
+    0 0 11px color-mix(in srgb, var(--audius-cube-left) 56%, transparent);
 }
 
 [data-theme="audius"] .hexaclear-audius-mode-bank,
@@ -213,7 +196,6 @@
 
 [data-theme="audius"] .hexaclear-audius-transport-button:disabled {
   opacity: 0.46;
-  filter: grayscale(0.5);
 }
 
 [data-theme="audius"] .hexaclear-audius-readouts {
@@ -241,21 +223,14 @@
   overflow: hidden;
 }
 
-[data-theme="audius"] .hexaclear-audius-readout-live {
-  transform: scale(var(--audius-score-scale));
-  transform-origin: right center;
-}
-
 [data-theme="audius"] .readout-value {
   font-size: clamp(1rem, 2.5dvh, 1.38rem);
   font-weight: 900;
   line-height: 1;
   color: color-mix(in srgb, var(--audius-cube-top) 78%, #fff5c8);
   text-shadow:
-    0 0 var(--audius-score-glow-a)
-      color-mix(in srgb, var(--audius-cube-top) 70%, transparent),
-    0 0 var(--audius-score-glow-b)
-      color-mix(in srgb, var(--audius-cube-left) 42%, transparent);
+    0 0 6px color-mix(in srgb, var(--audius-cube-top) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--audius-cube-left) 28%, transparent);
 }
 
 [data-theme="audius"] .hexaclear-audius-transport {
@@ -745,10 +720,10 @@
     var(--audius-glass-deep);
   border: 1px solid color-mix(in srgb, var(--audius-cube-top) 30%, #2f2738);
   box-shadow:
-    inset 0 0 var(--audius-board-inner-glow)
-      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+    inset 0 0 26px color-mix(in srgb, var(--audius-cube-left) 8%, transparent),
     inset 0 0 0 1px rgba(255, 255, 255, 0.045),
     0 18px 42px rgba(0, 0, 0, 0.68);
+  overflow: hidden;
 }
 
 [data-theme="audius"] .hexaclear-board-wrapper::before,
@@ -759,32 +734,49 @@
   border-radius: inherit;
 }
 
+/* Music-reactive glow behind the EQ bars. This used to be a full-canvas
+   radial-gradient fill drawn every animation frame; moving it to a
+   GPU-composited CSS layer (driven by the hue/ambience CSS vars at 30fps)
+   removes a heavy per-frame fill that mattered most on mobile. */
 [data-theme="audius"] .hexaclear-board-wrapper::before {
-  inset: -6%;
+  z-index: 0;
+  inset: 0;
   background:
     radial-gradient(
-      circle at 50% 48%,
-      color-mix(in srgb, var(--audius-cube-top) 42%, transparent) 0%,
-      transparent 52%
-    ),
-    conic-gradient(
-      from var(--audius-cell-phase, 0deg),
-      color-mix(in srgb, var(--audius-cube-top) 18%, transparent),
-      color-mix(in srgb, var(--audius-cube-left) 20%, transparent),
-      rgba(74, 48, 156, 0.18),
-      color-mix(in srgb, var(--audius-cube-top) 18%, transparent)
+      circle at 50% 50%,
+      hsl(var(--audius-viz-hue, 188deg) 95% 66% / 0.55) 0%,
+      hsl(calc(var(--audius-viz-hue, 188deg) + 58deg) 92% 46% / 0.32) 46%,
+      transparent 72%
     );
   mix-blend-mode: screen;
-  opacity: var(--audius-board-glow);
-  filter: blur(10px);
+  opacity: var(--audius-board-ambience);
+  transform: scale(var(--audius-stage-scale));
+  will-change: opacity, transform;
 }
 
 [data-theme="audius"] .hexaclear-board-wrapper::after {
+  z-index: 3;
   inset: 0.45rem;
   border: 1px solid color-mix(in srgb, var(--audius-cube-top) 15%, transparent);
-  box-shadow:
-    inset 0 0 var(--audius-face-glow)
-      color-mix(in srgb, var(--audius-cube-left) 26%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-audius-stage-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.9;
+  transform: scale(var(--audius-stage-scale));
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+[data-theme="audius"] .audius-stage-beat-a .hexaclear-audius-stage-canvas,
+[data-theme="audius"] .audius-stage-beat-b .hexaclear-audius-stage-canvas {
+  animation: hexaclear-audius-stage-kick 520ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
 }
 
 [data-theme="audius"] .hexaclear-board {
@@ -855,27 +847,23 @@
 [data-theme="audius"] .hexaclear-board-outline-back {
   stroke: rgba(0, 0, 0, 0.92);
   stroke-width: 12;
-  filter:
-    drop-shadow(0 3px 8px rgba(0, 0, 0, 0.75))
-    blur(0.45px);
 }
 
 [data-theme="audius"] .hexaclear-board-outline-front {
   stroke: color-mix(in srgb, var(--audius-cube-top) 52%, var(--audius-amber));
   stroke-width: 4.8;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
 }
 
 [data-theme="audius"] .hexaclear-hex.empty {
   fill: rgba(5, 2, 8, 0.34);
   stroke: color-mix(in srgb, var(--audius-cube-top) 25%, #5b3545);
-  stroke-opacity: var(--audius-empty-stroke-opacity);
+  stroke-opacity: 0.46;
   stroke-width: 2.7;
 }
 
 [data-theme="audius"] .hexaclear-slot-fill {
   fill: color-mix(in srgb, var(--audius-cube-right) 12%, #050209);
-  fill-opacity: var(--audius-slot-fill-opacity);
+  fill-opacity: 0.74;
   stroke: color-mix(in srgb, var(--audius-cube-left) 18%, transparent);
   stroke-width: 0.9;
   vector-effect: non-scaling-stroke;
@@ -926,15 +914,11 @@
 }
 
 [data-theme="audius"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube {
-  filter: invert(1) hue-rotate(180deg) saturate(2) brightness(1.28)
-    drop-shadow(0 0 8px rgba(255, 255, 255, 0.95));
+  filter: invert(1) hue-rotate(180deg) saturate(2) brightness(1.28);
 }
 
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece {
   pointer-events: none;
-  filter:
-    drop-shadow(0 0 5px rgba(255, 255, 255, 0.95))
-    drop-shadow(0 0 14px color-mix(in srgb, var(--audius-cube-top) 84%, transparent));
 }
 
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece .cube-top {
@@ -961,128 +945,37 @@
 [data-theme="audius"]
   .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
   .cube-top {
-  fill: var(--audius-cube-top, var(--cube-top));
-  fill-opacity: var(--audius-top-opacity);
+  fill: var(--audius-cube-top);
+  fill-opacity: 0.9;
 }
 
 [data-theme="audius"]
   .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
   .cube-left {
-  fill: var(--audius-cube-left, var(--cube-left));
-  fill-opacity: var(--audius-left-opacity);
+  fill: var(--audius-cube-left);
+  fill-opacity: 0.84;
 }
 
 [data-theme="audius"]
   .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
   .cube-right {
-  fill: var(--audius-cube-right, var(--cube-right));
-  fill-opacity: var(--audius-right-opacity);
+  fill: var(--audius-cube-right);
+  fill-opacity: 0.9;
 }
 
 [data-theme="audius"]
   .hexaclear-hex-cube:not(.golden):not(.daily-target)
   .cube-face {
   stroke: color-mix(in srgb, var(--audius-cube-top) 58%, #ffffff);
-  stroke-opacity: var(--audius-face-stroke-opacity);
+  stroke-opacity: 0.46;
   stroke-width: 1.05;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.46));
 }
 
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .hexaclear-cube-wiggle-wrap {
-  transform: scale(var(--audius-cube-scale));
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+[data-theme="audius"] .hexaclear-hex-cube:not(.golden):not(.daily-target)
   .cube-pulse-overlay,
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+[data-theme="audius"] .hexaclear-hex-cube:not(.golden):not(.daily-target)
   .cube-ripple-overlay {
-  display: block;
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .cube-pulse-dark {
-  fill: color-mix(in srgb, var(--audius-cube-right) 34%, #030006);
-  opacity: var(--audius-dark-overlay, 0);
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .cube-pulse-light {
-  fill: color-mix(in srgb, var(--audius-cube-top) 78%, #fff8c6);
-  opacity: var(--audius-light-overlay, 0);
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .cube-pulse-light.cube-pulse-top {
-  fill: color-mix(in srgb, var(--audius-cube-top) 72%, #fff7cb);
-  opacity: var(--audius-top-light, 0);
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .cube-pulse-light.cube-pulse-left {
-  fill: color-mix(in srgb, var(--audius-cube-left) 58%, #ff78b8);
-  opacity: var(--audius-left-warm, 0);
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .cube-pulse-dark.cube-pulse-right {
-  fill: color-mix(in srgb, var(--audius-cube-right) 62%, #05010d);
-  opacity: var(--audius-right-shadow, 0);
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
-  .cube-ripple-overlay {
-  fill: none;
-  stroke: color-mix(in srgb, var(--audius-cube-top) 70%, #ffffff);
-  stroke-width: 2.4;
-  vector-effect: non-scaling-stroke;
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube.audius-ripple-even
-  .cube-ripple-overlay {
-  animation: hexaclear-audius-ripple-even 760ms cubic-bezier(0.16, 1, 0.3, 1)
-    both;
-  animation-delay: var(--audius-cell-delay, 0ms);
-}
-
-[data-theme="audius"]
-  .hexaclear-hex-cube.audius-ripple-odd
-  .cube-ripple-overlay {
-  animation: hexaclear-audius-ripple-odd 760ms cubic-bezier(0.16, 1, 0.3, 1)
-    both;
-  animation-delay: var(--audius-cell-delay, 0ms);
-}
-
-[data-theme="audius"] .hexaclear-audius-shimmer {
-  fill: color-mix(in srgb, var(--audius-cube-top) 62%, #ffffff);
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-[data-theme="audius"] .audius-ripple-even .hexaclear-audius-shimmer {
-  animation: hexaclear-audius-shimmer-even 1200ms ease-out both;
-  animation-delay: var(--audius-shimmer-delay, 0ms);
-}
-
-[data-theme="audius"] .audius-ripple-odd .hexaclear-audius-shimmer {
-  animation: hexaclear-audius-shimmer-odd 1200ms ease-out both;
-  animation-delay: var(--audius-shimmer-delay, 0ms);
+  display: none;
 }
 
 [data-theme="audius"] .hexaclear-hand {
@@ -1100,11 +993,9 @@
     linear-gradient(180deg, rgba(229, 255, 243, 0.055), rgba(5, 1, 8, 0.72)),
     var(--audius-glass-deep);
   box-shadow:
-    inset 0 0 var(--audius-board-inner-glow)
-      color-mix(in srgb, var(--audius-cube-left) 8%, transparent),
+    inset 0 0 26px color-mix(in srgb, var(--audius-cube-left) 8%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 var(--audius-board-outer-glow)
-      color-mix(in srgb, var(--audius-cube-left) 22%, transparent),
+    0 0 18px color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
     0 12px 28px rgba(0, 0, 0, 0.62);
 }
 
@@ -1124,8 +1015,7 @@
     rgba(4, 1, 7, 0.62);
   box-shadow:
     inset 0 0 18px rgba(0, 0, 0, 0.72),
-    inset 0 0 var(--audius-face-glow)
-      color-mix(in srgb, var(--audius-cube-left) 18%, transparent);
+    inset 0 0 3px color-mix(in srgb, var(--audius-cube-left) 14%, transparent);
 }
 
 [data-theme="audius"] .hexaclear-piece-button {
@@ -1137,17 +1027,12 @@
     );
 }
 
-[data-theme="audius"] .hexaclear-piece-button .hexaclear-piece-svg,
-[data-theme="audius"] .hexaclear-hold-piece .hexaclear-piece-svg {
-  filter: drop-shadow(0 5px 12px rgba(0, 0, 0, 0.34));
-}
-
 [data-theme="audius"] .hexaclear-piece-button .hexaclear-hex.piece,
 [data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex.piece {
   fill: var(--audius-cube-top);
-  fill-opacity: var(--audius-top-opacity);
+  fill-opacity: 0.9;
   stroke: color-mix(in srgb, var(--audius-cube-right) 70%, #ffffff);
-  stroke-opacity: var(--audius-face-stroke-opacity);
+  stroke-opacity: 0.46;
 }
 
 [data-theme="audius"] .hexaclear-piece-button .hexaclear-hex-bevels,
@@ -1158,13 +1043,13 @@
 [data-theme="audius"] .hexaclear-piece-button .hexaclear-hex-bevel-highlight,
 [data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex-bevel-highlight {
   stroke: color-mix(in srgb, var(--audius-cube-top) 74%, #ffffff);
-  stroke-opacity: var(--audius-face-stroke-opacity);
+  stroke-opacity: 0.46;
 }
 
 [data-theme="audius"] .hexaclear-piece-button .hexaclear-hex-bevel-shadow,
 [data-theme="audius"] .hexaclear-hold-piece .hexaclear-hex-bevel-shadow {
   stroke: color-mix(in srgb, var(--audius-cube-right) 70%, #020106);
-  stroke-opacity: var(--audius-right-opacity);
+  stroke-opacity: 0.82;
 }
 
 [data-theme="audius"] .hexaclear-piece-button + .hexaclear-piece-button::before {
@@ -1243,8 +1128,7 @@
   color: color-mix(in srgb, var(--audius-cube-top) 78%, #fff4c7);
   text-shadow:
     0 0 1px rgba(255, 255, 255, 0.8),
-    0 0 var(--audius-title-glow)
-      color-mix(in srgb, var(--audius-cube-left) 56%, transparent);
+    0 0 11px color-mix(in srgb, var(--audius-cube-left) 48%, transparent);
 }
 
 [data-theme="audius"] .hexaclear-overlay-card .score,
@@ -1600,17 +1484,44 @@
     var(--audius-glass-deep);
   border: 1px solid color-mix(in srgb, var(--audius-cube-top) 30%, #2f2738);
   box-shadow:
-    inset 0 0 var(--audius-board-inner-glow)
-      color-mix(in srgb, var(--audius-cube-left) 12%, transparent),
+    inset 0 0 26px color-mix(in srgb, var(--audius-cube-left) 8%, transparent),
     inset 0 0 0 1px rgba(255, 255, 255, 0.045),
-    0 18px 42px rgba(0, 0, 0, 0.68),
-    0 0 var(--audius-board-outer-glow)
-      color-mix(in srgb, var(--audius-cube-left) 32%, transparent);
+    0 18px 42px rgba(0, 0, 0, 0.68);
 }
 
 [data-theme="audius"] .cubic-viewport.is-audius-visualizer .hexaclear-board {
   width: 100%;
   height: 100%;
+  /* Global music response for the whole cube layer: ONE compositor filter
+     (not per-cube), fed by the analyser vars. The cube subtree is static, so
+     the browser caches it as a texture and just re-runs these GPU shaders per
+     frame — we avoid blur/drop-shadow (neighborhood samplers) and per-cube
+     fill changes (repaints). The hue-rotate is a constant, music-driven
+     rotation (advanced in JS as --audius-cube-hue-rotate) so the whole palette
+     sweeps continuously through the spectrum. */
+  filter:
+    brightness(
+      calc(1 + var(--audius-intensity, 0) * 0.18 + var(--audius-onset, 0) * 0.14)
+    )
+    saturate(
+      calc(1 + var(--audius-bass, 0) * 0.4 + var(--audius-intensity, 0) * 0.3)
+    )
+    hue-rotate(var(--audius-cube-hue-rotate, 0deg));
+  will-change: filter;
+}
+
+/* Hold the cubes perfectly still/neutral when the user prefers reduced motion
+   (the analyser vars are also stripped in this state, but be explicit). */
+[data-theme="audius"].reduced-motion
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-board,
+[data-theme="audius"]
+  .reduced-motion
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-board {
+  transform: none;
+  filter: none;
+  will-change: auto;
 }
 
 [data-theme="audius"] .cubic-viewport.is-audius-visualizer .hexaclear-hand {
@@ -1638,68 +1549,22 @@
 [data-theme="audius"] .reduced-motion .cube-pulse-overlay,
 [data-theme="audius"].reduced-motion .cube-ripple-overlay,
 [data-theme="audius"] .reduced-motion .cube-ripple-overlay,
-[data-theme="audius"].reduced-motion .hexaclear-audius-shimmer-layer,
-[data-theme="audius"] .reduced-motion .hexaclear-audius-shimmer-layer {
+[data-theme="audius"].reduced-motion .hexaclear-audius-stage-canvas,
+[data-theme="audius"] .reduced-motion .hexaclear-audius-stage-canvas {
   display: none;
 }
 
-@keyframes hexaclear-audius-ripple-even {
+@keyframes hexaclear-audius-stage-kick {
   0% {
-    opacity: var(--audius-ripple, 0);
-    transform: scale(0.86);
+    opacity: 1;
+    transform: scale(1.025);
   }
-  55% {
-    opacity: var(--audius-ripple, 0);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.28);
-  }
-}
-
-@keyframes hexaclear-audius-ripple-odd {
-  0% {
-    opacity: var(--audius-ripple, 0);
-    transform: scale(0.86);
-  }
-  55% {
-    opacity: var(--audius-ripple, 0);
+  62% {
+    opacity: 0.92;
+    transform: scale(1.01);
   }
   100% {
-    opacity: 0;
-    transform: scale(1.28);
-  }
-}
-
-@keyframes hexaclear-audius-shimmer-even {
-  0%,
-  58% {
-    opacity: 0;
-    transform: scale(0.45);
-  }
-  68% {
-    opacity: var(--audius-shimmer, 0);
     transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.9);
-  }
-}
-
-@keyframes hexaclear-audius-shimmer-odd {
-  0%,
-  58% {
-    opacity: 0;
-    transform: scale(0.45);
-  }
-  68% {
-    opacity: var(--audius-shimmer, 0);
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.9);
   }
 }
 

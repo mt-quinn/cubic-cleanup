@@ -175,6 +175,179 @@ const AUDIUS_API_BASE = 'https://discoveryprovider.audius.co/v1'
 const AUDIUS_ANALYSER_SILENT_FRAME_LIMIT = 90
 const AUDIUS_ANALYSER_SILENCE_EPSILON = 1
 const AUDIUS_MIN_DYNAMIC_RANGE = 14
+const AUDIUS_VISUAL_FRAME_MS = 1000 / 30
+const AUDIUS_STAGE_BEAT_CLASSES = [
+  'audius-stage-beat-a',
+  'audius-stage-beat-b',
+] as const
+const AUDIUS_VISUAL_PROPERTIES = [
+  '--audius-bass',
+  '--audius-mid',
+  '--audius-treble',
+  '--audius-onset',
+  '--audius-intensity',
+  '--audius-breath',
+  '--audius-meter-bass',
+  '--audius-meter-mid',
+  '--audius-meter-treble',
+  '--audius-meter-onset',
+  '--audius-deck-hot',
+  '--audius-board-ambience',
+  '--audius-stage-scale',
+  '--audius-viz-hue',
+  '--audius-cube-hue-rotate',
+]
+
+type AudiusStageVisualState = {
+  bass: number
+  mid: number
+  treble: number
+  onset: number
+  intensity: number
+  breath: number
+  hue: number
+  playing: boolean
+}
+
+const clearAudiusStageCanvas = (canvas: HTMLCanvasElement | null) => {
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+}
+
+const AUDIUS_BAR_HUE_STEP = 4.4
+
+// Cached layout for the EQ canvas. Geometry and the log-spaced band
+// boundaries only change on resize, so we precompute them once (via a
+// ResizeObserver) instead of every animation frame.
+type AudiusStageGeometry = {
+  spectrum: number
+  cssWidth: number
+  cssHeight: number
+  dpr: number
+  columns: number
+  columnWidth: number
+  step: number
+  halfGap: number
+  baseY: number
+  minBar: number
+  span: number
+  bandStart: Int16Array
+  bandEnd: Int16Array
+  lift: Float32Array
+}
+
+const measureAudiusStage = (
+  canvas: HTMLCanvasElement,
+  spectrumLength: number,
+): AudiusStageGeometry => {
+  const rect = canvas.getBoundingClientRect()
+  const cssWidth = Math.max(1, Math.round(rect.width))
+  const cssHeight = Math.max(1, Math.round(rect.height))
+  // Bars are simple flat shapes, so a 1.5x backing store is plenty crisp
+  // while keeping fill-rate (the mobile bottleneck) in check.
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+  const backingWidth = Math.round(cssWidth * dpr)
+  const backingHeight = Math.round(cssHeight * dpr)
+  if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+    canvas.width = backingWidth
+    canvas.height = backingHeight
+  }
+  const columns = Math.max(28, Math.min(48, Math.floor(cssWidth / 12)))
+  const columnGap = Math.max(1.5, cssWidth * 0.0035)
+  const columnWidth = cssWidth / columns - columnGap
+  const bandStart = new Int16Array(columns)
+  const bandEnd = new Int16Array(columns)
+  const lift = new Float32Array(columns)
+  const usableBins = Math.max(2, spectrumLength - 1)
+  const logMax = Math.log(usableBins) // log(1) == 0, so logMin drops out
+  for (let i = 0; i < columns; i += 1) {
+    const start = spectrumLength
+      ? Math.max(1, Math.floor(Math.exp(logMax * (i / columns))))
+      : 0
+    const end = spectrumLength
+      ? Math.max(start + 1, Math.floor(Math.exp(logMax * ((i + 1) / columns))))
+      : 0
+    bandStart[i] = start
+    bandEnd[i] = Math.min(end, spectrumLength)
+    const position = columns <= 1 ? 0 : i / (columns - 1)
+    const lowLift = Math.max(0, 1 - position / 0.28)
+    const highLift = Math.max(0, (position - 0.62) / 0.38)
+    lift[i] = 1 + lowLift * 0.16 + highLift * 0.32
+  }
+  return {
+    spectrum: spectrumLength,
+    cssWidth,
+    cssHeight,
+    dpr,
+    columns,
+    columnWidth,
+    step: columnWidth + columnGap,
+    halfGap: columnGap * 0.5,
+    baseY: cssHeight * 0.94,
+    minBar: cssHeight * 0.012,
+    span: cssHeight * 0.82,
+    bandStart,
+    bandEnd,
+    lift,
+  }
+}
+
+const drawAudiusStageCanvas = (
+  canvas: HTMLCanvasElement | null,
+  frequencyData: Uint8Array<ArrayBuffer> | null,
+  visual: AudiusStageVisualState,
+  geom: AudiusStageGeometry | null,
+) => {
+  if (!canvas || !geom) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const {
+    cssWidth,
+    cssHeight,
+    dpr,
+    columns,
+    columnWidth,
+    step,
+    halfGap,
+    baseY,
+    minBar,
+    span,
+    bandStart,
+    bandEnd,
+    lift,
+  } = geom
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, cssWidth, cssHeight)
+
+  // Per-frame frequency readout: strongest bin per band, no smoothing/decay
+  // in the draw layer (temporal smoothing lives on the analyser instead).
+  const freq = visual.playing ? frequencyData : null
+  const hue = visual.hue
+  for (let i = 0; i < columns; i += 1) {
+    let peak = 0
+    if (freq) {
+      const end = bandEnd[i]
+      for (let bin = bandStart[i]; bin < end; bin += 1) {
+        const value = freq[bin]
+        if (value > peak) peak = value
+      }
+    }
+    const shaped = peak > 0 ? (peak / 255) * lift[i] - 0.02 : 0
+    // Gamma > 1 transfer curve keeps the response monotonic (accurate) while
+    // pushing quiet bands toward empty so only loud ones approach full.
+    const energy = shaped > 0 ? Math.min(1, Math.pow(shaped, 1.7)) : 0
+    const barHeight = energy > 0 ? Math.max(2, minBar + energy * span) : 2
+    const x = i * step + halfGap
+    const y = baseY - barHeight
+    ctx.fillStyle = `hsla(${(hue + i * AUDIUS_BAR_HUE_STEP) % 360}, 92%, ${
+      48 + energy * 24
+    }%, ${0.1 + energy * 0.46})`
+    ctx.fillRect(x, y, columnWidth, barHeight)
+  }
+}
 
 const buildAudiusApiUrl = (
   path: string,
@@ -1927,7 +2100,8 @@ const loadInitialGameFromStorage = (): GameState => {
 // Both pickup and placement get the same heavy bump per game design.
 // `didClear` is preserved for the call site in case we want clear-only
 // haptics later, but both branches currently fire the same heavy impact.
-const triggerHaptics = (_didClear: boolean) => {
+const triggerHaptics = (didClear: boolean) => {
+  void didClear
   haptics.trigger('heavy')
 }
 
@@ -3301,6 +3475,17 @@ function App() {
   const audiusMediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
   const audiusOutputGainRef = useRef<GainNode | null>(null)
   const audiusFrequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
+  const audiusCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const audiusCanvasVisualRef = useRef<AudiusStageVisualState>({
+    bass: 0,
+    mid: 0,
+    treble: 0,
+    onset: 0,
+    intensity: 0,
+    breath: 0,
+    hue: 188,
+    playing: false,
+  })
   const audiusEnergyFloorRef = useRef(0)
   const audiusEnergyPeakRef = useRef(64)
   const audiusPulseEnvelopeRef = useRef(0)
@@ -3311,6 +3496,9 @@ function App() {
   const audiusIntensityEnvelopeRef = useRef(0)
   const audiusBreathPhaseRef = useRef(0)
   const audiusHueRef = useRef(0)
+  // Ever-advancing hue angle for the whole-cube-layer filter. Always drifts
+  // while playing (constant rotation) and speeds up with the music.
+  const audiusCubeHueRef = useRef(0)
   const audiusLastBeatAtRef = useRef(0)
   const audiusLastVisualFrameAtRef = useRef(0)
   const audiusSilentFrameCountRef = useRef(0)
@@ -3322,13 +3510,12 @@ function App() {
   const [audiusSelectedTrackId, setAudiusSelectedTrackId] = useState<
     string | null
   >(null)
-  const [audiusSearchQuery, setAudiusSearchQuery] = useState('electronic')
+  const [audiusSearchQuery, setAudiusSearchQuery] = useState('lofi')
   const [audiusStatus, setAudiusStatus] = useState<
     'idle' | 'loading' | 'playing' | 'paused' | 'error'
   >('idle')
   const [audiusError, setAudiusError] = useState<string | null>(null)
   const [, setAudiusAnalyserLive] = useState(false)
-  const [audiusBeatToken, setAudiusBeatToken] = useState(0)
   const [audiusTitleCardCollapsed, setAudiusTitleCardCollapsed] =
     useState(false)
   const [audiusAutoTitleTrackId, setAudiusAutoTitleTrackId] = useState<
@@ -3398,10 +3585,12 @@ function App() {
       const source = ctx.createMediaElementSource(audio)
       const analyser = ctx.createAnalyser()
       const outputGain = ctx.createGain()
-      analyser.fftSize = 256
-      analyser.minDecibels = -85
-      analyser.maxDecibels = -8
-      analyser.smoothingTimeConstant = 0.58
+      analyser.fftSize = 512
+      analyser.minDecibels = -90
+      analyser.maxDecibels = -5
+      // Light temporal smoothing to take the edge off frame-to-frame jitter
+      // while staying responsive (0 = raw, 1 = frozen).
+      analyser.smoothingTimeConstant = 0.7
       source.connect(analyser)
       analyser.connect(outputGain)
       outputGain.connect(ctx.destination)
@@ -3572,6 +3761,7 @@ function App() {
       audiusIntensityEnvelopeRef.current = 0
       audiusBreathPhaseRef.current = 0
       audiusHueRef.current = 0
+      audiusCubeHueRef.current = 0
       audiusLastBeatAtRef.current = 0
       audiusSilentFrameCountRef.current = 0
       audiusAnalyserWarningShownRef.current = false
@@ -3814,7 +4004,9 @@ function App() {
           const n = Number(raw)
           if (Number.isFinite(n) && n > 0) return n
         }
-      } catch {}
+      } catch {
+        // Local best lookup is optional; stats query remains the source of truth.
+      }
     }
     return null
   }, [currentDailyDateKey, lifetimeStats.dailyBestMovesByDate])
@@ -7283,58 +7475,45 @@ function App() {
       return
     }
     if (audiusTracks.length === 0 && audiusStatus === 'idle') {
-      void loadAudiusTracks()
+      void loadAudiusTracks(audiusSearchQuery)
     }
-  }, [audiusStatus, audiusTracks.length, loadAudiusTracks, theme])
+  }, [audiusSearchQuery, audiusStatus, audiusTracks.length, loadAudiusTracks, theme])
 
   useEffect(() => {
     const rootEl = rootRef.current
+    const canvasEl = audiusCanvasRef.current
     if (theme !== 'audius' || reducedMotion) {
-      rootEl?.style.removeProperty('--audius-pulse')
-      rootEl?.style.removeProperty('--audius-brightness')
-      rootEl?.style.removeProperty('--audius-saturation')
-      rootEl?.style.removeProperty('--audius-scale')
-      rootEl?.style.removeProperty('--audius-light-overlay')
-      rootEl?.style.removeProperty('--audius-dark-overlay')
-      rootEl?.style.removeProperty('--audius-bass')
-      rootEl?.style.removeProperty('--audius-mid')
-      rootEl?.style.removeProperty('--audius-treble')
-      rootEl?.style.removeProperty('--audius-onset')
-      rootEl?.style.removeProperty('--audius-intensity')
-      rootEl?.style.removeProperty('--audius-breath')
-      rootEl?.style.removeProperty('--audius-top-light')
-      rootEl?.style.removeProperty('--audius-left-warm')
-      rootEl?.style.removeProperty('--audius-right-shadow')
-      rootEl?.style.removeProperty('--audius-ripple')
-      rootEl?.style.removeProperty('--audius-board-glow')
-      rootEl?.style.removeProperty('--audius-shimmer')
-      rootEl?.style.removeProperty('--audius-cube-scale')
-      rootEl?.style.removeProperty('--audius-title-glow')
-      rootEl?.style.removeProperty('--audius-board-inner-glow')
-      rootEl?.style.removeProperty('--audius-board-outer-glow')
-      rootEl?.style.removeProperty('--audius-score-glow-a')
-      rootEl?.style.removeProperty('--audius-score-glow-b')
-      rootEl?.style.removeProperty('--audius-score-scale')
-      rootEl?.style.removeProperty('--audius-outline-glow')
-      rootEl?.style.removeProperty('--audius-face-glow')
-      rootEl?.style.removeProperty('--audius-empty-stroke-opacity')
-      rootEl?.style.removeProperty('--audius-slot-fill-opacity')
-      rootEl?.style.removeProperty('--audius-top-opacity')
-      rootEl?.style.removeProperty('--audius-left-opacity')
-      rootEl?.style.removeProperty('--audius-right-opacity')
-      rootEl?.style.removeProperty('--audius-face-stroke-opacity')
-      rootEl?.style.removeProperty('--audius-deck-hot')
-      rootEl?.style.removeProperty('--audius-meter-bass')
-      rootEl?.style.removeProperty('--audius-meter-mid')
-      rootEl?.style.removeProperty('--audius-meter-treble')
-      rootEl?.style.removeProperty('--audius-meter-onset')
-      rootEl?.style.removeProperty('--audius-keybed-energy')
-      rootEl?.style.removeProperty('--audius-cube-top')
-      rootEl?.style.removeProperty('--audius-cube-left')
-      rootEl?.style.removeProperty('--audius-cube-right')
+      AUDIUS_VISUAL_PROPERTIES.forEach((property) => {
+        rootEl?.style.removeProperty(property)
+      })
+      rootEl?.classList.remove(...AUDIUS_STAGE_BEAT_CLASSES)
+      clearAudiusStageCanvas(canvasEl)
       return
     }
     let frame = 0
+    let beatClearTimer = 0
+    let beatIndex = 0
+    // Layout is cached and only recomputed when the canvas resizes, so the
+    // per-frame draw never touches getBoundingClientRect (forced reflow).
+    let stageGeometry: AudiusStageGeometry | null = canvasEl
+      ? measureAudiusStage(
+          canvasEl,
+          audiusFrequencyDataRef.current?.length ?? 256,
+        )
+      : null
+    let stageResizeObserver: ResizeObserver | null = null
+    if (canvasEl && typeof ResizeObserver !== 'undefined') {
+      stageResizeObserver = new ResizeObserver(() => {
+        if (!canvasEl) return
+        stageGeometry = measureAudiusStage(
+          canvasEl,
+          audiusFrequencyDataRef.current?.length ??
+            stageGeometry?.spectrum ??
+            256,
+        )
+      })
+      stageResizeObserver.observe(canvasEl)
+    }
     const smoothBand = (
       ref: { current: number },
       target: number,
@@ -7345,10 +7524,49 @@ function App() {
       ref.current += (target - ref.current) * rate
       return Math.max(0, Math.min(1, ref.current))
     }
+    const markBeat = () => {
+      if (!rootEl) return
+      const beatClass = AUDIUS_STAGE_BEAT_CLASSES[beatIndex % 2]
+      beatIndex += 1
+      rootEl.classList.remove(...AUDIUS_STAGE_BEAT_CLASSES)
+      rootEl.classList.add(beatClass)
+      if (beatClearTimer) window.clearTimeout(beatClearTimer)
+      beatClearTimer = window.setTimeout(() => {
+        rootEl.classList.remove(...AUDIUS_STAGE_BEAT_CLASSES)
+      }, 520)
+    }
     const tick = () => {
       const now = performance.now()
       const audio = audiusAudioRef.current
       const playing = audio != null && !audio.paused && !audio.ended
+      const analyser = audiusAnalyserRef.current
+      const data = audiusFrequencyDataRef.current
+
+      // Draw the EQ on every animation frame for maximum responsiveness:
+      // pull a fresh analyser frame and render the raw bars. The heavier band
+      // math and CSS-variable writes below stay throttled.
+      if (playing && analyser && data) {
+        analyser.getByteFrequencyData(data)
+        if (
+          canvasEl &&
+          (!stageGeometry || stageGeometry.spectrum !== data.length)
+        ) {
+          stageGeometry = measureAudiusStage(canvasEl, data.length)
+        }
+        drawAudiusStageCanvas(
+          canvasEl,
+          data,
+          audiusCanvasVisualRef.current,
+          stageGeometry,
+        )
+      }
+
+      if (now - audiusLastVisualFrameAtRef.current < AUDIUS_VISUAL_FRAME_MS) {
+        frame = window.requestAnimationFrame(tick)
+        return
+      }
+      audiusLastVisualFrameAtRef.current = now
+
       let pulse = 0
       let energy = 0
       let bass = 0
@@ -7357,10 +7575,7 @@ function App() {
       let onset = 0
       let intensity = 0
       let breath = 0
-      const analyser = audiusAnalyserRef.current
-      const data = audiusFrequencyDataRef.current
       if (playing && analyser && data) {
-        analyser.getByteFrequencyData(data)
         let sum = 0
         let bassSum = 0
         let bassCount = 0
@@ -7459,7 +7674,7 @@ function App() {
             now - audiusLastBeatAtRef.current > 340
           ) {
             audiusLastBeatAtRef.current = now
-            setAudiusBeatToken((token) => (token + 1) % 1000)
+            markBeat()
           }
         } else {
           audiusPulseEnvelopeRef.current *= 0.9
@@ -7499,123 +7714,19 @@ function App() {
       const hue =
         (188 + audiusHueRef.current + mid * 55 + treble * 18 - bass * 24) %
         360
-      const rightHue = (hue + 334 + bass * 18) % 360
-      const leftHue = (hue + 20 + treble * 30) % 360
-      if (now - audiusLastVisualFrameAtRef.current < 20) {
-        frame = window.requestAnimationFrame(tick)
-        return
-      }
-      audiusLastVisualFrameAtRef.current = now
-      rootEl?.style.setProperty('--audius-pulse', pulse.toFixed(3))
+      // Constant hue rotation across the cube layer: a steady base drift that
+      // accelerates with the music (intensity + beats). ~0.6deg/frame at 30fps
+      // (~18deg/s) at rest, faster on loud/peaky sections.
+      audiusCubeHueRef.current =
+        (audiusCubeHueRef.current +
+          (playing ? 0.6 + intensity * 1.6 + onset * 1.4 : 0)) %
+        360
       rootEl?.style.setProperty('--audius-bass', bass.toFixed(3))
       rootEl?.style.setProperty('--audius-mid', mid.toFixed(3))
       rootEl?.style.setProperty('--audius-treble', treble.toFixed(3))
       rootEl?.style.setProperty('--audius-onset', onset.toFixed(3))
       rootEl?.style.setProperty('--audius-intensity', intensity.toFixed(3))
       rootEl?.style.setProperty('--audius-breath', breath.toFixed(3))
-      rootEl?.style.setProperty(
-        '--audius-light-overlay',
-        Math.min(0.74, pulse * 0.38 + breath * 0.2 + onset * 0.26).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-dark-overlay',
-        Math.min(0.36, (1 - pulse) * 0.16 + bass * 0.18).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-top-light',
-        Math.min(0.84, breath * 0.26 + pulse * 0.32 + onset * 0.34).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-left-warm',
-        Math.min(0.48, mid * 0.34 + treble * 0.08).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-right-shadow',
-        Math.min(0.42, (1 - pulse) * 0.12 + bass * 0.24).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-ripple',
-        Math.min(1, onset * 0.9 + intensity * 0.16).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-board-glow',
-        Math.min(0.72, intensity * 0.42 + breath * 0.18 + onset * 0.22).toFixed(3),
-      )
-      const shimmerGate =
-        Math.max(0, (treble - 0.58) / 0.42) *
-        Math.max(0, (intensity - 0.36) / 0.64)
-      rootEl?.style.setProperty(
-        '--audius-shimmer',
-        Math.min(0.84, shimmerGate * 0.5 + onset * 0.46).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-cube-scale',
-        (1 + breath * 0.052 + pulse * 0.012 + onset * 0.018).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-title-glow',
-        `${(8 + intensity * 18).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-board-inner-glow',
-        `${(24 + breath * 44).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-board-outer-glow',
-        `${(
-          18 +
-          Math.min(0.72, intensity * 0.42 + breath * 0.18 + onset * 0.22) *
-            54
-        ).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-score-glow-a',
-        `${(6 + onset * 20).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-score-glow-b',
-        `${(14 + intensity * 26).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-score-scale',
-        (1 + breath * 0.045).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-outline-glow',
-        `${(3 + onset * 9).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-face-glow',
-        `${(2 + breath * 5).toFixed(1)}px`,
-      )
-      rootEl?.style.setProperty(
-        '--audius-empty-stroke-opacity',
-        (0.42 + breath * 0.24).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-slot-fill-opacity',
-        (0.72 + intensity * 0.12).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-top-opacity',
-        (0.82 + breath * 0.14).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-left-opacity',
-        (0.8 + intensity * 0.15).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-right-opacity',
-        (0.86 + bass * 0.12).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-face-stroke-opacity',
-        (0.42 + onset * 0.34).toFixed(3),
-      )
-      rootEl?.style.setProperty(
-        '--audius-deck-hot',
-        Math.min(1, onset * 0.62 + intensity * 0.34 + treble * 0.16).toFixed(3),
-      )
       rootEl?.style.setProperty(
         '--audius-meter-bass',
         Math.min(1, bass * 0.94 + intensity * 0.12).toFixed(3),
@@ -7633,80 +7744,54 @@ function App() {
         Math.min(1, onset * 0.92 + pulse * 0.2).toFixed(3),
       )
       rootEl?.style.setProperty(
-        '--audius-keybed-energy',
-        Math.min(1, intensity * 0.56 + mid * 0.24 + onset * 0.22).toFixed(3),
+        '--audius-deck-hot',
+        Math.min(1, onset * 0.55 + intensity * 0.24 + treble * 0.14).toFixed(3),
       )
       rootEl?.style.setProperty(
-        '--audius-cube-top',
-        `hsl(${hue.toFixed(1)} 94% ${(
-          52 +
-          intensity * 11 +
-          breath * 9 +
-          onset * 6
-        ).toFixed(1)}%)`,
+        '--audius-board-ambience',
+        Math.min(0.62, intensity * 0.3 + breath * 0.18 + onset * 0.14).toFixed(3),
       )
       rootEl?.style.setProperty(
-        '--audius-cube-left',
-        `hsl(${leftHue.toFixed(1)} 86% ${(
-          32 +
-          mid * 10 +
-          intensity * 10 +
-          breath * 6
-        ).toFixed(1)}%)`,
+        '--audius-stage-scale',
+        (1 + bass * 0.018 + onset * 0.01).toFixed(3),
       )
+      rootEl?.style.setProperty('--audius-viz-hue', `${hue.toFixed(1)}deg`)
       rootEl?.style.setProperty(
-        '--audius-cube-right',
-        `hsl(${rightHue.toFixed(1)} 82% ${(14 + bass * 7 + intensity * 8).toFixed(
-          1,
-        )}%)`,
+        '--audius-cube-hue-rotate',
+        `${audiusCubeHueRef.current.toFixed(1)}deg`,
       )
+      audiusCanvasVisualRef.current = {
+        bass,
+        mid,
+        treble,
+        onset,
+        intensity,
+        breath,
+        hue,
+        playing,
+      }
+      // While playing, the canvas is already drawn every frame at the top of
+      // the tick. When stopped, redraw here so bars settle to baseline.
+      if (!playing) {
+        drawAudiusStageCanvas(
+          canvasEl,
+          null,
+          audiusCanvasVisualRef.current,
+          stageGeometry,
+        )
+      }
       frame = window.requestAnimationFrame(tick)
     }
     frame = window.requestAnimationFrame(tick)
     return () => {
       window.cancelAnimationFrame(frame)
-      rootEl?.style.removeProperty('--audius-pulse')
-      rootEl?.style.removeProperty('--audius-brightness')
-      rootEl?.style.removeProperty('--audius-saturation')
-      rootEl?.style.removeProperty('--audius-scale')
-      rootEl?.style.removeProperty('--audius-light-overlay')
-      rootEl?.style.removeProperty('--audius-dark-overlay')
-      rootEl?.style.removeProperty('--audius-bass')
-      rootEl?.style.removeProperty('--audius-mid')
-      rootEl?.style.removeProperty('--audius-treble')
-      rootEl?.style.removeProperty('--audius-onset')
-      rootEl?.style.removeProperty('--audius-intensity')
-      rootEl?.style.removeProperty('--audius-breath')
-      rootEl?.style.removeProperty('--audius-top-light')
-      rootEl?.style.removeProperty('--audius-left-warm')
-      rootEl?.style.removeProperty('--audius-right-shadow')
-      rootEl?.style.removeProperty('--audius-ripple')
-      rootEl?.style.removeProperty('--audius-board-glow')
-      rootEl?.style.removeProperty('--audius-shimmer')
-      rootEl?.style.removeProperty('--audius-cube-scale')
-      rootEl?.style.removeProperty('--audius-title-glow')
-      rootEl?.style.removeProperty('--audius-board-inner-glow')
-      rootEl?.style.removeProperty('--audius-board-outer-glow')
-      rootEl?.style.removeProperty('--audius-score-glow-a')
-      rootEl?.style.removeProperty('--audius-score-glow-b')
-      rootEl?.style.removeProperty('--audius-score-scale')
-      rootEl?.style.removeProperty('--audius-outline-glow')
-      rootEl?.style.removeProperty('--audius-face-glow')
-      rootEl?.style.removeProperty('--audius-empty-stroke-opacity')
-      rootEl?.style.removeProperty('--audius-slot-fill-opacity')
-      rootEl?.style.removeProperty('--audius-top-opacity')
-      rootEl?.style.removeProperty('--audius-left-opacity')
-      rootEl?.style.removeProperty('--audius-right-opacity')
-      rootEl?.style.removeProperty('--audius-face-stroke-opacity')
-      rootEl?.style.removeProperty('--audius-deck-hot')
-      rootEl?.style.removeProperty('--audius-meter-bass')
-      rootEl?.style.removeProperty('--audius-meter-mid')
-      rootEl?.style.removeProperty('--audius-meter-treble')
-      rootEl?.style.removeProperty('--audius-meter-onset')
-      rootEl?.style.removeProperty('--audius-keybed-energy')
-      rootEl?.style.removeProperty('--audius-cube-top')
-      rootEl?.style.removeProperty('--audius-cube-left')
-      rootEl?.style.removeProperty('--audius-cube-right')
+      if (beatClearTimer) window.clearTimeout(beatClearTimer)
+      stageResizeObserver?.disconnect()
+      AUDIUS_VISUAL_PROPERTIES.forEach((property) => {
+        rootEl?.style.removeProperty(property)
+      })
+      rootEl?.classList.remove(...AUDIUS_STAGE_BEAT_CLASSES)
+      clearAudiusStageCanvas(canvasEl)
     }
   }, [reducedMotion, theme])
 
@@ -8713,12 +8798,6 @@ function App() {
   const tierPaletteStyle = paletteForTier(scoreTier, scoreOctave, theme)
   const showTutorialEndScreen =
     game.mode === 'endless' && tutorialEndScreenPending && !dailyIntroSeen
-  const audiusBeatClass =
-    theme === 'audius' && audiusBeatToken > 0
-      ? audiusBeatToken % 2 === 0
-        ? 'audius-ripple-even'
-        : 'audius-ripple-odd'
-      : ''
   const audiusTrackOptions = useMemo(() => {
     const byId = new Map<string, AudiusTrack>()
     audiusTracks.forEach((track) => byId.set(track.id, track))
@@ -8807,7 +8886,6 @@ function App() {
         colorblindSupport ? 'is-colorblind' : '',
         tutorialStage > 0 ? 'is-tutorial-active' : '',
         theme === 'audius' ? 'is-audius-visualizer' : '',
-        audiusBeatClass,
         ...octaveClasses,
       ]
         .filter(Boolean)
@@ -9682,6 +9760,13 @@ function App() {
           }}
           ref={boardWrapperRef}
         >
+          {theme === 'audius' && !reducedMotion && (
+            <canvas
+              ref={audiusCanvasRef}
+              className="hexaclear-audius-stage-canvas"
+              aria-hidden="true"
+            />
+          )}
           <div className="hexaclear-audius-vu hexaclear-audius-vu-left" aria-hidden="true">
             <span className="vu-tick vu-bass" />
             <span className="vu-tick vu-mid" />
@@ -10257,41 +10342,7 @@ function App() {
                   conflictStrokeColor
                     ? { ...(partnerHueStyle ?? {}), ...cellTintStyle }
                     : undefined
-                const audiusDistance =
-                  theme === 'audius'
-                    ? Math.hypot(
-                        cx - boardLayout.width / 2,
-                        cy - boardLayout.height / 2,
-                      )
-                    : 0
-                const audiusDistanceRatio =
-                  theme === 'audius'
-                    ? Math.min(
-                        1,
-                        audiusDistance /
-                          Math.max(boardLayout.width, boardLayout.height) /
-                          0.55,
-                      )
-                    : 0
-                const audiusCubeStyle =
-                  theme === 'audius'
-                    ? ({
-                        '--audius-cell-delay': `${Math.round(
-                          audiusDistanceRatio * 460,
-                        )}ms`,
-                        '--audius-cell-falloff': (
-                          1 -
-                          audiusDistanceRatio * 0.58
-                        ).toFixed(3),
-                        '--audius-cell-phase': `${Math.round(
-                          cell.coord.q * 23 - cell.coord.r * 17,
-                        )}deg`,
-                      } as React.CSSProperties)
-                    : undefined
-                const cubeStyle =
-                  partnerHueStyle || audiusCubeStyle
-                    ? { ...(partnerHueStyle ?? {}), ...(audiusCubeStyle ?? {}) }
-                    : undefined
+                const cubeStyle = partnerHueStyle
 
                 return (
                   <g
@@ -10431,7 +10482,6 @@ function App() {
                             ? 'daily-hit-pulse'
                             : '',
                           isPartnerOwned ? 'partner-piece' : '',
-                          audiusBeatClass,
                         ].filter(Boolean)}
                         style={cubeStyle}
                         playerGlyph={cellGlyphByCellId[cell.id]}
@@ -10786,35 +10836,6 @@ function App() {
                     )
                   })
                 })()}
-              </g>
-            )}
-
-            {theme === 'audius' && !reducedMotion && (
-              <g
-                className="hexaclear-audius-shimmer-layer"
-                aria-hidden="true"
-                pointerEvents="none"
-              >
-                {boardDef.cells
-                  .filter((_, idx) => idx % 7 === 0)
-                  .map((cell, idx) => {
-                    const pos = boardLayout.positions[cell.id]
-                    if (!pos) return null
-                    return (
-                      <circle
-                        key={`audius-shimmer-${cell.id}`}
-                        cx={pos.x + boardLayout.offsetX}
-                        cy={pos.y + boardLayout.offsetY}
-                        r={2.1 + (idx % 4) * 0.8}
-                        className="hexaclear-audius-shimmer"
-                        style={
-                          {
-                            '--audius-shimmer-delay': `${(idx % 5) * 190}ms`,
-                          } as React.CSSProperties
-                        }
-                      />
-                    )
-                  })}
               </g>
             )}
 

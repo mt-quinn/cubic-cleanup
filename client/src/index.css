@@ -3215,6 +3215,91 @@ body {
   }
 }
 
+/* Audius is now driven by the dedicated theme stylesheet plus a cheap
+   canvas stage layer. Keep this late neutralizer so the older shared
+   visualizer block above cannot re-enable per-cube filters/ripples. */
+.cubic-viewport.is-audius-visualizer .hexaclear-board-wrapper::before {
+  opacity: var(--audius-board-ambience, 0.18);
+  filter: none;
+  transform: scale(var(--audius-stage-scale, 1));
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-board-outline-back,
+.cubic-viewport.is-audius-visualizer .hexaclear-board-outline-front,
+.cubic-viewport.is-audius-visualizer .hexaclear-hex-cube .cube-face,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-piece-svg,
+.cubic-viewport.is-audius-visualizer .hexaclear-hold-piece .hexaclear-piece-svg {
+  filter: none;
+}
+.cubic-viewport.is-audius-visualizer .cube-pulse-overlay,
+.cubic-viewport.is-audius-visualizer .cube-ripple-overlay,
+.cubic-viewport.is-audius-visualizer .hexaclear-audius-shimmer,
+.cubic-viewport.is-audius-visualizer .hexaclear-audius-shimmer-layer {
+  display: none !important;
+  animation: none !important;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-top {
+  fill: var(--audius-cube-top, var(--cube-top));
+  fill-opacity: 0.9;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-left {
+  fill: var(--audius-cube-left, var(--cube-left));
+  fill-opacity: 0.84;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .cube-right {
+  fill: var(--audius-cube-right, var(--cube-right));
+  fill-opacity: 0.9;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .cube-face {
+  stroke-opacity: 0.46;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .hexaclear-cube-wiggle-wrap {
+  transform: none;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex.piece,
+.cubic-viewport.is-audius-visualizer .hexaclear-hold-piece .hexaclear-hex.piece,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex-bevel-highlight,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-hex-bevel-highlight {
+  stroke-opacity: 0.46;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex.piece,
+.cubic-viewport.is-audius-visualizer .hexaclear-hold-piece .hexaclear-hex.piece {
+  fill-opacity: 0.9;
+}
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button
+  .hexaclear-hex-bevel-shadow,
+.cubic-viewport.is-audius-visualizer
+  .hexaclear-hold-piece
+  .hexaclear-hex-bevel-shadow {
+  stroke-opacity: 0.82;
+}
+.cubic-viewport.is-audius-visualizer .hexaclear-live-stat .value {
+  transform: none;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--audius-cube-top, #cffff2) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--audius-cube-left, #42d6bd) 28%, transparent);
+}
+
 /* MP partner-tinted cubes (wood theme). Each face takes its tinted
    fill from an inline CSS variable computed in JS (HSL hue rotation
    + small lightness/saturation tweak). We deliberately bake the
