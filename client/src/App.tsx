@@ -1930,6 +1930,11 @@ type PersistedGameEnvelope = {
   // For daily mode we also stash the date key so we don't restore an
   // old daily puzzle on a new day.
   dateKey?: string
+  // Per-hand undo history, snapshotted alongside the game so a refresh
+  // resumes with the Undo button intact. Capped to the same 2 entries the
+  // in-memory stack keeps. Older saves predate this field — `undefined`
+  // simply restores an empty stack.
+  undo?: GameState[]
 }
 
 const PERSIST_KEY_BY_MODE: Record<GameMode, string> = {
@@ -2041,7 +2046,34 @@ const migrateLegacyPersistedGame = () => {
   }
 }
 
-const loadGameForMode = (mode: GameMode): GameState | null => {
+// Backfill fields added since older saves were written so we don't crash on
+// legacy state shapes (e.g. pre-multi-ruby saves had `goldenCellId`). Mutates
+// and returns the same object. Applied to both the live game and every undo
+// snapshot so a stack restored across a deploy can't carry an old shape.
+const normalizePersistedGame = (raw: unknown, mode: GameMode): GameState => {
+  const game = raw as GameState & {
+    goldenCellId?: string | null
+  }
+  if (!Array.isArray(game.goldenCellIds)) {
+    const legacyId = game.goldenCellId
+    game.goldenCellIds =
+      typeof legacyId === 'string' && legacyId.length > 0 ? [legacyId] : []
+  }
+  if (typeof game.mode !== 'string') {
+    game.mode = mode
+  }
+  // `hold` was added later. Older saves don't have it; default to
+  // an empty hold so downstream code that reads `game.hold` (and
+  // distinguishes null from a filled buffer) doesn't see undefined.
+  if (game.hold === undefined) {
+    game.hold = null
+  }
+  return game
+}
+
+const loadEnvelopeForMode = (
+  mode: GameMode,
+): { game: GameState; undo: GameState[] } | null => {
   if (typeof window === 'undefined') return null
   try {
     const raw = window.localStorage.getItem(PERSIST_KEY_BY_MODE[mode])
@@ -2054,30 +2086,18 @@ const loadGameForMode = (mode: GameMode): GameState | null => {
         return null
       }
     }
-    // Backfill fields added since older saves were written so we don't crash on
-    // legacy state shapes (e.g. pre-multi-ruby saves had `goldenCellId`).
-    const game = parsed.game as GameState & {
-      goldenCellId?: string | null
-    }
-    if (!Array.isArray(game.goldenCellIds)) {
-      const legacyId = game.goldenCellId
-      game.goldenCellIds =
-        typeof legacyId === 'string' && legacyId.length > 0 ? [legacyId] : []
-    }
-    if (typeof game.mode !== 'string') {
-      game.mode = mode
-    }
-    // `hold` was added later. Older saves don't have it; default to
-    // an empty hold so downstream code that reads `game.hold` (and
-    // distinguishes null from a filled buffer) doesn't see undefined.
-    if (game.hold === undefined) {
-      game.hold = null
-    }
-    return game
+    const game = normalizePersistedGame(parsed.game, mode)
+    const undo = Array.isArray(parsed.undo)
+      ? parsed.undo.map((entry) => normalizePersistedGame(entry, mode))
+      : []
+    return { game, undo }
   } catch {
     return null
   }
 }
+
+const loadGameForMode = (mode: GameMode): GameState | null =>
+  loadEnvelopeForMode(mode)?.game ?? null
 
 const loadInitialGameFromStorage = (): GameState => {
   if (typeof window === 'undefined') {
@@ -2095,6 +2115,21 @@ const loadInitialGameFromStorage = (): GameState => {
   if (activeMode === 'daily') return createDailyGameState()
   if (activeMode === 'big') return createBigGameState()
   return createInitialGameState()
+}
+
+// The undo stack lives in the active mode's envelope. Resolve the same active
+// mode `loadInitialGameFromStorage` does so the restored stack always pairs
+// with the restored game; any other case (no stored game, stale daily) yields
+// an empty stack.
+const loadInitialUndoFromStorage = (): GameState[] => {
+  if (typeof window === 'undefined') return []
+  let activeMode = (window.localStorage.getItem(ACTIVE_MODE_KEY) as
+    | GameMode
+    | null) ?? 'endless'
+  if (activeMode !== 'endless' && activeMode !== 'daily' && activeMode !== 'big') {
+    activeMode = 'endless'
+  }
+  return loadEnvelopeForMode(activeMode)?.undo ?? []
 }
 
 // Both pickup and placement get the same heavy bump per game design.
@@ -4153,7 +4188,12 @@ function App() {
       .sort((a, b) => a.moves - b.moves || a.date - b.date)
       .slice(0, 5)
   }, [playerName, dailyRunsToken, game.mode, game.dailyDateKey])
-  const [undoStack, setUndoStack] = useState<GameState[]>([])
+  const [undoStack, setUndoStack] = useState<GameState[]>(() =>
+    // The first-launch tutorial swaps in a synthetic board; its undo stack
+    // is always empty and the real game's persisted stack would be paired
+    // with the wrong board, so skip restoring during the guided opening.
+    tutorialStage === 1 ? [] : loadInitialUndoFromStorage(),
+  )
   const [undoAnimation, setUndoAnimation] = useState<{
     piece: ActivePiece
     startX: number
@@ -8095,6 +8135,10 @@ function App() {
         mode: game.mode,
         game,
         dateKey: game.mode === 'daily' ? getTodayKey() : undefined,
+        // Switching modes leaves the in-memory stack pointing at the prior
+        // run's snapshots; filtering by mode keeps a slot from ever caching
+        // another mode's undo history.
+        undo: undoStack.filter((entry) => entry.mode === game.mode),
       }
       window.localStorage.setItem(
         PERSIST_KEY_BY_MODE[game.mode],
@@ -8107,7 +8151,7 @@ function App() {
     if (game.mode === 'endless') setSavedEndlessGame(game)
     else if (game.mode === 'daily') setSavedDailyGame(game)
     else if (game.mode === 'big') setSavedBigGame(game)
-  }, [game, isMultiplayer, tutorialStage])
+  }, [game, isMultiplayer, tutorialStage, undoStack])
 
   const handleSaveHighScore = () => {
     if (pendingScore === null) return
