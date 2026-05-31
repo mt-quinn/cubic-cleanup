@@ -921,50 +921,56 @@
   pointer-events: none;
 }
 
+/* Ghost preview: same approach as the default theme — a greatly reduced
+   opacity translucent piece (default uses ~0.35 fill) so the board/visualizer
+   shows through, with the normal solid cube edge. No wireframe/dashes. These
+   rules must out-specify the general cube-fill rules above (hence the
+   :not(.preview-piece) exclusions there) so the reduced opacity actually
+   wins. */
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece .cube-top {
-  fill: #f8fff7;
-  fill-opacity: 0.92;
+  fill: var(--audius-cube-top);
+  fill-opacity: 0.32;
 }
 
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece .cube-left {
-  fill: color-mix(in srgb, var(--audius-cube-left) 78%, #ffffff);
-  fill-opacity: 0.86;
+  fill: var(--audius-cube-left);
+  fill-opacity: 0.32;
 }
 
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece .cube-right {
-  fill: color-mix(in srgb, var(--audius-cube-right) 58%, #86fff0);
-  fill-opacity: 0.88;
+  fill: var(--audius-cube-right);
+  fill-opacity: 0.32;
 }
 
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece .cube-face {
-  stroke: #ffffff;
-  stroke-opacity: 0.86;
-  stroke-width: 1.45;
+  stroke: color-mix(in srgb, var(--audius-cube-top) 58%, #ffffff);
+  stroke-opacity: 0.5;
+  stroke-width: 1.05;
 }
 
 [data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-top {
   fill: var(--audius-cube-top);
   fill-opacity: 0.9;
 }
 
 [data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-left {
   fill: var(--audius-cube-left);
   fill-opacity: 0.84;
 }
 
 [data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-right {
   fill: var(--audius-cube-right);
   fill-opacity: 0.9;
 }
 
 [data-theme="audius"]
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.preview-piece)
   .cube-face {
   stroke: color-mix(in srgb, var(--audius-cube-top) 58%, #ffffff);
   stroke-opacity: 0.46;

@@ -2902,25 +2902,25 @@ body {
   vector-effect: non-scaling-stroke;
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-top {
   fill: var(--audius-cube-top, var(--cube-top));
   fill-opacity: var(--audius-top-opacity, 0.85);
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-left {
   fill: var(--audius-cube-left, var(--cube-left));
   fill-opacity: var(--audius-left-opacity, 0.83);
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-right {
   fill: var(--audius-cube-right, var(--cube-right));
   fill-opacity: var(--audius-right-opacity, 0.86);
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.preview-piece)
   .cube-face {
   stroke: color-mix(in srgb, var(--audius-cube-top, #cffff2) 58%, #ffffff);
   stroke-opacity: var(--audius-face-stroke-opacity, 0.42);
@@ -3240,25 +3240,25 @@ body {
   animation: none !important;
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-top {
   fill: var(--audius-cube-top, var(--cube-top));
   fill-opacity: 0.9;
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-left {
   fill: var(--audius-cube-left, var(--cube-left));
   fill-opacity: 0.84;
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.partner-piece):not(.preview-piece)
   .cube-right {
   fill: var(--audius-cube-right, var(--cube-right));
   fill-opacity: 0.9;
 }
 .cubic-viewport.is-audius-visualizer
-  .hexaclear-hex-cube:not(.golden):not(.daily-target)
+  .hexaclear-hex-cube:not(.golden):not(.daily-target):not(.preview-piece)
   .cube-face {
   stroke-opacity: 0.46;
 }
