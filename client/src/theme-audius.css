@@ -914,7 +914,11 @@
 }
 
 [data-theme="audius"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube {
-  filter: invert(1) hue-rotate(180deg) saturate(2) brightness(1.28);
+  /* Reference a real SVG <filter> (defined in the board <defs>) instead of CSS
+     shorthand filter functions. WebKit/iOS ignores CSS invert()/hue-rotate()
+     on inner SVG elements like <g>, so this is what makes the about-to-clear
+     highlight render on mobile. */
+  filter: url(#audius-clear-invert);
 }
 
 [data-theme="audius"] .hexaclear-hex-cube.preview-piece {
@@ -1101,6 +1105,15 @@
 }
 
 [data-theme="audius"] .hexaclear-overlay {
+  /* The audius board wrapper uses overflow:hidden to clip the canvas/glow to
+     its rounded panel, which would otherwise crop modal overlays (menu, daily
+     history, game over) that render as its children. None of the overlay's
+     ancestors establish a containing block for fixed positioning, so pinning
+     it to the viewport lets every modal escape the board clip and span the
+     full screen. z-index is left at its base (50) so the search window
+     backdrop (80) still layers above an open menu. */
+  position: fixed;
+  inset: 0;
   background:
     radial-gradient(
       circle at 50% 42%,
@@ -1516,6 +1529,30 @@
   will-change: filter;
 }
 
+/* Mirror the board's music-reactive filter on the in-hand and held pieces so
+   the whole palette pulses and hue-rotates together. Only a few static SVGs,
+   so a per-piece compositor filter is cheap. Specificity must beat the
+   `filter: none` neutralizer in index.css (0,4,0). Unplayable pieces are
+   excluded so they keep their grayed-out cue. */
+[data-theme="audius"]
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button:not(.unplayable)
+  .hexaclear-piece-svg,
+[data-theme="audius"]
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-hold:not(.unplayable)
+  .hexaclear-piece-svg {
+  filter:
+    brightness(
+      calc(1 + var(--audius-intensity, 0) * 0.18 + var(--audius-onset, 0) * 0.14)
+    )
+    saturate(
+      calc(1 + var(--audius-bass, 0) * 0.4 + var(--audius-intensity, 0) * 0.3)
+    )
+    hue-rotate(var(--audius-cube-hue-rotate, 0deg));
+  will-change: filter;
+}
+
 /* Hold the cubes perfectly still/neutral when the user prefers reduced motion
    (the analyser vars are also stripped in this state, but be explicit). */
 [data-theme="audius"].reduced-motion
@@ -1526,6 +1563,28 @@
   .cubic-viewport.is-audius-visualizer
   .hexaclear-board {
   transform: none;
+  filter: none;
+  will-change: auto;
+}
+
+[data-theme="audius"].reduced-motion
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button:not(.unplayable)
+  .hexaclear-piece-svg,
+[data-theme="audius"]
+  .reduced-motion
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-piece-button:not(.unplayable)
+  .hexaclear-piece-svg,
+[data-theme="audius"].reduced-motion
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-hold:not(.unplayable)
+  .hexaclear-piece-svg,
+[data-theme="audius"]
+  .reduced-motion
+  .cubic-viewport.is-audius-visualizer
+  .hexaclear-hold:not(.unplayable)
+  .hexaclear-piece-svg {
   filter: none;
   will-change: auto;
 }

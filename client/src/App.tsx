@@ -10134,7 +10134,34 @@ function App() {
             viewBox={`0 0 ${boardLayout.width} ${boardLayout.height}`}
           >
             <defs>
-              
+              {/* About-to-clear highlight for the music visualizer theme.
+                  WebKit/iOS ignores CSS shorthand filter functions
+                  (invert(), hue-rotate(), ...) on inner SVG elements like
+                  <g>, so the CSS `filter: invert(1) ...` worked on desktop
+                  but silently did nothing on mobile. A real SVG <filter>
+                  referenced via filter: url(#...) is the natively supported
+                  path on WebKit, so it renders on mobile too. The primitives
+                  below reproduce invert(1) hue-rotate(180deg) saturate(2)
+                  brightness(1.28) in sRGB (to match CSS filter semantics). */}
+              {theme === 'audius' && (
+                <filter
+                  id="audius-clear-invert"
+                  colorInterpolationFilters="sRGB"
+                >
+                  <feComponentTransfer>
+                    <feFuncR type="table" tableValues="1 0" />
+                    <feFuncG type="table" tableValues="1 0" />
+                    <feFuncB type="table" tableValues="1 0" />
+                  </feComponentTransfer>
+                  <feColorMatrix type="hueRotate" values="180" />
+                  <feColorMatrix type="saturate" values="2" />
+                  <feComponentTransfer>
+                    <feFuncR type="linear" slope="1.28" />
+                    <feFuncG type="linear" slope="1.28" />
+                    <feFuncB type="linear" slope="1.28" />
+                  </feComponentTransfer>
+                </filter>
+              )}
               {rippleCells.length > 0 && rippleCenter && (
                 <mask
                   id="hexaclear-ripple-mask"
