@@ -1310,6 +1310,172 @@
   border-radius: 1.05rem;
 }
 
+/* ----- Music visualizer game-over screen ----------------------------------
+   The base game-over card leans on the warm wood palette (amber final score,
+   brown highlight-reel cubes, warm run-strip + dividers) which clashes with
+   the audius cyan/dark aesthetic. The generic overlay/button/section rules
+   above already cover the leaderboard, inputs and CTAs; these rules re-skin
+   the remaining game-over-specific pieces so the whole screen reads as part
+   of the visualizer theme. */
+[data-theme="audius"] .hexaclear-gameover-headline-value {
+  color: color-mix(in srgb, var(--audius-cube-top) 82%, #fff7d8);
+  text-shadow:
+    0 0 2px rgba(255, 255, 255, 0.7),
+    0 0 16px color-mix(in srgb, var(--audius-cube-left) 55%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-gameover-headline-label,
+[data-theme="audius"] .hexaclear-gameover-subhead {
+  color: color-mix(in srgb, var(--audius-cube-top) 46%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-gameover-daily-intro-copy {
+  color: color-mix(in srgb, var(--audius-cube-top) 40%, var(--audius-muted));
+}
+
+[data-theme="audius"]
+  .hexaclear-gameover-section
+  + .hexaclear-gameover-section {
+  border-top-color: color-mix(in srgb, var(--audius-cube-top) 14%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-run-strip {
+  border-block-color: color-mix(in srgb, var(--audius-cube-top) 16%, transparent);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--audius-cube-left) 4%, transparent),
+      color-mix(in srgb, var(--audius-cube-left) 14%, transparent),
+      color-mix(in srgb, var(--audius-cube-left) 4%, transparent)
+    );
+}
+
+[data-theme="audius"] .hexaclear-run-stat-value {
+  color: color-mix(in srgb, var(--audius-cube-top) 78%, #fff5c8);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--audius-cube-left) 30%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-run-stat-label {
+  color: color-mix(in srgb, var(--audius-cube-top) 46%, var(--audius-muted));
+}
+
+/* Highlight reel: recolor the mini-board to the cube palette. The ruby stays
+   red (a meaningful marker), so the cube rules skip .is-ruby. */
+[data-theme="audius"] .hexaclear-reel-title,
+[data-theme="audius"] .hexaclear-reel-caption {
+  color: color-mix(in srgb, var(--audius-cube-top) 56%, var(--audius-muted));
+}
+
+[data-theme="audius"] .hexaclear-reel-hex {
+  fill: rgba(5, 2, 8, 0.5);
+  stroke: color-mix(in srgb, var(--audius-cube-top) 16%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-reel-cube:not(.is-ruby) {
+  fill: color-mix(in srgb, var(--audius-cube-left) 80%, #0a2c30);
+  stroke: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="audius"]
+  .hexaclear-reel-cell.is-placed-now
+  .hexaclear-reel-cube:not(.is-ruby) {
+  fill: color-mix(in srgb, var(--audius-cube-top) 70%, #58e8d0);
+}
+
+[data-theme="audius"] .hexaclear-reel-points {
+  color: color-mix(in srgb, var(--audius-cube-top) 82%, #fff7d8);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--audius-cube-left) 50%, transparent),
+    0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* ----- Music visualizer profile / stats menu ------------------------------
+   The stats card content (summary masthead, performance panel, mode ledger,
+   record book, statlines) uses the warm wood palette. The card surface,
+   section labels and section backgrounds are already covered by the generic
+   rules above; these rules re-skin the remaining stats-specific content to
+   the cyan/dark visualizer look. */
+[data-theme="audius"] .hexaclear-profile-summary {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 18%, #30263b);
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      color-mix(in srgb, var(--audius-cube-left) 16%, transparent),
+      transparent 48%
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 60%),
+    rgba(2, 2, 7, 0.62);
+}
+
+[data-theme="audius"] .hexaclear-profile-summary-main,
+[data-theme="audius"] .hexaclear-performance-feature {
+  border-right-color: color-mix(in srgb, var(--audius-cube-top) 14%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-performance-panel {
+  border-block-color: color-mix(in srgb, var(--audius-cube-top) 16%, transparent);
+  background: color-mix(in srgb, var(--audius-cube-left) 6%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-mode-ledger-item {
+  border-color: color-mix(in srgb, var(--audius-cube-top) 16%, transparent);
+  background: color-mix(in srgb, var(--audius-cube-left) 6%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-profile-summary-line,
+[data-theme="audius"] .hexaclear-statline,
+[data-theme="audius"] .hexaclear-record-row {
+  border-bottom-color: color-mix(in srgb, var(--audius-cube-top) 12%, transparent);
+}
+
+/* Big numeric features get a teal glow; smaller values stay crisp cyan. */
+[data-theme="audius"] .hexaclear-profile-summary-value,
+[data-theme="audius"] .hexaclear-performance-feature-value,
+[data-theme="audius"] .hexaclear-record-value {
+  color: color-mix(in srgb, var(--audius-cube-top) 80%, #fff5c8);
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--audius-cube-left) 34%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="audius"] .hexaclear-statline-value,
+[data-theme="audius"] .hexaclear-profile-summary-line strong,
+[data-theme="audius"] .hexaclear-mode-ledger-value {
+  color: color-mix(in srgb, var(--audius-cube-top) 76%, #fff5c8);
+}
+
+[data-theme="audius"] .hexaclear-profile-summary-label,
+[data-theme="audius"] .hexaclear-performance-feature-label,
+[data-theme="audius"] .hexaclear-mode-ledger-label,
+[data-theme="audius"] .hexaclear-record-label,
+[data-theme="audius"] .hexaclear-statline-label,
+[data-theme="audius"] .hexaclear-profile-summary-line span,
+[data-theme="audius"] .hexaclear-stats-tracking-since {
+  color: color-mix(in srgb, var(--audius-cube-top) 44%, var(--audius-muted));
+}
+
+/* ----- Music visualizer secondary buttons ---------------------------------
+   The board Undo button and the "Back" buttons in the menu sub-screens
+   (profile/stats, scoring, scores, account) use the warm orange pill by
+   default — the generic overlay-button rule above deliberately skips
+   .hexaclear-reset. Re-skin them as the theme's dark-glass secondary button
+   so they match the rest of the visualizer chrome. The history Close and the
+   resume/new-game heroes keep their own dedicated bright treatments. */
+[data-theme="audius"] .hexaclear-undo-button,
+[data-theme="audius"] .hexaclear-stats-card .hexaclear-reset,
+[data-theme="audius"] .hexaclear-scoring-card .hexaclear-reset,
+[data-theme="audius"] .hexaclear-scores-card .hexaclear-reset,
+[data-theme="audius"] .hexaclear-account-card .hexaclear-reset {
+  border: 1px solid color-mix(in srgb, var(--audius-cube-top) 28%, #30263b);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent),
+    rgba(5, 4, 11, 0.82);
+  color: color-mix(in srgb, var(--audius-cube-top) 70%, #f2d8a6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 12px color-mix(in srgb, var(--audius-cube-left) 18%, transparent);
+}
+
 [data-theme="audius"] .hexaclear-menu-zone,
 [data-theme="audius"] .hexaclear-menu-settings-zone,
 [data-theme="audius"] .hexaclear-menu-settings-body,
