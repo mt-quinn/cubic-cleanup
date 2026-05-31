@@ -442,7 +442,7 @@
 }
 
 [data-theme="audius"] .hexaclear-main {
-  justify-content: start;
+  justify-content: center;
   gap: clamp(0.42rem, 0.9dvh, 0.62rem);
 }
 
