@@ -137,17 +137,71 @@ type AudiusTrack = {
   title: string
   duration: number
   bpm: number | null
+  userId?: string
+  playlistsContainingTrackIds?: number[]
+  albumBacklinkId?: number | string
   user?: {
+    id?: string
     name?: string
     handle?: string
   }
 }
+
+type AudiusCollection = {
+  id: string
+  name: string
+  isAlbum: boolean
+  playlistId: number | null
+  userId?: string
+  trackIds: string[]
+  trackCount: number
+}
+
+type AudiusAlbumQueue = {
+  id: string
+  name: string
+  tracks: AudiusTrack[]
+}
+
+type PlayAudiusTrackOptions = {
+  resolveAlbum?: boolean
+}
+
+type AudiusRepeatMode = 'none' | 'album' | 'track'
+type AudiusAlbumResolveStatus = 'idle' | 'resolving' | 'resolved'
 
 const AUDIUS_APP_NAME = 'cubekill-visualizer-poc'
 const AUDIUS_API_BASE = 'https://discoveryprovider.audius.co/v1'
 const AUDIUS_ANALYSER_SILENT_FRAME_LIMIT = 90
 const AUDIUS_ANALYSER_SILENCE_EPSILON = 1
 const AUDIUS_MIN_DYNAMIC_RANGE = 14
+
+const buildAudiusApiUrl = (
+  path: string,
+  params: Record<string, string | number | boolean> = {},
+): string => {
+  const search = new URLSearchParams({ app_name: AUDIUS_APP_NAME })
+  Object.entries(params).forEach(([key, value]) => {
+    search.set(key, String(value))
+  })
+  return `${AUDIUS_API_BASE}${path}?${search.toString()}`
+}
+
+const normalizeAudiusPlaylistIds = (value: unknown): number[] => {
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is number => typeof id === 'number')
+}
+
+const normalizeAudiusAlbumBacklinkId = (
+  value: unknown,
+): number | string | undefined => {
+  if (typeof value === 'number' || typeof value === 'string') return value
+  if (!value || typeof value !== 'object') return undefined
+  const item = value as { id?: unknown; playlist_id?: unknown }
+  if (typeof item.id === 'string' || typeof item.id === 'number') return item.id
+  if (typeof item.playlist_id === 'number') return item.playlist_id
+  return undefined
+}
 
 const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
   if (!Array.isArray(data)) return []
@@ -159,23 +213,38 @@ const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
         title?: unknown
         duration?: unknown
         bpm?: unknown
+        user_id?: unknown
         user?: unknown
         is_stream_gated?: unknown
+        playlists_containing_track?: unknown
+        album_backlink?: unknown
       }
       if (item.is_stream_gated === true) return null
       if (typeof item.id !== 'string') return null
       if (typeof item.title !== 'string' || item.title.trim() === '') return null
       const user =
         item.user && typeof item.user === 'object'
-          ? (item.user as { name?: unknown; handle?: unknown })
+          ? (item.user as { id?: unknown; name?: unknown; handle?: unknown })
           : undefined
+      const userId =
+        typeof item.user_id === 'string'
+          ? item.user_id
+          : typeof user?.id === 'string'
+            ? user.id
+            : undefined
       return {
         id: item.id,
         title: item.title,
         duration: typeof item.duration === 'number' ? item.duration : 0,
         bpm: typeof item.bpm === 'number' && item.bpm > 0 ? item.bpm : null,
+        userId,
+        playlistsContainingTrackIds: normalizeAudiusPlaylistIds(
+          item.playlists_containing_track,
+        ),
+        albumBacklinkId: normalizeAudiusAlbumBacklinkId(item.album_backlink),
         user: user
           ? {
+              id: typeof user.id === 'string' ? user.id : undefined,
               name: typeof user.name === 'string' ? user.name : undefined,
               handle: typeof user.handle === 'string' ? user.handle : undefined,
             }
@@ -183,6 +252,64 @@ const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
       }
     })
     .filter((track): track is AudiusTrack => track != null)
+}
+
+const normalizeAudiusCollections = (data: unknown): AudiusCollection[] => {
+  if (!Array.isArray(data)) return []
+  return data
+    .map((raw): AudiusCollection | null => {
+      if (!raw || typeof raw !== 'object') return null
+      const item = raw as {
+        id?: unknown
+        playlist_id?: unknown
+        playlist_name?: unknown
+        playlistName?: unknown
+        is_album?: unknown
+        isAlbum?: unknown
+        user_id?: unknown
+        user?: unknown
+        track_count?: unknown
+        playlist_contents?: unknown
+      }
+      if (typeof item.id !== 'string') return null
+      const name =
+        typeof item.playlist_name === 'string'
+          ? item.playlist_name
+          : typeof item.playlistName === 'string'
+            ? item.playlistName
+            : ''
+      if (!name.trim()) return null
+      const user =
+        item.user && typeof item.user === 'object'
+          ? (item.user as { id?: unknown })
+          : undefined
+      const trackIds = Array.isArray(item.playlist_contents)
+        ? item.playlist_contents
+            .map((entry) => {
+              if (!entry || typeof entry !== 'object') return null
+              const trackId = (entry as { track_id?: unknown }).track_id
+              return typeof trackId === 'string' ? trackId : null
+            })
+            .filter((trackId): trackId is string => trackId != null)
+        : []
+      return {
+        id: item.id,
+        name,
+        isAlbum: item.is_album === true || item.isAlbum === true,
+        playlistId:
+          typeof item.playlist_id === 'number' ? item.playlist_id : null,
+        userId:
+          typeof item.user_id === 'string'
+            ? item.user_id
+            : typeof user?.id === 'string'
+              ? user.id
+              : undefined,
+        trackIds,
+        trackCount:
+          typeof item.track_count === 'number' ? item.track_count : trackIds.length,
+      }
+    })
+    .filter((collection): collection is AudiusCollection => collection != null)
 }
 
 const formatAudiusDuration = (seconds: number): string => {
@@ -3188,7 +3315,10 @@ function App() {
   const audiusLastVisualFrameAtRef = useRef(0)
   const audiusSilentFrameCountRef = useRef(0)
   const audiusAnalyserWarningShownRef = useRef(false)
+  const audiusAlbumResolveTokenRef = useRef(0)
   const [audiusTracks, setAudiusTracks] = useState<AudiusTrack[]>([])
+  const [audiusAlbumQueue, setAudiusAlbumQueue] =
+    useState<AudiusAlbumQueue | null>(null)
   const [audiusSelectedTrackId, setAudiusSelectedTrackId] = useState<
     string | null
   >(null)
@@ -3197,25 +3327,40 @@ function App() {
     'idle' | 'loading' | 'playing' | 'paused' | 'error'
   >('idle')
   const [audiusError, setAudiusError] = useState<string | null>(null)
-  const [audiusAnalyserLive, setAudiusAnalyserLive] = useState(false)
+  const [, setAudiusAnalyserLive] = useState(false)
   const [audiusBeatToken, setAudiusBeatToken] = useState(0)
   const [audiusTitleCardCollapsed, setAudiusTitleCardCollapsed] =
     useState(false)
+  const [audiusAutoTitleTrackId, setAudiusAutoTitleTrackId] = useState<
+    string | null
+  >(null)
+  const [audiusRepeatMode, setAudiusRepeatMode] =
+    useState<AudiusRepeatMode>('album')
+  const [audiusAlbumResolveStatus, setAudiusAlbumResolveStatus] =
+    useState<AudiusAlbumResolveStatus>('idle')
+  const [showAudiusSearch, setShowAudiusSearch] = useState(false)
+  const [showAudiusVolume, setShowAudiusVolume] = useState(false)
+  const audiusTrackTitleFrameRef = useRef<HTMLSpanElement | null>(null)
+  const audiusTrackTitleTextRef = useRef<HTMLSpanElement | null>(null)
+  const [audiusTrackTitleScrollPx, setAudiusTrackTitleScrollPx] = useState(0)
   const [audiusVolume, setAudiusVolume] = useState(() => {
     if (typeof window === 'undefined') return 0.65
     const raw = window.localStorage.getItem('cubic-audius-volume')
     const parsed = raw == null ? Number.NaN : Number(raw)
     return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0.65
   })
+  const [audiusPlaybackPosition, setAudiusPlaybackPosition] = useState(0)
+  const [audiusPlaybackDuration, setAudiusPlaybackDuration] = useState(0)
   const loadAudiusTracks = useCallback(async (query?: string) => {
+    audiusAlbumResolveTokenRef.current += 1
+    setAudiusAlbumQueue(null)
+    setAudiusAlbumResolveStatus('idle')
     setAudiusStatus((current) => (current === 'playing' ? current : 'loading'))
     setAudiusError(null)
     const trimmed = query?.trim() ?? ''
     const endpoint = trimmed
-      ? `${AUDIUS_API_BASE}/tracks/search?query=${encodeURIComponent(
-          trimmed,
-        )}&app_name=${AUDIUS_APP_NAME}&limit=8`
-      : `${AUDIUS_API_BASE}/tracks/trending?app_name=${AUDIUS_APP_NAME}&limit=8`
+      ? buildAudiusApiUrl('/tracks/search', { query: trimmed, limit: 8 })
+      : buildAudiusApiUrl('/tracks/trending', { limit: 8 })
     try {
       const res = await fetch(endpoint)
       if (!res.ok) throw new Error(`Audius returned ${res.status}`)
@@ -3282,12 +3427,139 @@ function App() {
       gain.gain.setTargetAtTime(audiusVolume, now, 0.025)
     }
   }, [audiusVolume])
+  const resolveAudiusAlbumQueueForTrack = useCallback(
+    async (trackId: string) => {
+      const token = ++audiusAlbumResolveTokenRef.current
+      setAudiusAlbumQueue(null)
+      setAudiusAlbumResolveStatus('resolving')
+      const fetchAudiusData = async (url: string): Promise<unknown> => {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`Audius returned ${res.status}`)
+        const json = (await res.json()) as { data?: unknown }
+        return json.data
+      }
+      const clearQueue = () => {
+        if (audiusAlbumResolveTokenRef.current === token) {
+          setAudiusAlbumQueue(null)
+          setAudiusAlbumResolveStatus('resolved')
+        }
+      }
+
+      try {
+        const localTrack = audiusTracks.find((track) => track.id === trackId)
+        let track = localTrack
+        if (
+          !track ||
+          !track.userId ||
+          track.playlistsContainingTrackIds === undefined
+        ) {
+          const data = await fetchAudiusData(
+            buildAudiusApiUrl(`/tracks/${encodeURIComponent(trackId)}`),
+          )
+          track = normalizeAudiusTracks([data])[0] ?? localTrack
+        }
+        const userId = track?.userId ?? track?.user?.id
+        if (!track || !userId) {
+          clearQueue()
+          return
+        }
+
+        const collectionUrls = [
+          buildAudiusApiUrl(`/users/${encodeURIComponent(userId)}/playlists`, {
+            limit: 100,
+          }),
+          buildAudiusApiUrl(`/users/${encodeURIComponent(userId)}/albums`, {
+            limit: 100,
+          }),
+        ]
+        const collectionResults = await Promise.allSettled(
+          collectionUrls.map((url) => fetchAudiusData(url)),
+        )
+        const collections = collectionResults.flatMap((result) =>
+          result.status === 'fulfilled'
+            ? normalizeAudiusCollections(result.value)
+            : [],
+        )
+        const containingCollections = collections.filter((collection) =>
+          collection.trackIds.includes(trackId),
+        )
+        if (containingCollections.length === 0) {
+          clearQueue()
+          return
+        }
+
+        const playlistIds = track.playlistsContainingTrackIds ?? []
+        const albumBacklink = track.albumBacklinkId
+        const [collection] = containingCollections.sort((a, b) => {
+          const score = (candidate: AudiusCollection): number => {
+            let value = 0
+            if (candidate.isAlbum) value += 80
+            if (candidate.name.toLowerCase().includes('album')) value += 40
+            if (
+              candidate.playlistId != null &&
+              playlistIds.includes(candidate.playlistId)
+            ) {
+              value += 20
+            }
+            if (
+              albumBacklink != null &&
+              (albumBacklink === candidate.id ||
+                albumBacklink === candidate.playlistId)
+            ) {
+              value += 120
+            }
+            value += Math.min(candidate.trackCount, 40) / 10
+            return value
+          }
+          return score(b) - score(a)
+        })
+        if (!collection) {
+          clearQueue()
+          return
+        }
+
+        const collectionTracks = normalizeAudiusTracks(
+          await fetchAudiusData(
+            buildAudiusApiUrl(
+              `/playlists/${encodeURIComponent(collection.id)}/tracks`,
+            ),
+          ),
+        )
+        if (
+          audiusAlbumResolveTokenRef.current !== token ||
+          !collectionTracks.some((candidate) => candidate.id === trackId) ||
+          collectionTracks.length <= 1
+        ) {
+          clearQueue()
+          return
+        }
+
+        setAudiusAlbumQueue({
+          id: collection.id,
+          name: collection.name,
+          tracks: collectionTracks,
+        })
+        setAudiusAlbumResolveStatus('resolved')
+        setAudiusTracks((prev) => {
+          const seen = new Set(prev.map((candidate) => candidate.id))
+          const additions = collectionTracks.filter(
+            (candidate) => !seen.has(candidate.id),
+          )
+          return additions.length > 0 ? [...prev, ...additions] : prev
+        })
+      } catch {
+        clearQueue()
+      }
+    },
+    [audiusTracks],
+  )
   const playAudiusTrack = useCallback(
-    async (trackId?: string | null) => {
+    async (trackId?: string | null, options: PlayAudiusTrackOptions = {}) => {
       const id = trackId ?? audiusSelectedTrackId ?? audiusTracks[0]?.id
       const audio = audiusAudioRef.current
-      if (!id || !audio) return
+      if (!id || !audio) return false
       setAudiusSelectedTrackId(id)
+      setShowAudiusVolume(false)
       setAudiusError(null)
       setAudiusStatus('loading')
       audiusEnergyFloorRef.current = 0
@@ -3304,6 +3576,7 @@ function App() {
       audiusSilentFrameCountRef.current = 0
       audiusAnalyserWarningShownRef.current = false
       setAudiusAnalyserLive(false)
+      setAudiusPlaybackPosition(0)
       audio.crossOrigin = 'anonymous'
       audio.volume = 1
       audio.src = `${AUDIUS_API_BASE}/tracks/${id}/stream?app_name=${AUDIUS_APP_NAME}`
@@ -3318,6 +3591,10 @@ function App() {
         }
         await audio.play()
         setAudiusStatus('playing')
+        if (options.resolveAlbum !== false) {
+          void resolveAudiusAlbumQueueForTrack(id)
+        }
+        return true
       } catch (error) {
         setAudiusError(
           error instanceof Error
@@ -3325,10 +3602,87 @@ function App() {
             : 'Browser blocked Audius playback.',
         )
         setAudiusStatus('error')
+        return false
       }
     },
-    [audiusSelectedTrackId, audiusTracks, ensureAudiusAnalyser],
+    [
+      audiusSelectedTrackId,
+      audiusTracks,
+      ensureAudiusAnalyser,
+      resolveAudiusAlbumQueueForTrack,
+    ],
   )
+  const getAdjacentAudiusTrack = useCallback(
+    (direction: 1 | -1): AudiusTrack | null => {
+      const queue = audiusAlbumQueue?.tracks ?? []
+      if (!audiusSelectedTrackId || queue.length <= 1) return null
+      const currentIndex = queue.findIndex(
+        (track) => track.id === audiusSelectedTrackId,
+      )
+      if (currentIndex < 0) return null
+      const nextIndex = currentIndex + direction
+      if (nextIndex >= 0 && nextIndex < queue.length) {
+        return queue[nextIndex] ?? null
+      }
+      if (audiusRepeatMode !== 'album') return null
+      return direction > 0 ? queue[0] ?? null : queue[queue.length - 1] ?? null
+    },
+    [audiusAlbumQueue, audiusRepeatMode, audiusSelectedTrackId],
+  )
+  const showAudiusAutoTitle = useCallback(
+    (trackId: string) => {
+      if (!audiusTitleCardCollapsed) return
+      setAudiusAutoTitleTrackId(trackId)
+    },
+    [audiusTitleCardCollapsed],
+  )
+  const playAdjacentAudiusTrack = useCallback(
+    async (direction: 1 | -1, automatic = false): Promise<boolean> => {
+      const track = getAdjacentAudiusTrack(direction)
+      if (!track) return false
+      const didPlay = await playAudiusTrack(track.id, { resolveAlbum: false })
+      if (didPlay && automatic) {
+        showAudiusAutoTitle(track.id)
+      }
+      return didPlay
+    },
+    [getAdjacentAudiusTrack, playAudiusTrack, showAudiusAutoTitle],
+  )
+  const playNextAudiusAlbumTrack = useCallback(async () => {
+    if (audiusRepeatMode === 'track' && audiusSelectedTrackId) {
+      const didPlay = await playAudiusTrack(audiusSelectedTrackId, {
+        resolveAlbum: false,
+      })
+      if (didPlay) return
+    }
+    if (await playAdjacentAudiusTrack(1, true)) {
+      return
+    }
+    setAudiusStatus('paused')
+  }, [
+    audiusRepeatMode,
+    audiusSelectedTrackId,
+    playAdjacentAudiusTrack,
+    playAudiusTrack,
+  ])
+  const toggleAudiusPlayPause = useCallback(async () => {
+    if (audiusStatus === 'playing') {
+      audiusAudioRef.current?.pause()
+      setAudiusStatus('paused')
+      return
+    }
+    await playAudiusTrack()
+  }, [audiusStatus, playAudiusTrack])
+  const cycleAudiusRepeatMode = useCallback(() => {
+    setAudiusRepeatMode((mode) =>
+      mode === 'none' ? 'album' : mode === 'album' ? 'track' : 'none',
+    )
+  }, [])
+  useEffect(() => {
+    if (!audiusAutoTitleTrackId) return
+    const id = window.setTimeout(() => setAudiusAutoTitleTrackId(null), 4200)
+    return () => window.clearTimeout(id)
+  }, [audiusAutoTitleTrackId])
   const [dailyHighScores, setDailyHighScores] = useState<DailyHighScoreEntry[]>(
     () => (typeof window === 'undefined' ? [] : loadDailyHighScores()),
   )
@@ -8365,7 +8719,15 @@ function App() {
         ? 'audius-ripple-even'
         : 'audius-ripple-odd'
       : ''
-  const selectedAudiusDeckTrack = audiusTracks.find(
+  const audiusTrackOptions = useMemo(() => {
+    const byId = new Map<string, AudiusTrack>()
+    audiusTracks.forEach((track) => byId.set(track.id, track))
+    audiusAlbumQueue?.tracks.forEach((track) => {
+      if (!byId.has(track.id)) byId.set(track.id, track)
+    })
+    return [...byId.values()]
+  }, [audiusAlbumQueue, audiusTracks])
+  const selectedAudiusDeckTrack = audiusTrackOptions.find(
     (track) => track.id === audiusSelectedTrackId,
   )
   const audiusDeckBestValue =
@@ -8379,20 +8741,63 @@ function App() {
     game.mode === 'daily' ? displayedCubesRemaining : game.score
   const audiusDeckTrackTitle =
     selectedAudiusDeckTrack?.title ?? 'Choose a track in Settings'
-  const audiusDeckTrackArtist =
+  const audiusDeckTrackArtistName =
     selectedAudiusDeckTrack?.user?.name ??
     selectedAudiusDeckTrack?.user?.handle ??
     'Audius'
-  const audiusDeckStatus =
-    audiusStatus === 'playing'
-      ? audiusAnalyserLive
-        ? 'Analyser live'
-        : 'Warming analyser'
-      : audiusStatus === 'loading'
-        ? 'Loading'
-        : audiusStatus === 'error'
-          ? 'Stream error'
-          : 'Ready'
+  const audiusDeckTrackArtist = audiusAlbumQueue
+    ? `${audiusDeckTrackArtistName} · ${audiusAlbumQueue.name}`
+    : audiusDeckTrackArtistName
+  const audiusProgressDuration =
+    audiusPlaybackDuration > 0
+      ? audiusPlaybackDuration
+      : selectedAudiusDeckTrack?.duration ?? 0
+  const audiusProgressValue = Math.min(
+    Math.max(audiusPlaybackPosition, 0),
+    Math.max(audiusProgressDuration, 0),
+  )
+  const audiusTitleCardPeeking =
+    audiusTitleCardCollapsed && audiusAutoTitleTrackId != null
+  const audiusPreviousTrack = getAdjacentAudiusTrack(-1)
+  const audiusNextTrack = getAdjacentAudiusTrack(1)
+  const audiusAlbumResolving = audiusAlbumResolveStatus === 'resolving'
+  const audiusAlbumResolved = audiusAlbumResolveStatus === 'resolved'
+  const audiusPreviousDisabled =
+    !selectedAudiusDeckTrack ||
+    audiusStatus === 'loading' ||
+    audiusAlbumResolving ||
+    (audiusAlbumResolved && !audiusPreviousTrack)
+  const audiusNextDisabled =
+    !selectedAudiusDeckTrack ||
+    audiusStatus === 'loading' ||
+    audiusAlbumResolving ||
+    (audiusAlbumResolved && !audiusNextTrack)
+  useLayoutEffect(() => {
+    const frame = audiusTrackTitleFrameRef.current
+    const text = audiusTrackTitleTextRef.current
+    if (!frame || !text) {
+      setAudiusTrackTitleScrollPx(0)
+      return
+    }
+
+    const measure = () => {
+      const overflow = Math.ceil(text.scrollWidth - frame.clientWidth)
+      setAudiusTrackTitleScrollPx(overflow > 4 ? overflow : 0)
+    }
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(frame)
+    observer.observe(text)
+    return () => observer.disconnect()
+  }, [audiusDeckTrackTitle, audiusTitleCardCollapsed, audiusTitleCardPeeking])
+  const audiusRepeatLabel =
+    audiusRepeatMode === 'album'
+      ? 'Repeat album'
+      : audiusRepeatMode === 'track'
+        ? 'Repeat track'
+        : 'Repeat off'
   return (
     <div
       className={[
@@ -8421,13 +8826,151 @@ function App() {
         crossOrigin="anonymous"
         onPlay={() => setAudiusStatus('playing')}
         onPause={() => setAudiusStatus((s) => (s === 'playing' ? 'paused' : s))}
-        onEnded={() => setAudiusStatus('paused')}
+        onTimeUpdate={(e) => {
+          const audio = e.currentTarget
+          setAudiusPlaybackPosition(
+            Number.isFinite(audio.currentTime) ? audio.currentTime : 0,
+          )
+        }}
+        onDurationChange={(e) => {
+          const audio = e.currentTarget
+          setAudiusPlaybackDuration(
+            Number.isFinite(audio.duration) ? audio.duration : 0,
+          )
+        }}
+        onLoadedMetadata={(e) => {
+          const audio = e.currentTarget
+          setAudiusPlaybackDuration(
+            Number.isFinite(audio.duration) ? audio.duration : 0,
+          )
+        }}
+        onEnded={() => {
+          void playNextAudiusAlbumTrack()
+        }}
         onError={() => {
           if (theme !== 'audius') return
           setAudiusStatus('error')
           setAudiusError('Audius playback failed for this track.')
         }}
       />
+      {theme === 'audius' && showAudiusSearch && (
+        <div
+          className="hexaclear-audius-search-window-backdrop"
+          role="presentation"
+        >
+          <section
+            className="hexaclear-audius-search-window"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search Audius tracks"
+          >
+            <div className="hexaclear-audius-search-window-head">
+              <div>
+                <span className="track-label">Audius Library</span>
+                <h2>Search tracks</h2>
+              </div>
+              <button
+                type="button"
+                className="hexaclear-audius-window-close"
+                onClick={() => {
+                  playUiClick()
+                  setShowAudiusSearch(false)
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <div className="hexaclear-audius-search-row">
+              <input
+                className="hexaclear-audius-search"
+                type="search"
+                value={audiusSearchQuery}
+                placeholder="Search Audius tracks"
+                onChange={(e) => setAudiusSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  playUiClick()
+                  void loadAudiusTracks(audiusSearchQuery)
+                }}
+                aria-label="Search Audius tracks"
+              />
+              <button
+                type="button"
+                className="hexaclear-menu-chip"
+                onClick={() => {
+                  playUiClick()
+                  void loadAudiusTracks(audiusSearchQuery)
+                }}
+                disabled={audiusStatus === 'loading'}
+              >
+                Search
+              </button>
+            </div>
+            <label className="hexaclear-audius-field">
+              <span>Track</span>
+              <select
+                className="hexaclear-menu-settings-select"
+                value={audiusSelectedTrackId ?? ''}
+                onChange={(e) => {
+                  audiusAlbumResolveTokenRef.current += 1
+                  setAudiusAlbumQueue(null)
+                  setAudiusAlbumResolveStatus('idle')
+                  setAudiusAutoTitleTrackId(null)
+                  setShowAudiusVolume(false)
+                  setAudiusSelectedTrackId(e.target.value)
+                  playUiClick()
+                }}
+                aria-label="Audius track"
+              >
+                {audiusTrackOptions.length === 0 ? (
+                  <option value="">Load tracks...</option>
+                ) : (
+                  audiusTrackOptions.map((track) => (
+                    <option key={track.id} value={track.id}>
+                      {track.title}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <div className="hexaclear-audius-search-window-actions">
+              <button
+                type="button"
+                className="hexaclear-menu-chip"
+                onClick={() => {
+                  playUiClick()
+                  void playAudiusTrack()
+                }}
+                disabled={
+                  audiusStatus === 'loading' || audiusTrackOptions.length === 0
+                }
+              >
+                Play selected
+              </button>
+              <button
+                type="button"
+                className="hexaclear-menu-chip"
+                onClick={() => {
+                  playUiClick()
+                  setShowAudiusSearch(false)
+                }}
+              >
+                Done
+              </button>
+            </div>
+            <p className="hexaclear-audius-meta">
+              {selectedAudiusDeckTrack
+                ? `${audiusDeckTrackArtist} · ${formatAudiusDuration(
+                    selectedAudiusDeckTrack.duration,
+                  )}`
+                : 'Search Audius, choose a track, then press Play.'}
+            </p>
+            {audiusError && (
+              <p className="hexaclear-audius-error">{audiusError}</p>
+            )}
+          </section>
+        </div>
+      )}
       {/* Win98 app titlebar — only visible when [data-theme="win98"] is
           active. Window controls are visual-only; closing/minimizing a
           web app doesn't make sense. Kept always-mounted so theme swaps
@@ -9158,71 +9701,271 @@ function App() {
           <section
             className={[
               'hexaclear-audius-title-card',
-              audiusTitleCardCollapsed ? 'is-collapsed' : '',
+              audiusTitleCardCollapsed && !audiusTitleCardPeeking
+                ? 'is-collapsed'
+                : '',
+              audiusTitleCardPeeking ? 'is-peeking' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             aria-label="Music visualizer track"
             aria-hidden={theme !== 'audius'}
           >
-            <button
-              type="button"
-              className="hexaclear-audius-title-toggle"
-              onClick={() => {
-                playUiClick()
-                setAudiusTitleCardCollapsed((collapsed) => !collapsed)
-              }}
-              aria-expanded={!audiusTitleCardCollapsed}
-            >
-              {audiusTitleCardCollapsed ? 'Show track' : 'Hide'}
-            </button>
-            <div className="hexaclear-audius-title-copy">
-              <span className="track-label">Now playing</span>
-              <span className="track-title">{audiusDeckTrackTitle}</span>
-              <span className="track-artist">
-                {audiusDeckTrackArtist}
-                {selectedAudiusDeckTrack
-                  ? ` · ${formatAudiusDuration(selectedAudiusDeckTrack.duration)}`
-                  : ''}
-              </span>
-            </div>
-            <div
-              className="hexaclear-audius-spectrum"
-              aria-label={`Music visualizer status: ${audiusDeckStatus}`}
-            >
-              <span className="spectrum-bar spectrum-bass" />
-              <span className="spectrum-bar spectrum-mid" />
-              <span className="spectrum-bar spectrum-treble" />
-              <span className="spectrum-bar spectrum-onset" />
-              <span className="spectrum-state">{audiusDeckStatus}</span>
-            </div>
-            <div className="hexaclear-audius-transport-actions">
+            {audiusTitleCardPeeking ? (
               <button
                 type="button"
-                className="hexaclear-audius-transport-button is-primary"
+                className="hexaclear-audius-title-peek"
                 onClick={() => {
                   playUiClick()
-                  void playAudiusTrack()
+                  setAudiusAutoTitleTrackId(null)
+                  setAudiusTitleCardCollapsed(false)
                 }}
-                disabled={
-                  audiusStatus === 'loading' || audiusTracks.length === 0
-                }
               >
-                {audiusStatus === 'playing' ? 'Restart' : 'Play'}
+                <span className="track-label">Now playing</span>
+                <span className="track-title">{audiusDeckTrackTitle}</span>
               </button>
-              <button
-                type="button"
-                className="hexaclear-audius-transport-button"
-                onClick={() => {
-                  playUiClick()
-                  audiusAudioRef.current?.pause()
-                  setAudiusStatus('paused')
-                }}
-                disabled={audiusStatus !== 'playing'}
-              >
-                Pause
-              </button>
-            </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="hexaclear-audius-title-toggle"
+                  onClick={() => {
+                    playUiClick()
+                    setAudiusAutoTitleTrackId(null)
+                    setShowAudiusVolume(false)
+                    setAudiusTitleCardCollapsed((collapsed) => !collapsed)
+                  }}
+                  aria-expanded={!audiusTitleCardCollapsed}
+                >
+                  {audiusTitleCardCollapsed ? 'Show track' : 'Hide'}
+                </button>
+                <div className="hexaclear-audius-title-copy">
+                  <span className="track-label">Now playing</span>
+                  <span
+                    ref={audiusTrackTitleFrameRef}
+                    className={[
+                      'track-title',
+                      audiusTrackTitleScrollPx > 0 ? 'is-overflowing' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    style={
+                      {
+                        '--audius-title-scroll-distance': `${audiusTrackTitleScrollPx}px`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    <span
+                      ref={audiusTrackTitleTextRef}
+                      className="track-title-text"
+                    >
+                      {audiusDeckTrackTitle}
+                    </span>
+                  </span>
+                  <span className="track-artist">
+                    {audiusDeckTrackArtist}
+                    {selectedAudiusDeckTrack
+                      ? ` · ${formatAudiusDuration(
+                          selectedAudiusDeckTrack.duration,
+                        )}`
+                      : ''}
+                  </span>
+                </div>
+                <label className="hexaclear-audius-progress">
+                  <input
+                    type="range"
+                    min="0"
+                    max={Math.max(1, Math.ceil(audiusProgressDuration))}
+                    value={Math.round(audiusProgressValue)}
+                    onChange={(e) => {
+                      const next = Number(e.target.value)
+                      const audio = audiusAudioRef.current
+                      if (audio && Number.isFinite(next)) {
+                        audio.currentTime = next
+                      }
+                      setAudiusPlaybackPosition(
+                        Number.isFinite(next) ? next : 0,
+                      )
+                    }}
+                    aria-label="Track progress"
+                  />
+                  <span className="hexaclear-audius-progress-time">
+                    {formatAudiusDuration(audiusProgressValue)} /{' '}
+                    {formatAudiusDuration(audiusProgressDuration)}
+                  </span>
+                </label>
+                <div
+                  className="hexaclear-audius-spectrum"
+                  aria-label="Music visualizer levels"
+                >
+                  <span className="spectrum-bar spectrum-bass" />
+                  <span className="spectrum-bar spectrum-mid" />
+                  <span className="spectrum-bar spectrum-treble" />
+                  <span className="spectrum-bar spectrum-onset" />
+                </div>
+                <div className="hexaclear-audius-media-controls">
+                  <div className="hexaclear-audius-media-button-row">
+                    <div className="hexaclear-audius-primary-transport">
+                      <button
+                        type="button"
+                        className={[
+                          'hexaclear-audius-media-button',
+                          audiusAlbumResolving ? 'is-resolving' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          playUiClick()
+                          void playAdjacentAudiusTrack(-1)
+                        }}
+                        disabled={audiusPreviousDisabled}
+                        aria-label="Previous track"
+                      >
+                        {audiusAlbumResolving ? (
+                          <span className="hexaclear-audius-spinner" aria-hidden="true" />
+                        ) : (
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 5v14" />
+                            <path d="M19 6 9 12l10 6V6Z" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="hexaclear-audius-media-button is-primary is-play-pause"
+                        onClick={() => {
+                          playUiClick()
+                          void toggleAudiusPlayPause()
+                        }}
+                        disabled={
+                          audiusStatus === 'loading' ||
+                          audiusTrackOptions.length === 0
+                        }
+                        aria-label={
+                          audiusStatus === 'playing' ? 'Pause track' : 'Play track'
+                        }
+                      >
+                        {audiusStatus === 'playing' ? (
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M8 5v14" />
+                            <path d="M16 5v14" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M8 5.5 18 12 8 18.5V5.5Z" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className={[
+                          'hexaclear-audius-media-button',
+                          audiusAlbumResolving ? 'is-resolving' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          playUiClick()
+                          void playAdjacentAudiusTrack(1)
+                        }}
+                        disabled={audiusNextDisabled}
+                        aria-label="Next track"
+                      >
+                        {audiusAlbumResolving ? (
+                          <span className="hexaclear-audius-spinner" aria-hidden="true" />
+                        ) : (
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M18 5v14" />
+                            <path d="M5 6l10 6-10 6V6Z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <div className="hexaclear-audius-secondary-controls">
+                      <button
+                        type="button"
+                        className={[
+                          'hexaclear-audius-media-button',
+                          'is-secondary',
+                          'is-repeat',
+                          audiusRepeatMode !== 'none' ? 'is-active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          playUiClick()
+                          cycleAudiusRepeatMode()
+                        }}
+                        aria-label={audiusRepeatLabel}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M7 7h8.4c2.2 0 4 1.8 4 4 0 1.2-.5 2.3-1.4 3.1" />
+                          <path d="m16 4 3.4 3L16 10" />
+                          <path d="M17 17H8.6c-2.2 0-4-1.8-4-4 0-1.2.5-2.3 1.4-3.1" />
+                          <path d="m8 20-3.4-3L8 14" />
+                          {audiusRepeatMode === 'track' && (
+                            <text x="12" y="15" textAnchor="middle">
+                              1
+                            </text>
+                          )}
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className={[
+                          'hexaclear-audius-media-button',
+                          'is-secondary',
+                          showAudiusVolume ? 'is-active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          playUiClick()
+                          setShowAudiusVolume((shown) => !shown)
+                        }}
+                        aria-label="Music volume"
+                        aria-expanded={showAudiusVolume}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M5 9v6h4l6 4V5L9 9H5Z" />
+                          <path d="M18 9.5c.8 1.4.8 3.6 0 5" />
+                          <path d="M20.5 7c1.8 2.8 1.8 7.2 0 10" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="hexaclear-audius-media-button is-secondary"
+                        onClick={() => {
+                          playUiClick()
+                          setShowAudiusSearch(true)
+                        }}
+                        aria-label="Search Audius tracks"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="10.5" cy="10.5" r="5.5" />
+                          <path d="m15 15 4.5 4.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {showAudiusVolume && (
+                    <label className="hexaclear-audius-mini-volume">
+                      <span>Volume</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={Math.round(audiusVolume * 100)}
+                        onChange={(e) => {
+                          setAudiusVolume(Number(e.target.value) / 100)
+                        }}
+                        aria-label="Audius music volume"
+                      />
+                    </label>
+                  )}
+                </div>
+              </>
+            )}
           </section>
           {previewTerritoryDelta && (() => {
             // PvP territory-delta chip. Floats above the board near
@@ -12474,7 +13217,7 @@ function App() {
                     : theme === 'audius'
                       ? 'Audius'
                       : 'Cubekill'
-                const selectedAudiusTrack = audiusTracks.find(
+                const selectedAudiusTrack = audiusTrackOptions.find(
                   (track) => track.id === audiusSelectedTrackId,
                 )
                 const menuAccountSummary = authLoading
@@ -12792,106 +13535,17 @@ function App() {
                               <div className="hexaclear-audius-panel">
                                 <div className="hexaclear-audius-panel-head">
                                   <span>Music source</span>
-                                  <span>Audius</span>
-                                </div>
-                                <div className="hexaclear-audius-search-row">
-                                  <input
-                                    className="hexaclear-audius-search"
-                                    type="search"
-                                    value={audiusSearchQuery}
-                                    placeholder="Search Audius tracks"
-                                    onChange={(e) =>
-                                      setAudiusSearchQuery(e.target.value)
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key !== 'Enter') return
-                                      playUiClick()
-                                      void loadAudiusTracks(audiusSearchQuery)
-                                    }}
-                                    aria-label="Search Audius tracks"
-                                  />
                                   <button
                                     type="button"
                                     className="hexaclear-menu-chip"
                                     onClick={() => {
                                       playUiClick()
-                                      void loadAudiusTracks(audiusSearchQuery)
+                                      setShowAudiusSearch(true)
                                     }}
-                                    disabled={audiusStatus === 'loading'}
                                   >
                                     Search
                                   </button>
                                 </div>
-                                <label className="hexaclear-audius-field">
-                                  <span>Track</span>
-                                  <select
-                                    className="hexaclear-menu-settings-select"
-                                    value={audiusSelectedTrackId ?? ''}
-                                    onChange={(e) => {
-                                      setAudiusSelectedTrackId(e.target.value)
-                                      playUiClick()
-                                    }}
-                                    aria-label="Audius track"
-                                  >
-                                    {audiusTracks.length === 0 ? (
-                                      <option value="">Load tracks...</option>
-                                    ) : (
-                                      audiusTracks.map((track) => (
-                                        <option key={track.id} value={track.id}>
-                                          {track.title}
-                                        </option>
-                                      ))
-                                    )}
-                                  </select>
-                                </label>
-                                <div className="hexaclear-audius-controls">
-                                  <button
-                                    type="button"
-                                    className="hexaclear-menu-chip"
-                                    onClick={() => {
-                                      playUiClick()
-                                      void playAudiusTrack()
-                                    }}
-                                    disabled={
-                                      audiusStatus === 'loading' ||
-                                      audiusTracks.length === 0
-                                    }
-                                  >
-                                    {audiusStatus === 'playing'
-                                      ? 'Restart track'
-                                      : 'Play track'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="hexaclear-menu-chip"
-                                    onClick={() => {
-                                      playUiClick()
-                                      audiusAudioRef.current?.pause()
-                                      setAudiusStatus('paused')
-                                    }}
-                                    disabled={audiusStatus !== 'playing'}
-                                  >
-                                    Pause
-                                  </button>
-                                </div>
-                                <label className="hexaclear-audius-volume">
-                                  <span>Music volume</span>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={Math.round(audiusVolume * 100)}
-                                    onChange={(e) => {
-                                      setAudiusVolume(
-                                        Number(e.target.value) / 100,
-                                      )
-                                    }}
-                                    aria-label="Audius music volume"
-                                  />
-                                  <output>
-                                    {Math.round(audiusVolume * 100)}%
-                                  </output>
-                                </label>
                                 <p className="hexaclear-audius-meta">
                                   {selectedAudiusTrack
                                     ? `${
@@ -12899,18 +13553,16 @@ function App() {
                                         selectedAudiusTrack.user?.handle ??
                                         'Audius artist'
                                       } · ${
+                                        audiusAlbumQueue
+                                          ? `${audiusAlbumQueue.name} · `
+                                          : ''
+                                      }${
                                         selectedAudiusTrack.bpm
                                           ? `${selectedAudiusTrack.bpm} BPM`
                                           : 'BPM unknown'
                                       } · ${formatAudiusDuration(
                                         selectedAudiusTrack.duration,
-                                      )} · ${
-                                        audiusAnalyserLive
-                                          ? 'Analyser live'
-                                          : audiusStatus === 'playing'
-                                            ? 'Analyser warming up'
-                                            : 'Analyser idle'
-                                      }`
+                                      )}`
                                     : 'Search Audius, choose a track, then press Play.'}
                                 </p>
                                 {audiusError && (
