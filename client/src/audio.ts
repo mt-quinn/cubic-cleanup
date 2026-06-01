@@ -359,6 +359,38 @@ const buildAudioContext = (): AudioContext | null => {
   return ctx
 }
 
+// ---- Audio session category -------------------------------------------
+//
+// By default iOS Safari treats our audio — especially the music-visualizer
+// <audio> element, which is a real HTMLMediaElement — as primary
+// "playback". That seizes the Now-Playing / lock-screen session and pauses
+// whatever the user had going in other apps. Declaring the page's audio
+// session as 'ambient' tells the platform our audio is non-primary: it
+// mixes with other apps' audio instead of interrupting it, and obeys the
+// hardware mute switch. The mute-switch behavior is not a regression for a
+// browser game, which is already governed by it.
+//
+// The AudioSession API is Safari-only (16.4+) and still experimental, so we
+// feature-detect and set it best-effort. It's a document-global setting, so
+// a single call governs both this SFX context and the visualizer's separate
+// AudioContext. We reassert it on every gesture-driven unlock because an
+// iOS audio-session interruption can reset the category out from under us.
+
+type AudioSessionLike = { type?: string }
+
+const configureAudioSession = () => {
+  if (typeof navigator === 'undefined') return
+  const session = (
+    navigator as Navigator & { audioSession?: AudioSessionLike }
+  ).audioSession
+  if (!session) return
+  try {
+    if (session.type !== 'ambient') session.type = 'ambient'
+  } catch {
+    // Unsupported value or a locked session — best-effort, just no-op.
+  }
+}
+
 // ---- Visibility / focus hooks -----------------------------------------
 //
 // These do NOT touch the AudioContext directly — touching it outside a
@@ -451,6 +483,10 @@ const installVisibilityHooks = () => {
 // is no longer required; the menu can stay closed on cold load.
 installVisibilityHooks()
 
+// Declare the page's audio as mixable up front so the platform never
+// boots us into a Now-Playing-stealing session in the first place.
+configureAudioSession()
+
 // ---- Public unlock path -----------------------------------------------
 
 // Must be called from inside a user gesture so the AudioContext can move
@@ -465,6 +501,10 @@ installVisibilityHooks()
 // recover from an iOS audio-session steal.
 export const unlockAudioOnGesture = () => {
   if (typeof window === 'undefined') return
+
+  // Reassert the mixable session category — an iOS interruption while we
+  // were hidden can silently reset it back to 'playback'.
+  configureAudioSession()
 
   // If we're returning from a hidden-page round-trip, the existing
   // context — if any — is suspect. Close it now, inside the gesture,
