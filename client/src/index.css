@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Monoton&family=Orbitron:wght@700;900&family=Nunito:wght@400;600;700;800&display=swap');
 @import url('./theme-win98.css');
 @import url('./theme-audius.css');
+@import url('./theme-glass.css');
 
 :root {
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
@@ -2198,7 +2199,7 @@ body {
 }
 
 .hexaclear-overlay-card
-  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle) {
+  button:not(.hexaclear-reset):not(.hexaclear-menu-link):not(.hexaclear-menu-restart-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-history-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle) {
   border-radius: 999px;
   border: none;
   padding: 0.5rem 1.25rem;
@@ -5787,6 +5788,16 @@ body {
   overflow-y: auto;
   padding-right: 0.25rem;
   padding-bottom: 0.25rem;
+  /* Hide the native scrollbar (it still scrolls via wheel / touch /
+     drag) so the catalog reads as a clean grid. Firefox + legacy Edge
+     use the standard props; WebKit/Blink needs the pseudo-element. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hexaclear-piecetiary::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .hexaclear-piecetiary-grid {

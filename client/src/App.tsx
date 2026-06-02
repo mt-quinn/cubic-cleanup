@@ -121,15 +121,18 @@ type HoverInfo = {
 // Theme engine: the set of identifiers a user can pick from in the
 // menu's theme selector. Wood is the original warm cream/gold theme;
 // win98 is the Minesweeper / Windows 98 homage; audius is the
-// music-reactive visualizer layered on top of the Cubekill palette. The active
-// id lives on <html data-theme="..."> and every theme-specific CSS rule
-// is scoped under that attribute so switching is a single DOM write.
-type ThemeId = 'wood' | 'win98' | 'audius'
+// music-reactive visualizer layered on top of the Cubekill palette; glass
+// is the backlit cathedral stained-glass theme (translucent jewel panes +
+// lead came + a shatter-on-clear). The active id lives on
+// <html data-theme="..."> and every theme-specific CSS rule is scoped under
+// that attribute so switching is a single DOM write.
+type ThemeId = 'wood' | 'win98' | 'audius' | 'glass'
 
 const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
   { id: 'wood', label: 'Cubekill (default)' },
   { id: 'win98', label: 'Windows 98' },
   { id: 'audius', label: 'Music Visualizer' },
+  { id: 'glass', label: 'Stained Glass' },
 ]
 
 type AudiusTrack = {
@@ -137,6 +140,7 @@ type AudiusTrack = {
   title: string
   duration: number
   bpm: number | null
+  artwork?: string
   userId?: string
   playlistsContainingTrackIds?: number[]
   albumBacklinkId?: number | string
@@ -376,6 +380,20 @@ const normalizeAudiusAlbumBacklinkId = (
   return undefined
 }
 
+// Audius returns artwork as a map of square sizes ("150x150" / "480x480" /
+// "1000x1000"). Prefer the mid size — crisp on a ~54px tile at 2x DPR without
+// pulling the full-res master into a thumbnail.
+const normalizeAudiusArtwork = (raw: unknown): string | undefined => {
+  if (!raw || typeof raw !== 'object') return undefined
+  const art = raw as Record<string, unknown>
+  const candidates = ['480x480', '1000x1000', '150x150']
+  for (const key of candidates) {
+    const value = art[key]
+    if (typeof value === 'string' && value.trim() !== '') return value
+  }
+  return undefined
+}
+
 const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
   if (!Array.isArray(data)) return []
   return data
@@ -386,6 +404,7 @@ const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
         title?: unknown
         duration?: unknown
         bpm?: unknown
+        artwork?: unknown
         user_id?: unknown
         user?: unknown
         is_stream_gated?: unknown
@@ -410,6 +429,7 @@ const normalizeAudiusTracks = (data: unknown): AudiusTrack[] => {
         title: item.title,
         duration: typeof item.duration === 'number' ? item.duration : 0,
         bpm: typeof item.bpm === 'number' && item.bpm > 0 ? item.bpm : null,
+        artwork: normalizeAudiusArtwork(item.artwork),
         userId,
         playlistsContainingTrackIds: normalizeAudiusPlaylistIds(
           item.playlists_containing_track,
@@ -575,6 +595,33 @@ const paletteForTier = (
       '--w98-inverse-fill': `hsl(${inverseHue}, ${Math.min(100, sat + 3)}%, 40%)`,
     } as React.CSSProperties
   }
+  if (theme === 'glass') {
+    // Stained glass: rich, saturated jewel tones. Keep saturation high
+    // and lightness in a mid band so the translucent panes stay
+    // luminous (never washed-out pastel), with a brighter "lit" top
+    // face and a deep leaded base. The faces themselves are painted at
+    // reduced fill-opacity in theme-glass.css so the board's backlight
+    // glows through; these vars only set the hue/chroma of each pane.
+    const sat = Math.min(100, 84 + satBump)
+    // The backlight + accent ride the SAME octave rotation as the jewels
+    // (see glassOctaveHueShift) instead of the per-tier golden-angle scatter
+    // the other themes use — so the light pooling behind the window always
+    // belongs to the same color story as the panes in front of it, and the
+    // whole composition drifts as one harmonious unit as octaves climb.
+    const glassShift = glassOctaveHueShift(octave)
+    const glassLightHue = (210 + glassShift) % 360
+    return {
+      '--cube-top': `hsl(${topHue}, ${sat}%, 66%)`,
+      '--cube-left': `hsl(${baseHue}, ${sat}%, 48%)`,
+      '--cube-right': `hsl(${rightHue}, ${Math.max(72, sat - 6)}%, 30%)`,
+      '--score-tier-accent': `hsl(${glassLightHue}, ${sat}%, 58%)`,
+      '--cube-inverse-bright': `hsl(${inverseHue}, ${sat}%, 70%)`,
+      '--cube-inverse-dim': `hsl(${inverseHue}, ${Math.max(60, sat - 14)}%, 42%)`,
+      // Drives the backlight glow behind the window so the light that
+      // bleeds through the panes shares the jewels' octave-rotated hue.
+      '--glass-light-hue': `${glassLightHue}`,
+    } as React.CSSProperties
+  }
   // Wood theme: softer saturation, brighter top face for the
   // painterly "ambient light" cube look.
   const baseSat = 78 + satBump
@@ -590,6 +637,69 @@ const paletteForTier = (
 
 const HEX_SIZE = 32
 const SQRT3 = Math.sqrt(3)
+
+// Stained-glass theme: the circular carved-stone rose-window frame has been
+// retired in favor of showing the masonry wall directly around the board
+// (the lit blue glass is clipped to the hex panes instead). Flip to `true`
+// to bring the frame back.
+const SHOW_GLASS_ROSE_FRAME = false
+
+// ---------------------------------------------------------------------------
+// Stained-glass jewel palette
+// ---------------------------------------------------------------------------
+// In the glass theme every cube is cut from one of four real stained-glass
+// colors — sapphire (deep navy), turquoise, emerald, amethyst — instead of
+// the shared score-tier hue. A piece spawns into the hand with a color per
+// cube; that color is deterministic from the piece id + cube index, so the
+// hand preview and the eventual board placement always agree, and the color
+// persists on the board after the piece is gone (see `glassCellColors`).
+//
+// Each jewel gives the three cube facets: a brighter lit top, a mid left,
+// and a deep leaded right. The panes are painted at reduced fill-opacity in
+// theme-glass.css so the backlight glows through; these are the hue/chroma.
+type JewelFacets = {
+  '--cube-top': string
+  '--cube-left': string
+  '--cube-right': string
+}
+const GLASS_JEWELS: JewelFacets[] = [
+  // Sapphire — deep navy blue
+  { '--cube-top': '#4f7ee0', '--cube-left': '#234c9e', '--cube-right': '#122a63' },
+  // Turquoise
+  { '--cube-top': '#3fd7d2', '--cube-left': '#13a3a6', '--cube-right': '#085f68' },
+  // Emerald
+  { '--cube-top': '#52d886', '--cube-left': '#1aa95c', '--cube-right': '#0a6836' },
+  // Amethyst
+  { '--cube-top': '#b888ea', '--cube-left': '#8a4fd2', '--cube-right': '#511f92' },
+]
+
+// Small deterministic string hash (FNV-1a). Stable across renders/reloads so
+// a given piece-cube always maps to the same jewel.
+const hashString = (s: string): number => {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}
+
+const jewelIndexForPieceCube = (pieceId: string, cubeIndex: number): number =>
+  hashString(`${pieceId}:${cubeIndex}`) % GLASS_JEWELS.length
+
+const jewelStyle = (
+  index: number,
+  hueShift = 0,
+): React.CSSProperties => {
+  const jewel =
+    GLASS_JEWELS[
+      ((index % GLASS_JEWELS.length) + GLASS_JEWELS.length) %
+        GLASS_JEWELS.length
+    ]
+  return hueShift % 360 === 0
+    ? (jewel as unknown as React.CSSProperties)
+    : rotateJewelFacets(jewel, hueShift)
+}
 
 // Self-rendered cube palette in the wood theme. Mirrors the
 // `--cube-{top,right,left}` defaults declared in index.css. We hold
@@ -695,6 +805,44 @@ const tintCubeColor = (
   return rgbToHex(nr, ng, nb)
 }
 
+// Per-octave hue rotation for the stained-glass jewels (and the backlight
+// that bleeds through them). 30° is a clean twelfth of the color wheel, so:
+//   • every octave is a rigid rotation of the SAME four jewels — their
+//     mutual spacing (and therefore the palette's harmony) is identical at
+//     octave 1 and octave 40; only the window's overall color story drifts;
+//   • the sequence is bounded and predictable (it cycles every 12 octaves),
+//     passing through a full complement of the base palette at octave 6.
+// This is the guard against "hideous at high octaves": we never invent new,
+// clashing hue *relationships*, we only spin the balanced quartet around.
+const GLASS_OCTAVE_HUE_STEP = 30
+
+// Rigidly rotate a jewel's three facets by `deg`, preserving each facet's
+// saturation + lightness (so the lit-top / mid-left / deep-right structure
+// survives the spin and the panes stay luminous rather than washing out).
+const rotateJewelFacets = (
+  jewel: JewelFacets,
+  deg: number,
+): React.CSSProperties => {
+  const rot = (hex: string): string => {
+    const [r, g, b] = hexToRgb(hex)
+    const [h, s, l] = rgbToHsl(r, g, b)
+    const [nr, ng, nb] = hslToRgb(h + deg, s, l)
+    return rgbToHex(nr, ng, nb)
+  }
+  return {
+    '--cube-top': rot(jewel['--cube-top']),
+    '--cube-left': rot(jewel['--cube-left']),
+    '--cube-right': rot(jewel['--cube-right']),
+  } as unknown as React.CSSProperties
+}
+
+// The hue rotation applied to the glass palette at a given score octave.
+// Octave 0 (game start) is the untouched base quartet; each octave after
+// that adds one clean wheel-step. Shared by the jewels and the backlight so
+// the whole window drifts in lockstep.
+const glassOctaveHueShift = (octave: number): number =>
+  octave > 0 ? (octave * GLASS_OCTAVE_HUE_STEP) % 360 : 0
+
 // Resolve the on-screen score counter element for the active theme.
 // Wood theme renders the score in `.hexaclear-live-stat .value`;
 // Win98 hides that and renders it as a 7-segment LCD on the right
@@ -766,6 +914,65 @@ const buildLayout = (boardDef: BoardDefinition): BoardLayout => {
     positions,
     width,
     height,
+    offsetX: -minX + HEX_SIZE * 1.25,
+    offsetY: -minY + HEX_SIZE * 1.25,
+  }
+}
+
+// Stained-glass only: nudge each of the seven rosettes radially outward by
+// a small fraction of its center's offset from the board origin, opening a
+// thin sliver of the lit glass field BETWEEN the rosettes (the central
+// flower sits at the origin, so it doesn't move; the six outer flowers
+// drift out along their own spokes). Returns a fresh layout — every
+// consumer (cell render, click, drag mapping, clears, ripple) reads
+// `boardLayout.positions`, so moving the cells here keeps hit-testing
+// pixel-accurate without any special-casing downstream.
+const ROSETTE_SEPARATION = 0.1
+const buildRosetteSeparatedLayout = (
+  layout: BoardLayout,
+  geometry: BoardGeometry,
+  sep: number = ROSETTE_SEPARATION,
+): BoardLayout => {
+  const cellOffset: Record<string, { x: number; y: number }> = {}
+  for (const center of geometry.flowerCenters) {
+    const { x: ox, y: oy } = axialToPixel(center.q, center.r)
+    for (let dq = -geometry.flowerRadius; dq <= geometry.flowerRadius; dq++) {
+      const drMin = Math.max(-geometry.flowerRadius, -dq - geometry.flowerRadius)
+      const drMax = Math.min(geometry.flowerRadius, -dq + geometry.flowerRadius)
+      for (let dr = drMin; dr <= drMax; dr++) {
+        cellOffset[axialToId({ q: center.q + dq, r: center.r + dr })] = {
+          x: ox * sep,
+          y: oy * sep,
+        }
+      }
+    }
+  }
+  const positions: Record<string, { x: number; y: number }> = {}
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const id in layout.positions) {
+    const p = layout.positions[id]
+    const off = cellOffset[id] ?? { x: 0, y: 0 }
+    const np = { x: p.x + off.x, y: p.y + off.y }
+    positions[id] = np
+    minX = Math.min(minX, np.x)
+    maxX = Math.max(maxX, np.x)
+    minY = Math.min(minY, np.y)
+    maxY = Math.max(maxY, np.y)
+  }
+  // Recompute the viewBox to bound the spread-out cells (same margin as
+  // buildLayout). The board SVG fits this viewBox into its fixed on-screen
+  // box, so the separated board lands on the EXACT same footprint as the
+  // un-separated board — it cannot clip the frame — while the inter-rosette
+  // gaps keep their full size and the cells simply render a touch smaller
+  // to make room. (The earlier bug kept the original viewBox, so the spread
+  // cells pushed past it and got clipped by the opening.)
+  return {
+    positions,
+    width: maxX - minX + HEX_SIZE * 2.5,
+    height: maxY - minY + HEX_SIZE * 2.5,
     offsetX: -minX + HEX_SIZE * 1.25,
     offsetY: -minY + HEX_SIZE * 1.25,
   }
@@ -2867,7 +3074,6 @@ function App() {
     [game.mode],
   )
   const boardDef = boardRender.boardDef
-  const boardLayout = boardRender.layout
   // True iff the player committed to a session this load — either by having
   // an in-progress game restored from storage, or by explicitly starting /
   // resetting a run from the menu, or by placing their first piece. Once
@@ -2892,6 +3098,27 @@ function App() {
   const [clearingClassesByCell, setClearingClassesByCell] = useState<
     Record<string, string[]>
   >({})
+  // Stained-glass shatter. The engine drains clearingCells after 600ms,
+  // which is too fast to read the shards breaking apart. So in the glass
+  // theme we snapshot the cleared cells into their own state and keep the
+  // shard overlay mounted on a longer, theme-owned timeline (well past
+  // the engine's clear window) so the break is actually legible. The
+  // token re-keys the shard <g> on every clear so the animation restarts
+  // cleanly even on rapid back-to-back clears.
+  const [glassShatter, setGlassShatter] = useState<{
+    cells: string[]
+    token: number
+  } | null>(null)
+  // Stained-glass per-cell jewel colors. When a piece is placed in the glass
+  // theme each landed cell records the jewel index of the cube that filled
+  // it, so the color the player saw in their hand persists on the board.
+  // Keyed by cell id, value is an index into GLASS_JEWELS. Pruned to filled
+  // cells whenever the board changes (so it resets with a new game and never
+  // grows unbounded). Cells with no entry fall back to a deterministic jewel
+  // from the cell id, so pre-seeded boards / rubies still get a color.
+  const [glassCellColors, setGlassCellColors] = useState<Record<string, number>>(
+    {},
+  )
   // Ruby cells participating in the *current* clear animation. Tracked
   // as a list so big-board placements that sweep up multiple rubies in
   // one move can keep the ruby decoration on every cleared cell, not
@@ -3504,6 +3731,24 @@ function App() {
     const raw = window.localStorage.getItem('cubic-theme')
     return raw === 'win98' || raw === 'audius' ? raw : 'wood'
   })
+  // Board cell positions. In the Stained Glass theme the seven rosettes are
+  // pushed slightly apart so the lit glass field shows between them; every
+  // other theme uses the raw, fully-tessellated layout. Computed off the
+  // reactive `theme` so it follows live theme switches, and memoized so the
+  // positions object stays referentially stable for downstream deps.
+  const boardLayout = useMemo(
+    () =>
+      theme === 'glass'
+        ? buildRosetteSeparatedLayout(boardRender.layout, boardRender.geometry)
+        : boardRender.layout,
+    [boardRender, theme],
+  )
+  // Stained-glass only: the hue rotation applied to every jewel (and the
+  // backlight) at the current octave. Threaded into all jewelStyle() calls
+  // so the hand, ghost, placed cubes, and lock-in animation all wear the
+  // same octave-shifted palette and stay in agreement. Non-glass themes
+  // never read it.
+  const glassHueShift = theme === 'glass' ? glassOctaveHueShift(scoreOctave) : 0
   const audiusAudioRef = useRef<HTMLAudioElement | null>(null)
   const audiusAudioContextRef = useRef<AudioContext | null>(null)
   const audiusAnalyserRef = useRef<AnalyserNode | null>(null)
@@ -5119,6 +5364,27 @@ function App() {
         return current
       }
       dismissActionFtueHint()
+
+      // Glass theme: record the jewel color each landed cell takes, mapping
+      // the piece's per-cube colors (deterministic from piece id + cube
+      // index, same as the hand preview) onto the board cells it fills. The
+      // target cell for cube i is the piece origin + the cube's relative
+      // axial offset — exactly the mapping getBestPlacementPreview uses.
+      if (theme === 'glass') {
+        const placedBoardDef = getBoardDefinitionForMode(current.mode)
+        const originCell = placedBoardDef.cells.find((c) => c.id === cellId)
+        if (originCell) {
+          const colorUpdates: Record<string, number> = {}
+          piece.shape.cells.forEach((rel, i) => {
+            const targetId = axialToId({
+              q: originCell.coord.q + rel.q,
+              r: originCell.coord.r + rel.r,
+            })
+            colorUpdates[targetId] = jewelIndexForPieceCube(piece.id, i)
+          })
+          setGlassCellColors((prev) => ({ ...prev, ...colorUpdates }))
+        }
+      }
 
       // Identify rubies that respawned onto previously-empty cells in
       // this placement so we can hide each one until the clear animation
@@ -7373,6 +7639,48 @@ function App() {
     return () => window.clearTimeout(timeout)
   }, [clearingCells])
 
+  // Glass-theme shatter: capture each clear on its own longer-lived
+  // timeline so the shards are readable. Skipped under reduced motion
+  // (the shard overlay is hidden there anyway) and in other themes.
+  useEffect(() => {
+    if (theme !== 'glass' || reducedMotion) return
+    if (clearingCells.length === 0) return
+    setGlassShatter({ cells: clearingCells, token: Date.now() })
+    // Held well past the engine's 600ms clear window so the slow shatter
+    // (shards fly for ~1.7s) can play out fully and stay legible.
+    const timeout = window.setTimeout(() => setGlassShatter(null), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [clearingCells, theme, reducedMotion])
+
+  // Keep the glass jewel-color map in sync with the board: drop entries for
+  // cells that are no longer filled. This resets the palette on a new game
+  // (board goes empty) and bounds the map to ≤49 entries without any
+  // bespoke reset wiring.
+  useEffect(() => {
+    if (theme !== 'glass') return
+    setGlassCellColors((prev) => {
+      let changed = false
+      const next: Record<string, number> = {}
+      for (const id in prev) {
+        if (game.board[id] === 'filled') next[id] = prev[id]
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [game.board, theme])
+
+  // Per-cube jewel styles for a hand / hold / ghost piece in the glass
+  // theme. Deterministic from the piece id so the hand preview matches what
+  // lands on the board. Returns undefined in other themes (no override).
+  const glassCubeStylesForPiece = (
+    piece: ActivePiece,
+  ): (React.CSSProperties | undefined)[] | undefined =>
+    theme === 'glass'
+      ? piece.shape.cells.map((_, i) =>
+          jewelStyle(jewelIndexForPieceCube(piece.id, i), glassHueShift),
+        )
+      : undefined
+
   // Drive the screenshake animation. Removes the class, forces a reflow,
   // sets the amplitude variable, then re-adds the class so consecutive
   // shakes always restart cleanly instead of fighting an in-progress one.
@@ -8899,6 +9207,14 @@ function App() {
     Math.max(audiusPlaybackPosition, 0),
     Math.max(audiusProgressDuration, 0),
   )
+  const audiusDeckArtworkUrl = selectedAudiusDeckTrack?.artwork ?? null
+  const audiusDeckIsPlaying = audiusStatus === 'playing'
+  // Elapsed-fill percentage for the custom scrubber. WebKit can't paint a
+  // native progress fill, so we feed this into a CSS gradient on the track.
+  const audiusProgressPct =
+    audiusProgressDuration > 0
+      ? Math.min(100, Math.max(0, (audiusProgressValue / audiusProgressDuration) * 100))
+      : 0
   const audiusTitleCardPeeking =
     audiusTitleCardCollapsed && audiusAutoTitleTrackId != null
   const audiusPreviousTrack = getAdjacentAudiusTrack(-1)
@@ -9827,6 +10143,12 @@ function App() {
           }}
           ref={boardWrapperRef}
         >
+          {/* The carved-stone rose-window frame is retired: the glass theme
+              now shows the masonry wall directly around the board, with the
+              lit blue field clipped to the hex panes (see #glass-field-clip)
+              so glass appears only WITHIN the cells. Component kept behind a
+              flag for easy revert. */}
+          {SHOW_GLASS_ROSE_FRAME && theme === 'glass' && <GlassRoseFrame />}
           {theme === 'audius' && !reducedMotion && (
             <canvas
               ref={audiusCanvasRef}
@@ -9857,6 +10179,7 @@ function App() {
                 ? 'is-collapsed'
                 : '',
               audiusTitleCardPeeking ? 'is-peeking' : '',
+              audiusDeckIsPlaying ? 'is-playing' : '',
             ]
               .filter(Boolean)
               .join(' ')}
@@ -9878,57 +10201,115 @@ function App() {
               </button>
             ) : (
               <>
-                <button
-                  type="button"
-                  className="hexaclear-audius-title-toggle"
-                  onClick={() => {
-                    playUiClick()
-                    setAudiusAutoTitleTrackId(null)
-                    setShowAudiusVolume(false)
-                    setAudiusTitleCardCollapsed((collapsed) => !collapsed)
-                  }}
-                  aria-expanded={!audiusTitleCardCollapsed}
-                >
-                  {audiusTitleCardCollapsed ? 'Show track' : 'Hide'}
-                </button>
-                <div className="hexaclear-audius-title-copy">
-                  <span className="track-label">Now playing</span>
-                  <span
-                    ref={audiusTrackTitleFrameRef}
+                <div className="hexaclear-audius-np-header">
+                  <div
                     className={[
-                      'track-title',
-                      audiusTrackTitleScrollPx > 0 ? 'is-overflowing' : '',
+                      'hexaclear-audius-artwork',
+                      audiusDeckArtworkUrl ? 'has-art' : 'is-empty',
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    style={
-                      {
-                        '--audius-title-scroll-distance': `${audiusTrackTitleScrollPx}px`,
-                      } as React.CSSProperties
+                    aria-hidden="true"
+                  >
+                    {audiusDeckArtworkUrl ? (
+                      <img
+                        src={audiusDeckArtworkUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          // CDN miss / gated art: drop the broken <img> so the
+                          // placeholder disc shows through instead.
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <svg
+                        className="hexaclear-audius-artwork-glyph"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 18V6l10-2v12" />
+                        <circle cx="6.5" cy="18" r="2.5" />
+                        <circle cx="16.5" cy="16" r="2.5" />
+                      </svg>
+                    )}
+                    <span
+                      className="hexaclear-audius-np-eq"
+                      aria-label="Music visualizer levels"
+                    >
+                      <span className="spectrum-bar spectrum-bass" />
+                      <span className="spectrum-bar spectrum-mid" />
+                      <span className="spectrum-bar spectrum-treble" />
+                      <span className="spectrum-bar spectrum-onset" />
+                    </span>
+                  </div>
+                  <div className="hexaclear-audius-title-copy">
+                    <span className="track-label">
+                      <span
+                        className="hexaclear-audius-np-dot"
+                        aria-hidden="true"
+                      />
+                      Now playing
+                    </span>
+                    <span
+                      ref={audiusTrackTitleFrameRef}
+                      className={[
+                        'track-title',
+                        audiusTrackTitleScrollPx > 0 ? 'is-overflowing' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={
+                        {
+                          '--audius-title-scroll-distance': `${audiusTrackTitleScrollPx}px`,
+                        } as React.CSSProperties
+                      }
+                    >
+                      <span
+                        ref={audiusTrackTitleTextRef}
+                        className="track-title-text"
+                      >
+                        {audiusDeckTrackTitle}
+                      </span>
+                    </span>
+                    <span className="track-artist">{audiusDeckTrackArtist}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="hexaclear-audius-title-toggle"
+                    onClick={() => {
+                      playUiClick()
+                      setAudiusAutoTitleTrackId(null)
+                      setShowAudiusVolume(false)
+                      setAudiusTitleCardCollapsed((collapsed) => !collapsed)
+                    }}
+                    aria-expanded={!audiusTitleCardCollapsed}
+                    aria-label={
+                      audiusTitleCardCollapsed
+                        ? 'Show now playing'
+                        : 'Hide now playing'
                     }
                   >
-                    <span
-                      ref={audiusTrackTitleTextRef}
-                      className="track-title-text"
-                    >
-                      {audiusDeckTrackTitle}
-                    </span>
-                  </span>
-                  <span className="track-artist">
-                    {audiusDeckTrackArtist}
-                    {selectedAudiusDeckTrack
-                      ? ` · ${formatAudiusDuration(
-                          selectedAudiusDeckTrack.duration,
-                        )}`
-                      : ''}
-                  </span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
                 </div>
                 <label className="hexaclear-audius-progress">
+                  <span className="hexaclear-audius-progress-elapsed">
+                    {formatAudiusDuration(audiusProgressValue)}
+                  </span>
                   <input
                     type="range"
                     min="0"
                     max={Math.max(1, Math.ceil(audiusProgressDuration))}
                     value={Math.round(audiusProgressValue)}
+                    style={
+                      {
+                        '--audius-progress-pct': `${audiusProgressPct}%`,
+                      } as React.CSSProperties
+                    }
                     onChange={(e) => {
                       const next = Number(e.target.value)
                       const audio = audiusAudioRef.current
@@ -9941,20 +10322,10 @@ function App() {
                     }}
                     aria-label="Track progress"
                   />
-                  <span className="hexaclear-audius-progress-time">
-                    {formatAudiusDuration(audiusProgressValue)} /{' '}
+                  <span className="hexaclear-audius-progress-total">
                     {formatAudiusDuration(audiusProgressDuration)}
                   </span>
                 </label>
-                <div
-                  className="hexaclear-audius-spectrum"
-                  aria-label="Music visualizer levels"
-                >
-                  <span className="spectrum-bar spectrum-bass" />
-                  <span className="spectrum-bar spectrum-mid" />
-                  <span className="spectrum-bar spectrum-treble" />
-                  <span className="spectrum-bar spectrum-onset" />
-                </div>
                 <div className="hexaclear-audius-media-controls">
                   <div className="hexaclear-audius-media-button-row">
                     <div className="hexaclear-audius-primary-transport">
@@ -10253,6 +10624,112 @@ function App() {
                   />
                 </filter>
               )}
+              {/* Stained-glass depth kit. These primitives are what sell
+                  the "real glass" read — they're referenced from
+                  theme-glass.css via fill: url(#...) / filter: url(#...).
+                  A real SVG <filter>/<gradient> is used (not CSS shorthand
+                  filters) because WebKit/iOS ignores CSS filter functions on
+                  inner SVG nodes — same reason the audius theme references
+                  url(#audius-clear-invert). All are static (no animated
+                  turbulence) so they render once and the browser caches the
+                  result. */}
+              {theme === 'glass' && (
+                <>
+                  {/* Diagonal specular sheen laid over each lit pane — a
+                      bright streak fading to nothing, like a glaze catching
+                      window light. Painted onto the per-face light overlay. */}
+                  <linearGradient
+                    id="glass-sheen"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                    <stop offset="34%" stopColor="#ffffff" stopOpacity="0.18" />
+                    <stop offset="60%" stopColor="#ffffff" stopOpacity="0" />
+                  </linearGradient>
+                  {/* Inner pane luminance: a hot center falling to a dark
+                      leaded rim, so each pane reads as lit from behind with
+                      volume rather than a flat fill. */}
+                  <radialGradient id="glass-inner-light" cx="50%" cy="42%" r="62%">
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+                    <stop offset="46%" stopColor="#ffffff" stopOpacity="0.12" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0.32" />
+                  </radialGradient>
+                  {/* Single-tone hex pane volume. A lit crown high on the
+                      pane (light entering the glass), a clear translucent
+                      mid, and a shadowed foot + darkened leaded rim give a
+                      thick hand-cut piece of cathedral glass its depth
+                      WITHOUT any cube faceting. Painted (normal blend, so
+                      the dark stops actually sink the edges) over the flat
+                      jewel fill. */}
+                  <radialGradient id="glass-pane-depth" cx="50%" cy="32%" r="74%">
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
+                    <stop offset="26%" stopColor="#ffffff" stopOpacity="0.16" />
+                    <stop offset="52%" stopColor="#ffffff" stopOpacity="0" />
+                    <stop offset="78%" stopColor="#000000" stopOpacity="0.16" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0.5" />
+                  </radialGradient>
+                  {/* Seedy antique-glass refraction: low-frequency fractal
+                      noise displaces the backlight layer it's applied to, so
+                      the light bleeding through ripples and pools the way it
+                      does through hand-poured cathedral glass. Kept subtle and
+                      static. */}
+                  <filter
+                    id="glass-refract"
+                    x="-20%"
+                    y="-20%"
+                    width="140%"
+                    height="140%"
+                  >
+                    <feTurbulence
+                      type="fractalNoise"
+                      baseFrequency="0.012 0.026"
+                      numOctaves={2}
+                      seed={7}
+                      result="noise"
+                    />
+                    <feDisplacementMap
+                      in="SourceGraphic"
+                      in2="noise"
+                      scale={14}
+                      xChannelSelector="R"
+                      yChannelSelector="G"
+                    />
+                  </filter>
+                  {/* The backlit field. ONE sheet of lit cathedral-blue
+                      glass, center-bright and dimming outward, clipped to
+                      the union of every hex pane below so it shows ONLY
+                      through the glass — the masonry wall fills the gaps
+                      between the seven rosettes and the space around the
+                      board. The stop colors live in theme-glass.css keyed
+                      off --glass-light-hue, so the field's hue rides the
+                      same octave rotation as the jewels. */}
+                  <radialGradient id="glass-field" cx="50%" cy="47%" r="62%">
+                    <stop className="glass-field-stop-core" offset="0%" />
+                    <stop className="glass-field-stop-mid" offset="52%" />
+                    <stop className="glass-field-stop-edge" offset="100%" />
+                  </radialGradient>
+                  <clipPath
+                    id="glass-field-clip"
+                    clipPathUnits="userSpaceOnUse"
+                  >
+                    {boardDef.cells.map((cell) => {
+                      const p = boardLayout.positions[cell.id]
+                      return (
+                        <polygon
+                          key={`field-clip-${cell.id}`}
+                          points={buildHexPoints(
+                            p.x + boardLayout.offsetX,
+                            p.y + boardLayout.offsetY,
+                          )}
+                        />
+                      )
+                    })}
+                  </clipPath>
+                </>
+              )}
               {rippleCells.length > 0 && rippleCenter && (
                 <mask
                   id="hexaclear-ripple-mask"
@@ -10281,6 +10758,22 @@ function App() {
                 </mask>
               )}
             </defs>
+
+            {/* Stained-glass backlit field, behind every pane and clipped
+                to the hex panes so masonry shows in the gaps. */}
+            {theme === 'glass' && (
+              <g className="hexaclear-glass-field" aria-hidden="true">
+                <rect
+                  x={0}
+                  y={0}
+                  width={boardLayout.width}
+                  height={boardLayout.height}
+                  fill="url(#glass-field)"
+                  clipPath="url(#glass-field-clip)"
+                  filter="url(#glass-refract)"
+                />
+              </g>
+            )}
 
             {/* Board hull behind everything */}
             {boardRender.outlineSegments.map((seg, idx) => (
@@ -10460,7 +10953,19 @@ function App() {
                   conflictStrokeColor
                     ? { ...(partnerHueStyle ?? {}), ...cellTintStyle }
                     : undefined
-                const cubeStyle = partnerHueStyle
+                // Glass theme: color each filled cube with its persisted
+                // jewel (or a deterministic fallback from the cell id for
+                // pre-seeded cells). Skipped for rubies (own palette) and
+                // multiplayer (partner-hue identity wins).
+                const glassJewelStyle =
+                  theme === 'glass' && !isGolden && !isMultiplayer
+                    ? jewelStyle(
+                        glassCellColors[cell.id] ??
+                          jewelIndexForPieceCube(cell.id, 0),
+                        glassHueShift,
+                      )
+                    : null
+                const cubeStyle = glassJewelStyle ?? partnerHueStyle
 
                 return (
                   <g
@@ -10663,6 +11168,90 @@ function App() {
                 )
               })
             })()}
+
+            {/* Stained-glass shatter. Only in the glass theme, only while
+                a clear is in flight (clearingCells drains after 600ms — the
+                same window the engine keeps the clear state alive). Each
+                clearing cell breaks into six wedge shards that fling outward
+                along their own radial direction, spin, and fall, so a clear
+                reads as panes smashing rather than the default shrink. The
+                cube's clear animation is replaced with a quick light-flash in
+                theme-glass.css so the two don't double up. The shards inherit
+                the active jewel palette (--cube-*) so they match the glass
+                that just broke. Transient + glass-only = no per-frame cost
+                outside a clear. */}
+            {theme === 'glass' && glassShatter && (
+              <g
+                key={glassShatter.token}
+                className="hexaclear-glass-shatter"
+                pointerEvents="none"
+                aria-hidden="true"
+              >
+                {glassShatter.cells.map((id) => {
+                  const pos = boardLayout.positions[id]
+                  if (!pos) return null
+                  const cx = pos.x + boardLayout.offsetX
+                  const cy = pos.y + boardLayout.offsetY
+                  // 12 boundary points (6 corners + 6 edge midpoints)
+                  // fanned from the center give a finer, more glass-like
+                  // fracture than clean wedges.
+                  const ring: { x: number; y: number }[] = []
+                  for (let i = 0; i < 6; i++) {
+                    const a = ((60 * i - 30) * Math.PI) / 180
+                    const a2 = ((60 * (i + 1) - 30) * Math.PI) / 180
+                    const vx = cx + HEX_SIZE * Math.cos(a)
+                    const vy = cy + HEX_SIZE * Math.sin(a)
+                    const mx = cx + HEX_SIZE * 0.92 * Math.cos((a + a2) / 2)
+                    const my = cy + HEX_SIZE * 0.92 * Math.sin((a + a2) / 2)
+                    ring.push({ x: vx, y: vy }, { x: mx, y: my })
+                  }
+                  // Each cell's shards inherit its own jewel color so the
+                  // break matches the pane that shattered.
+                  const cellJewelStyle = jewelStyle(
+                    glassCellColors[id] ?? jewelIndexForPieceCube(id, 0),
+                    glassHueShift,
+                  )
+                  return (
+                    <g key={`${id}-shards`} style={cellJewelStyle}>
+                      {ring.map((p, i) => {
+                    const p2 = ring[(i + 1) % ring.length]
+                    const mx = (cx + p.x + p2.x) / 3
+                    const my = (cy + p.y + p2.y) / 3
+                    const dx = mx - cx
+                    const dy = my - cy
+                    const len = Math.hypot(dx, dy) || 1
+                    // Deterministic per-shard variation (stable across
+                    // re-renders within one shatter): travel distance and
+                    // spin keyed off the shard index so the break reads
+                    // organic, not mechanical.
+                    const dist = 0.78 + ((i * 7) % 5) * 0.14
+                    const spin = (i % 2 === 0 ? 1 : -1) * (0.7 + ((i * 3) % 4) * 0.22)
+                    return (
+                      <polygon
+                        key={`${id}-shard-${i}`}
+                        className={`hexaclear-glass-shard hexaclear-glass-shard-${i % 6}`}
+                        points={`${cx.toFixed(2)},${cy.toFixed(2)} ${p.x.toFixed(
+                          2,
+                        )},${p.y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(
+                          2,
+                        )}`}
+                        style={
+                          {
+                            '--shard-dx': (dx / len).toFixed(3),
+                            '--shard-dy': (dy / len).toFixed(3),
+                            '--shard-dist': dist.toFixed(2),
+                            '--shard-spin': spin.toFixed(2),
+                            '--shard-delay': `${(i % 6) * 45}ms`,
+                          } as React.CSSProperties
+                        }
+                      />
+                    )
+                      })}
+                    </g>
+                  )
+                })}
+              </g>
+            )}
 
             {/* Off-board invalid placement flash: show the attempted shape
                 even when part of it falls outside the board. */}
@@ -10936,6 +11525,18 @@ function App() {
                         (clearingCells.length === 0 &&
                           game.goldenCellIds.includes(cell.id)))
                     if (game.board[cell.id] !== 'filled') return null
+                    // Glass theme: the lock-in overlay must wear the SAME
+                    // persisted jewel as the static cube it replaces, or the
+                    // placement animation flashes the default sapphire palette
+                    // before snapping to the piece's real color.
+                    const glassJewelStyle =
+                      theme === 'glass' && !isGolden && !isMultiplayer
+                        ? jewelStyle(
+                            glassCellColors[cell.id] ??
+                              jewelIndexForPieceCube(cell.id, 0),
+                            glassHueShift,
+                          )
+                        : undefined
                     return (
                       <CubeLines
                         key={`placed-overlay-${cell.id}`}
@@ -10949,6 +11550,7 @@ function App() {
                             : 'normal'
                         }
                         dailyHits={isDailyTarget ? dailyHitsForCell : undefined}
+                        style={glassJewelStyle}
                         playerGlyph={cellGlyphByCellId[cell.id]}
                       />
                     )
@@ -11277,7 +11879,11 @@ function App() {
               className="hexaclear-ghost"
               style={ghostStyle}
             >
-              <PiecePreview shape={ghost.piece.shape} mode="board" />
+              <PiecePreview
+                shape={ghost.piece.shape}
+                mode="board"
+                cubeStyles={glassCubeStylesForPiece(ghost.piece)}
+              />
               {/* Multi-clear hint: when the current hover position
                   would clear 2+ scoring patterns at once, surface a
                   small "×N" chip pinned to the floating ghost. The
@@ -11315,7 +11921,11 @@ function App() {
                 '--undo-delta-y': `${undoAnimation.endY - undoAnimation.startY}px`,
               } as React.CSSProperties & { '--undo-delta-x': string; '--undo-delta-y': string }}
             >
-              <PiecePreview shape={undoAnimation.piece.shape} mode="board" />
+              <PiecePreview
+                shape={undoAnimation.piece.shape}
+                mode="board"
+                cubeStyles={glassCubeStylesForPiece(undoAnimation.piece)}
+              />
             </div>
           )}
           {rescueAnimation && (
@@ -11339,7 +11949,11 @@ function App() {
                   the overlay was several times bigger than the pocket
                   render, so the swap at the end of the flight was a
                   visible size jump. */}
-              <PiecePreview shape={rescueAnimation.piece.shape} mode="hand" />
+              <PiecePreview
+                shape={rescueAnimation.piece.shape}
+                mode="hand"
+                cubeStyles={glassCubeStylesForPiece(rescueAnimation.piece)}
+              />
             </div>
           )}
           {game.mode === 'daily' &&
@@ -13366,7 +13980,9 @@ function App() {
                     ? 'Win98'
                     : theme === 'audius'
                       ? 'Audius'
-                      : 'Cubekill'
+                      : theme === 'glass'
+                        ? 'Glass'
+                        : 'Cubekill'
                 const selectedAudiusTrack = audiusTrackOptions.find(
                   (track) => track.id === audiusSelectedTrackId,
                 )
@@ -14152,6 +14768,24 @@ function App() {
                                   size: variant.size,
                                 }}
                                 mode="hand"
+                                // In the cathedral theme the catalog pieces
+                                // carry the same per-cube jewel tones (sapphire
+                                // / turquoise / emerald / amethyst) the hand
+                                // uses. Keyed off the variant id so each shape
+                                // shows a stable mix every time. Other themes
+                                // keep their default rendering.
+                                cubeStyles={
+                                  theme === 'glass'
+                                    ? variant.cells.map((_, i) =>
+                                        jewelStyle(
+                                          jewelIndexForPieceCube(
+                                            variant.id,
+                                            i,
+                                          ),
+                                        ),
+                                      )
+                                    : undefined
+                                }
                               />
                             </div>
                             <div className="hexaclear-piecetiary-notation">
@@ -16157,6 +16791,7 @@ function App() {
                       <PiecePreview
                         shape={displayPiece.shape}
                         mode="hand"
+                        cubeStyles={glassCubeStylesForPiece(displayPiece)}
                       />
                     </span>
                   )}
@@ -16275,7 +16910,11 @@ function App() {
                 }}
               >
                 {displayPiece && !isDragging && (
-                  <PiecePreview shape={displayPiece.shape} mode="hand" />
+                  <PiecePreview
+                    shape={displayPiece.shape}
+                    mode="hand"
+                    cubeStyles={glassCubeStylesForPiece(displayPiece)}
+                  />
                 )}
                 {isDragging && (
                   <span
@@ -16298,6 +16937,147 @@ function App() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Stained-glass rose-window frame
+// ---------------------------------------------------------------------------
+// A circular oculus of carved pale limestone that the hex board sits inside,
+// turning the play field into a real rose window mounted in a cathedral wall.
+// Built procedurally with 16-fold symmetry: an outer torus molding, a ring of
+// radial colonettes, a ring of foiled oculi (little round lights), a cusped
+// inner edge, gilt fillets, and carved corner spandrels with quatrefoils.
+// Rendered as an overlay over the board (pointer-events: none in CSS); the
+// central opening is transparent so the glass shows through.
+const GlassRoseFrame = () => {
+  const C = 500
+  const N = 16
+  const rInner = 430 // opening edge — the glass shows inside this
+  const rTorIn = 472 // where the outer torus molding begins
+  const rOuter = 499 // frame edge
+  const deg = (d: number) => (d * Math.PI) / 180
+  const pol = (r: number, d: number): [number, number] => [
+    C + r * Math.cos(deg(d)),
+    C + r * Math.sin(deg(d)),
+  ]
+  // Donut path (outer ring minus inner circle) via even-odd fill.
+  const annulus = (rIn: number, rOut: number) =>
+    `M${C - rOut},${C} A${rOut},${rOut} 0 1 0 ${C + rOut},${C} A${rOut},${rOut} 0 1 0 ${
+      C - rOut
+    },${C} Z M${C - rIn},${C} A${rIn},${rIn} 0 1 1 ${C + rIn},${C} A${rIn},${rIn} 0 1 1 ${
+      C - rIn
+    },${C} Z`
+
+  // Gabled lancet "light" drawn at the 12-o'clock sector (apex pointing
+  // outward); N rotated copies form the ring of pointed-arch lights that
+  // read as a gothic rose window. Sits entirely inside the tracery band.
+  const wb = 21 // half-width of a light at its base
+  const rLightIn = rInner + 4
+  const rLightOut = rTorIn - 9
+  const cuspH = 22 // height of the pointed gable
+  const lightPath =
+    `M${C - wb},${C - rLightIn} L${C - wb},${C - (rLightOut - cuspH)} ` +
+    `L${C},${C - rLightOut} L${C + wb},${C - (rLightOut - cuspH)} ` +
+    `L${C + wb},${C - rLightIn} Z`
+  const lights = Array.from({ length: N }, (_, i) => i * (360 / N))
+  const mullions = Array.from({ length: N }, (_, i) => (i + 0.5) * (360 / N))
+  const corners: Array<[number, number]> = [
+    [142, 142],
+    [858, 142],
+    [142, 858],
+    [858, 858],
+  ]
+
+  return (
+    <div className="hexaclear-glass-frame" aria-hidden="true">
+      <svg
+        className="hexaclear-glass-rose"
+        viewBox="0 0 1000 1000"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          {/* Pale limestone, lit from the upper-left. */}
+          <linearGradient id="rose-lime" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#efe4ca" />
+            <stop offset="40%" stopColor="#d3bf97" />
+            <stop offset="74%" stopColor="#9a8460" />
+            <stop offset="100%" stopColor="#5f4e39" />
+          </linearGradient>
+          {/* Recessed / shadowed stone for carved hollows + the light band. */}
+          <linearGradient id="rose-shade" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#8d7a58" />
+            <stop offset="55%" stopColor="#5b4b36" />
+            <stop offset="100%" stopColor="#352a1d" />
+          </linearGradient>
+          {/* Faintly-lit deep cathedral glass behind the tracery lights. */}
+          <radialGradient id="rose-eye" cx="42%" cy="36%" r="72%">
+            <stop offset="0%" stopColor="#26315a" />
+            <stop offset="55%" stopColor="#141633" />
+            <stop offset="100%" stopColor="#060611" />
+          </radialGradient>
+        </defs>
+
+        {/* The masonry wall is painted on the page background now, so the
+            frame draws no spandrel — everything outside the torus is
+            transparent and the wall shows straight through. Carved
+            quatrefoil bosses still flank the window, sitting on that wall. */}
+        {corners.map(([x, y], i) => (
+          <g
+            key={`corner-${i}`}
+            className="rose-corner"
+            transform={`translate(${x} ${y})`}
+          >
+            <circle className="rose-corner-stone" r="34" />
+            <g className="rose-corner-foil">
+              <circle cx="0" cy="-15" r="11" />
+              <circle cx="0" cy="15" r="11" />
+              <circle cx="-15" cy="0" r="11" />
+              <circle cx="15" cy="0" r="11" />
+            </g>
+            <circle className="rose-corner-pip" r="6" />
+          </g>
+        ))}
+
+        {/* Outer torus molding — the chunky stone rim of the oculus. */}
+        <path className="rose-torus" d={annulus(rTorIn, rOuter)} />
+        <circle className="rose-bead-dark" cx={C} cy={C} r={rOuter - 3} />
+        <circle className="rose-bead-gilt" cx={C} cy={C} r={rTorIn + 5} />
+        <circle className="rose-bead-dark" cx={C} cy={C} r={rTorIn - 1} />
+
+        {/* Recessed light band that holds the tracery. */}
+        <path className="rose-band" d={annulus(rInner, rTorIn)} />
+
+        {/* Carved stone mullions (the slender stone bars between lights). */}
+        {mullions.map((a, i) => {
+          const [x0, y0] = pol(rInner + 2, a)
+          const [x1, y1] = pol(rTorIn - 2, a)
+          return (
+            <line
+              key={`mul-${i}`}
+              className="rose-mullion"
+              x1={x0}
+              y1={y0}
+              x2={x1}
+              y2={y1}
+            />
+          )
+        })}
+
+        {/* Ring of pointed-arch lights — the rose's radiating petals,
+            glazed with dark cathedral glass and cusped in gilt. */}
+        {lights.map((a, i) => (
+          <g key={`light-${i}`} transform={`rotate(${a} ${C} ${C})`}>
+            <path className="rose-light" d={lightPath} />
+            <path className="rose-light-cusp" d={lightPath} />
+          </g>
+        ))}
+
+        {/* Gilt fillets bounding the tracery band. */}
+        <circle className="rose-fillet" cx={C} cy={C} r={rInner} />
+        <circle className="rose-bead-dark" cx={C} cy={C} r={rInner - 4} />
+      </svg>
+    </div>
+  )
+}
+
 type PiecePreviewProps = {
   shape: ActivePiece['shape']
   mode?: 'hand' | 'board'
@@ -16309,6 +17089,12 @@ type PiecePreviewProps = {
    * Used by the Hold pocket so 1-cube pieces don't render as dots.
    */
   fitToBounds?: boolean
+  /**
+   * Optional per-cube style overrides, indexed to match `shape.cells`.
+   * Used by the glass theme to paint each cube its assigned jewel color
+   * (the same color it will keep once placed on the board).
+   */
+  cubeStyles?: (React.CSSProperties | undefined)[]
 }
 
 /**
@@ -16369,6 +17155,7 @@ const PiecePreview = ({
   shape,
   mode = 'hand',
   fitToBounds = false,
+  cubeStyles,
 }: PiecePreviewProps) => {
   const coords = shape.cells
 
@@ -16435,6 +17222,7 @@ const PiecePreview = ({
               key={`cube-${idx}`}
               cx={x + HEX_SIZE * 1}
               cy={y + HEX_SIZE * 1}
+              style={cubeStyles?.[idx]}
             />
           )
         })}
@@ -16548,6 +17336,7 @@ const PiecePreview = ({
             key={`cube-${idx}`}
             cx={cx}
             cy={cy}
+            style={cubeStyles?.[idx]}
           />
         )
       })}
