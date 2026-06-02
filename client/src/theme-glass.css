@@ -9,16 +9,12 @@
    corner bosses. Clears smash the panes into flying shards.
 
    Depth is built from stacked, individually cheap factors:
-     1. Luminous jewel fills (paletteForTier 'glass').
-     2. Per-pane inner-light radial (url(#glass-inner-light)) — hot core,
-        dark leaded rim — painted on the cube ripple-overlay polygon.
-     3. A diagonal specular sheen (url(#glass-sheen)) on the top facet.
-     4. Raised lead came: thick dark cell strokes + the per-hex bevel
-        polylines re-purposed as a rounded came bead (pewter highlight
-        on the lit edge, black on the shadow edge) + heavy rosette ribs.
+     1. A single backlit field clipped to all panes (transmission).
+     2. Flat translucent jewel fills (paletteForTier 'glass').
+     3. Per-rosette stone tracery strokes (full bay perimeter).
+     4. Thin lead came between adjacent panes.
      5. A refracted ambient backlight (url(#glass-refract)).
-     6. Carved-stone surround: grain, blind-arcade wall, layered stone
-        molding, gothic crown + quatrefoil bosses (rendered in App.tsx).
+     6. Continuous limestone wall on the page chrome.
 
    Cascade note (mirrors win98): never put !important on the animated
    cell fill/stroke/stroke-width — the [data-theme="glass"] prefix
@@ -30,11 +26,11 @@
   /* Carved limestone — warm tones that read as the same masonry the wall
      and window surround are cut from, so every readout/control looks
      carved INTO the cathedral rather than dropped on top of it. */
-  --glass-stone: #3a2f1e;
-  --glass-stone-deep: #20170c; /* deep recessed niche */
-  --glass-stone-face: #4a3d28; /* lit face of a molding */
-  --glass-stone-raise: #5c4c30; /* raised, sun-struck edge */
-  --glass-stone-shadow: #0f0a03; /* deep joint shadow / carved border */
+  --glass-stone: #5b523a;
+  --glass-stone-deep: #2d2415; /* deep recessed niche */
+  --glass-stone-face: #756a4b; /* lit face of a molding */
+  --glass-stone-raise: #9d9168; /* raised, sun-struck edge */
+  --glass-stone-shadow: #181107; /* deep joint shadow / carved border */
 
   /* Lead came — warm near-black lead with a dim sheen, NOT gold/grey.
      The "hi" is only a restrained brushed-graphite catch of light, kept
@@ -73,6 +69,12 @@
   --cube-golden-top: #ff5a76;
   --cube-golden-left: #d11d40;
   --cube-golden-right: #8c0f29;
+
+  /* Glass pane transmission — one continuous window, board-lit. */
+  --glass-pane-fill-opacity: 0.44;
+  --glass-pane-empty: rgba(22, 28, 38, 0.48);
+  --glass-ruby-pane-opacity: 0.52;
+  --glass-hand-pane-opacity: 0.58;
 
   /* Reusable stone grain + blind-arcade wall (URL-encoded SVG). */
   --glass-grain:
@@ -113,7 +115,13 @@
     /* cut-stone ashlar coursing */
     var(--glass-ashlar),
     /* base limestone, lit at the top course, sinking to shadow below */
-    linear-gradient(180deg, #4b4030 0%, #392d1d 46%, #251c11 78%, #181107 100%);
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--glass-stone-raise) 54%, #282016) 0%,
+      var(--glass-stone) 44%,
+      var(--glass-stone-deep) 78%,
+      #160f08 100%
+    );
   background-repeat: no-repeat, no-repeat, repeat, repeat, no-repeat;
   background-size: auto, auto, 180px 180px, 128px 236px, auto;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
@@ -496,8 +504,8 @@
      transparent stage: the masonry wall (painted on the page) shows
      through everywhere, and the lit blue glass lives INSIDE the board
      SVG — one field clipped to the hex panes (see #glass-field-clip in
-     App.tsx) so glass appears only within the cells and stone fills the
-     gaps between the seven rosettes. */
+     App.tsx) so glass appears only within the cells; stone tracery
+     strokes ring each rosette bay. */
   background: none;
   border-radius: 0;
   box-shadow: none;
@@ -525,9 +533,29 @@
 /* The lit field's hue rides --glass-light-hue (set per octave in
    paletteForTier), so the backlight rotates in lockstep with the jewels.
    Center-bright, dimming toward the outer rosettes. */
-[data-theme="glass"] .glass-field-stop-core { stop-color: hsl(var(--glass-light-hue, 210) 52% 45%); }
-[data-theme="glass"] .glass-field-stop-mid { stop-color: hsl(var(--glass-light-hue, 210) 56% 32%); }
-[data-theme="glass"] .glass-field-stop-edge { stop-color: hsl(var(--glass-light-hue, 210) 60% 21%); }
+[data-theme="glass"] .glass-field-stop-core { stop-color: hsl(var(--glass-light-hue, 42) 22% 88%); }
+[data-theme="glass"] .glass-field-stop-mid { stop-color: hsl(var(--glass-light-hue, 42) 28% 68%); }
+[data-theme="glass"] .glass-field-stop-edge { stop-color: hsl(var(--glass-light-hue, 42) 32% 46%); }
+
+/* Single diagonal sheen over the whole window aperture. */
+[data-theme="glass"] .hexaclear-glass-glare {
+  opacity: 0.16;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* A broad, soft shadow just inside the aperture: glass appears set back
+   behind the stone reveal instead of painted flush on the wall. */
+[data-theme="glass"] .hexaclear-glass-recess-shadow {
+  fill: none;
+  stroke: rgba(20, 15, 8, 0.7);
+  stroke-width: 9.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.17;
+  filter: blur(2.8px);
+}
 
 /* A slow brightness breathe stands in for the old opacity pulse — it
    keeps the field fully opaque (so masonry never bleeds through the
@@ -541,14 +569,50 @@
   50% { filter: brightness(1.09); }
 }
 
-/* No board-hull outline in this theme: the seven rosettes are nudged
-   apart (see buildRosetteSeparatedLayout) so the single tessellated hull
-   outline no longer traces their silhouette, and the heavy dark ring read
-   as a hard edge around the glass. Each rosette's own per-hex lead came is
-   the only leading now. */
-[data-theme="glass"] .hexaclear-board-outline-back,
+/* Window reveal — a recessed joint plus a raised limestone face, using
+   the same vertical lighting ramp as the surrounding wall. */
+[data-theme="glass"] .hexaclear-board-outline-back {
+  stroke: url(#glass-stone-joint-gradient);
+  stroke-width: 12.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.34;
+  filter:
+    drop-shadow(0.8px 1.6px 0.8px rgba(0, 0, 0, 0.38))
+    blur(0.2px);
+}
 [data-theme="glass"] .hexaclear-board-outline-front {
-  stroke: none;
+  stroke: url(#glass-stone-face-gradient);
+  stroke-width: 7.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.88;
+  filter:
+    drop-shadow(0 -0.7px 0 rgba(255, 244, 214, 0.12))
+    drop-shadow(0 1.2px 0.75px rgba(0, 0, 0, 0.4));
+  transition: none;
+}
+[data-theme="glass"] .hexaclear-board-outline-arris {
+  stroke: url(#glass-stone-arris-gradient);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.42;
+  mix-blend-mode: screen;
+  filter: none;
+  transition: none;
+}
+[data-theme="glass"] .hexaclear-board-outline-texture {
+  stroke: url(#glass-stone-speckle);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.18;
+  mix-blend-mode: soft-light;
 }
 
 /* ====================================================================
@@ -689,151 +753,110 @@
 }
 
 /* ====================================================================
-   Empty cells — dark leaded openings
+   Empty cells — dark cathedral glass (translucent, not opaque voids)
    ==================================================================== */
-/* Empty panes are clear leaded glass: a faint blue tint over the lit
-   field so the continuous backlight glows through. The dark lead came
-   is painted by .hexaclear-cell-outline on top (below), not here — the
-   base hex carries only the glass tint. */
+/* Neutral dark glass — flat tint; brightness varies from #glass-field. */
 [data-theme="glass"] .hexaclear-hex.empty {
-  fill: rgba(11, 27, 56, 0.28);
+  fill: var(--glass-pane-empty);
   fill-opacity: 1;
   stroke: none;
 }
+/* Wood-style inner dimple reads as a solid pit — hide it. */
 [data-theme="glass"] .hexaclear-slot-fill {
-  fill: rgba(8, 20, 44, 0.42);
+  display: none;
 }
 
 /* ====================================================================
-   Raised lead came — thick beaded H-channel
+   Lead came — thin dark H-profile between panes
    --------------------------------------------------------------------
-   The on-top .hexaclear-cell-outline carries the heavy dark lead bead;
-   the inset bevel polylines add a pewter crown highlight and a sunken
-   underside so the came reads as physically extruded solder, not a flat
-   SVG stroke.
+   Subordinate to the stone tracery ribs. Flat solder lines, not thick
+   beaded piping — the bevel polylines stay hidden (below).
    ==================================================================== */
 [data-theme="glass"] .hexaclear-cell-outline {
   fill: none;
   stroke: var(--glass-came);
-  stroke-width: 7.5;
+  stroke-width: 2.65;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+  opacity: 0.92;
   paint-order: stroke;
 }
-[data-theme="glass"] .hexaclear-hex-bevels {
-  display: block;
+[data-theme="glass"] .hexaclear-cell-outline.perimeter-adjacent {
+  stroke: color-mix(in srgb, var(--glass-came) 62%, var(--glass-stone-face));
+  stroke-width: 2.05;
+  opacity: 0.56;
 }
-[data-theme="glass"] .hexaclear-hex-bevel {
+/* Hull lip — a shallow limestone incision, not black lead. The exterior
+   stone reveal already owns this boundary; a dark inner outline makes the
+   board read as a separate sticker on the wall. */
+[data-theme="glass"] .hexaclear-glass-perimeter-lead {
   fill: none;
+  stroke: color-mix(in srgb, var(--glass-stone-face) 68%, var(--glass-stone-deep));
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+  opacity: 0.34;
 }
-/* Pewter crown — a bright catch of window-light on the upper-left bead. */
-[data-theme="glass"] .hexaclear-hex-bevel-highlight {
-  stroke: var(--glass-came-hi);
-  stroke-width: 2.2;
-  opacity: 0.55;
-}
-/* Sunken underside — the dark trough beneath the bead. */
-[data-theme="glass"] .hexaclear-hex-bevel-shadow {
-  stroke: var(--glass-came-lo);
-  stroke-width: 4.8;
-  opacity: 0.88;
+[data-theme="glass"] .hexaclear-hex-bevels {
+  display: none;
 }
 
 /* ====================================================================
-   Filled cells — translucent jewel panes with depth
+   Filled cells — coloured translucent panes (same layer as empties)
    ==================================================================== */
+/* The hex polygon IS the glass pane. One continuous backlit field
+   (#glass-field) shines through every cell; jewel colour is a flat
+   translucent pigment layer — not opaque cube faces stacked on top. */
 [data-theme="glass"] .hexaclear-hex.filled {
-  fill: transparent;
+  fill: var(--cube-top);
+  fill-opacity: var(--glass-pane-fill-opacity);
   stroke: none;
 }
 [data-theme="glass"] .hexaclear-hex.filled.golden {
+  fill: var(--cube-golden-top);
+  fill-opacity: var(--glass-ruby-pane-opacity);
+}
+
+[data-theme="glass"] .hexaclear-pane-surface {
+  fill: url(#glass-pane-seed);
   stroke: none;
+  opacity: 0.1;
+  mix-blend-mode: overlay;
+}
+[data-theme="glass"] .hexaclear-pane-surface.filled {
+  opacity: 0.14;
+}
+[data-theme="glass"] .hexaclear-pane-surface.empty {
+  opacity: 0.07;
+}
+[data-theme="glass"] .hexaclear-pane-surface.golden {
+  opacity: 0.11;
+}
+[data-theme="glass"] .hexaclear-pane-surface.preview-invalid,
+[data-theme="glass"] .hexaclear-pane-surface.clearing {
+  display: none;
 }
 
-/* Each filled cell is ONE hand-cut hexagonal pane of glass, not a cube.
-   The three isometric facets are collapsed to a single flat jewel tone
-   (no center "Y" seam, no top/left/right shading) and all the depth comes
-   from translucency + a painted volume gradient over the top. */
-[data-theme="glass"] .hexaclear-hex-cube .cube-face {
-  stroke: none;
-}
-[data-theme="glass"] .hexaclear-hex-cube .cube-top,
-[data-theme="glass"] .hexaclear-hex-cube .cube-left,
-[data-theme="glass"] .hexaclear-hex-cube .cube-right {
-  /* Mid jewel tone, held a touch translucent so the lit window behind
-     bleeds through the glass the way real cathedral panes transmit. */
-  fill: var(--cube-left);
-  fill-opacity: 0.84;
+/* Cube geometry is only a label carrier (ruby +10, daily count). */
+[data-theme="glass"] .hexaclear-hex-cube .cube-face,
+[data-theme="glass"] .hexaclear-hex-cube .cube-ripple-overlay,
+[data-theme="glass"] .hexaclear-hex-cube .cube-pulse-overlays {
+  display: none;
 }
 
-/* Pane volume: lit crown up high, clear translucent middle, shadowed
-   foot + darkened leaded rim — a thick poured-glass slab read, painted
-   across the WHOLE hexagon (normal blend so the dark stops sink). */
-[data-theme="glass"] .hexaclear-hex-cube .cube-ripple-overlay {
-  display: block;
-  fill: url(#glass-pane-depth);
-  mix-blend-mode: normal;
-  opacity: 1;
-  pointer-events: none;
-}
-
-/* A single soft specular streak riding the upper edge — the surface
-   catching window light. The other five pulse facets stay hidden so no
-   cube faceting returns. */
-[data-theme="glass"] .hexaclear-hex-cube .cube-pulse-overlay.cube-pulse-light.cube-pulse-top {
-  display: block;
-  fill: url(#glass-sheen);
-  opacity: 0.42;
-  mix-blend-mode: screen;
-  pointer-events: none;
-}
-
-/* Ruby pane — same single-tone glass treatment, kept distinct by its
-   deep red tone and the +10 label rather than by cube faceting. */
-[data-theme="glass"] .hexaclear-hex-cube.golden .cube-top,
-[data-theme="glass"] .hexaclear-hex-cube.golden .cube-left,
-[data-theme="glass"] .hexaclear-hex-cube.golden .cube-right {
-  fill: var(--cube-golden-left);
-  fill-opacity: 0.86;
-}
-[data-theme="glass"] .hexaclear-hex-cube.golden .cube-ripple-overlay { opacity: 1; }
 [data-theme="glass"] .hexaclear-gem-label { fill: var(--glass-gold-bright); }
 
-/* Daily-mode numbered targets: flat frosted-glass panes, NOT the base
-   chrome dice. Same single-tone + pane-depth + sheen as the jewel panes,
-   in a pale grisaille tone so they read as plain leaded glass distinct
-   from the colored jewels while the goal number stays legible. */
+/* Daily-mode numbered targets: pale grisaille glass on the hex pane. */
+[data-theme="glass"] .hexaclear-hex.empty.daily-target {
+  fill: #b8c8dc;
+  fill-opacity: 0.52;
+}
 [data-theme="glass"] .hexaclear-hex-cube.daily-target .cube-face {
   filter: none;
   stroke: none;
 }
-[data-theme="glass"] .hexaclear-hex-cube.daily-target .cube-top,
-[data-theme="glass"] .hexaclear-hex-cube.daily-target .cube-left,
-[data-theme="glass"] .hexaclear-hex-cube.daily-target .cube-right {
-  fill: #c7d6e8;
-  fill-opacity: 0.76;
-}
-[data-theme="glass"] .hexaclear-hex-cube.daily-target .cube-ripple-overlay {
-  display: block;
-  fill: url(#glass-pane-depth);
-  mix-blend-mode: normal;
-  opacity: 1;
-  pointer-events: none;
-}
-[data-theme="glass"]
-  .hexaclear-hex-cube.daily-target
-  .cube-pulse-overlay.cube-pulse-light.cube-pulse-top {
-  display: block;
-  fill: url(#glass-sheen);
-  opacity: 0.4;
-  mix-blend-mode: screen;
-  pointer-events: none;
-}
-/* The goal number reads as dark grisaille paint fired onto the pane. */
 [data-theme="glass"] .hexaclear-daily-number-centered {
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
@@ -843,23 +866,67 @@
 }
 
 /* ====================================================================
-   Rosette tracery — REMOVED in this theme
+   Stone tracery — per-rosette masonry ribs (full perimeter)
    --------------------------------------------------------------------
-   The seven-rosette stone web reads as clutter over the continuous blue
-   glass field, so we drop it entirely: no limestone bars, no carved
-   groove, no drop shadow — gone. The per-hex lead came (the cell-edge
-   strokes between hexes) is a SEPARATE layer and stays as the only
-   leading on the glass.
+   Same dual-stroke language as the outer window reveal: a deep shadow
+   stroke beneath a lit stone face. No drop shadows. Shared borders
+   between rosettes are de-duped in App.tsx so each mullion draws once.
    ==================================================================== */
-[data-theme="glass"] .hexaclear-flower-boundary-back,
-[data-theme="glass"] .hexaclear-flower-boundary,
+[data-theme="glass"] .hexaclear-glass-tracery-mullion,
+[data-theme="glass"] .hexaclear-glass-tracery-groove {
+  display: none;
+}
+
+[data-theme="glass"] .hexaclear-flower-boundary-back {
+  stroke: url(#glass-stone-joint-gradient);
+  stroke-width: 10.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.38;
+  filter:
+    drop-shadow(0.8px 1.5px 0.65px rgba(0, 0, 0, 0.34))
+    blur(0.16px);
+}
+[data-theme="glass"] .hexaclear-flower-boundary {
+  stroke: url(#glass-stone-face-gradient);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.84;
+  filter:
+    drop-shadow(0 -0.65px 0 rgba(255, 244, 214, 0.1))
+    drop-shadow(0 1px 0.6px rgba(0, 0, 0, 0.36));
+}
+[data-theme="glass"] .hexaclear-flower-boundary-arris {
+  stroke: url(#glass-stone-arris-gradient);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.36;
+  mix-blend-mode: screen;
+  filter: none;
+}
+[data-theme="glass"] .hexaclear-flower-boundary-texture {
+  stroke: url(#glass-stone-speckle);
+  stroke-width: 5.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.2;
+  mix-blend-mode: soft-light;
+}
+[data-theme="glass"] .hexaclear-flower-boundary-group {
+  filter: none;
+}
 [data-theme="glass"] .hexaclear-flower-groove,
 [data-theme="glass"] .hexaclear-flower-groove-dark,
 [data-theme="glass"] .hexaclear-flower-groove-light {
   stroke: none;
   fill: none;
 }
-[data-theme="glass"] .hexaclear-flower-boundary-group,
 [data-theme="glass"] .hexaclear-flower-groove-group {
   display: none;
   filter: none;
@@ -871,10 +938,14 @@
 /* Ghost of where the piece will seat: a faint pane of clear leaded glass
    with a luminous rim, rather than a flat opaque white wash. */
 [data-theme="glass"] .hexaclear-hex.preview-valid {
-  fill: rgba(214, 232, 255, 0.13);
-  stroke: rgba(233, 244, 255, 0.92);
-  stroke-opacity: 0.92;
+  fill: rgba(220, 228, 240, 0.28);
+  stroke: rgba(240, 246, 255, 0.88);
+  stroke-opacity: 0.88;
   stroke-width: 2.6;
+}
+[data-theme="glass"] .hexaclear-hex.empty.preview-valid {
+  fill: rgba(160, 178, 205, 0.42);
+  stroke: rgba(230, 238, 252, 0.9);
 }
 [data-theme="glass"] .hexaclear-hex.preview-invalid {
   fill: rgba(214, 40, 70, 0.4);
@@ -890,41 +961,44 @@
    the whole run breathes with a radiant halo. It's unmistakable, and it
    foreshadows the shatter that follows. */
 
-/* Filled panes that will clear: ignite + pulse. This deliberately
-   overrides the base chrome treatment (shrink to 0.8 + wiggle), which has
-   no business happening to leaded glass — glass blazes and breaks, it
-   doesn't jiggle. */
+/* Filled panes about to clear — the whole hex pane surges brighter. */
+[data-theme="glass"] .hexaclear-hex.filled.preview-clear {
+  animation: glass-pane-preview-glow 720ms ease-in-out infinite alternate;
+}
+@keyframes glass-pane-preview-glow {
+  0% {
+    fill-opacity: var(--glass-pane-fill-opacity);
+    filter: brightness(1);
+  }
+  100% {
+    fill-opacity: 0.78;
+    filter: brightness(1.38);
+  }
+}
+[data-theme="glass"] .hexaclear-hex.filled.golden.preview-clear {
+  animation: glass-ruby-preview-glow 720ms ease-in-out infinite alternate;
+}
+@keyframes glass-ruby-preview-glow {
+  0% {
+    fill-opacity: var(--glass-ruby-pane-opacity);
+    filter: brightness(1);
+  }
+  100% {
+    fill-opacity: 0.88;
+    filter: brightness(1.42);
+  }
+}
+/* Legacy cube selectors — faces are hidden; keep for safety. */
 [data-theme="glass"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: glass-preview-ignite 720ms ease-in-out infinite alternate;
-}
-[data-theme="glass"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-top,
-[data-theme="glass"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-left,
-[data-theme="glass"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-right {
-  /* A lit cast of the pane's own jewel hue — mostly the jewel, with just a
-     touch of warm lift, so the color stays clearly visible and the "about
-     to clear" read comes from the glow rather than washing to white. */
-  fill: color-mix(in srgb, var(--cube-top) 74%, #fff1cc);
-  fill-opacity: 1;
-}
-/* Keep most of the pane's volume (just a little brighter), and lift the
-   specular sheen only modestly so the crown catches light without blowing
-   out. */
-[data-theme="glass"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-ripple-overlay {
-  opacity: 0.6;
-}
-[data-theme="glass"]
-  .hexaclear-hex.preview-clear
-  ~ .hexaclear-hex-cube
-  .cube-pulse-overlay.cube-pulse-light.cube-pulse-top {
-  opacity: 0.55;
+  transform: none;
+  animation: none;
+  filter: none;
 }
 /* The pane's leaded rim turns to a glowing gold filament. */
 [data-theme="glass"] .hexaclear-cell-outline.filled.preview-clear {
   stroke: #fff2c4;
   stroke-opacity: 0.95;
-  stroke-width: 5;
+  stroke-width: 3.5;
 }
 
 /* Empty cells inside the clear (the holes the dropped piece plugs): a
@@ -932,14 +1006,18 @@
    connected band of light, even across the gaps the piece hasn't filled
    yet. */
 [data-theme="glass"] .hexaclear-hex.empty.preview-clear {
-  fill: rgba(255, 244, 214, 0.16);
+  fill: var(--glass-pane-empty);
   stroke: none;
-  animation: glass-preview-rim 720ms ease-in-out infinite alternate;
+  animation: glass-empty-preview-glow 720ms ease-in-out infinite alternate;
+}
+@keyframes glass-empty-preview-glow {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(1.38); }
 }
 [data-theme="glass"] .hexaclear-cell-outline.empty.preview-clear {
   stroke: #ffe9b0;
   stroke-opacity: 0.95;
-  stroke-width: 5.5;
+  stroke-width: 3.5;
   animation: glass-preview-rim 720ms ease-in-out infinite alternate;
 }
 
@@ -984,7 +1062,7 @@
   }
   [data-theme="glass"] .hexaclear-hex.empty.preview-clear {
     animation: none !important;
-    filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
+    filter: brightness(1.25) !important;
   }
   [data-theme="glass"] .hexaclear-cell-outline.empty.preview-clear {
     animation: none !important;
@@ -1006,7 +1084,7 @@
   .cubic-viewport.reduced-motion
   .hexaclear-hex.empty.preview-clear {
   animation: none !important;
-  filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
+  filter: brightness(1.25) !important;
 }
 [data-theme="glass"]
   .cubic-viewport.reduced-motion
@@ -1026,12 +1104,60 @@
 [data-theme="glass"] .hexaclear-hex-cube.clearing-line,
 [data-theme="glass"] .hexaclear-hex-cube.clearing-flower-center,
 [data-theme="glass"] .hexaclear-hex-cube.clearing-flower-ring {
+  animation: none;
+}
+[data-theme="glass"] .hexaclear-hex.filled.clearing-line,
+[data-theme="glass"] .hexaclear-hex.filled.clearing-flower-center,
+[data-theme="glass"] .hexaclear-hex.filled.clearing-flower-ring {
+  stroke: none;
   transform-box: fill-box;
   transform-origin: center;
-  animation: hexaclear-glass-flash 360ms ease-out both;
+  animation: hexaclear-glass-pane-flash 360ms ease-out both;
 }
-[data-theme="glass"] .hexaclear-hex-cube.clearing-flower-ring {
+[data-theme="glass"] .hexaclear-hex.filled.clearing-flower-ring {
   animation-delay: 150ms;
+}
+
+[data-theme="glass"] .hexaclear-hex.filled.golden.clearing-line,
+[data-theme="glass"] .hexaclear-hex.filled.golden.clearing-flower-center,
+[data-theme="glass"] .hexaclear-hex.filled.golden.clearing-flower-ring {
+  animation: hexaclear-glass-ruby-pane-flash 360ms ease-out both;
+}
+
+@keyframes hexaclear-glass-ruby-pane-flash {
+  0% {
+    filter: brightness(1) saturate(1);
+    fill-opacity: var(--glass-ruby-pane-opacity);
+    opacity: 1;
+  }
+  45% {
+    filter: brightness(2.8) saturate(0.5);
+    fill-opacity: 0.95;
+    opacity: 1;
+  }
+  100% {
+    filter: brightness(3.4) saturate(0.3);
+    fill-opacity: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes hexaclear-glass-pane-flash {
+  0% {
+    filter: brightness(1) saturate(1);
+    fill-opacity: var(--glass-pane-fill-opacity);
+    opacity: 1;
+  }
+  45% {
+    filter: brightness(2.6) saturate(0.55);
+    fill-opacity: 0.92;
+    opacity: 1;
+  }
+  100% {
+    filter: brightness(3.2) saturate(0.35);
+    fill-opacity: 0;
+    opacity: 0;
+  }
 }
 
 @keyframes hexaclear-glass-flash {
@@ -1044,6 +1170,12 @@
 [data-theme="glass"] .hexaclear-hex.clearing-line,
 [data-theme="glass"] .hexaclear-hex.clearing-flower-center,
 [data-theme="glass"] .hexaclear-hex.clearing-flower-ring {
+  stroke: none;
+}
+[data-theme="glass"] .hexaclear-hex.empty.clearing,
+[data-theme="glass"] .hexaclear-hex.empty.clearing-line,
+[data-theme="glass"] .hexaclear-hex.empty.clearing-flower-center,
+[data-theme="glass"] .hexaclear-hex.empty.clearing-flower-ring {
   fill: transparent;
   stroke: var(--glass-came);
 }
@@ -1148,8 +1280,11 @@
 
 [data-theme="glass"] .hexaclear-hex.piece {
   fill: var(--cube-top);
-  fill-opacity: 0.94;
+  fill-opacity: var(--glass-hand-pane-opacity);
   stroke: none;
+}
+[data-theme="glass"] .hexaclear-hex-bevels.piece {
+  display: none;
 }
 
 /* Dark-lead came on every hand/hold jewel, drawn ON TOP of the cube faces so
@@ -1158,9 +1293,9 @@
 [data-theme="glass"] .hexaclear-piece-outline {
   fill: none;
   stroke: var(--glass-came);
-  stroke-width: 5.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke-width: 2.8;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
   vector-effect: non-scaling-stroke;
 }
 [data-theme="glass"] .hexaclear-hold.unplayable .hexaclear-piece-svg,

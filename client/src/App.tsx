@@ -650,7 +650,10 @@ const paletteForTier = (
     // belongs to the same color story as the panes in front of it, and the
     // whole composition drifts as one harmonious unit as octaves climb.
     const glassShift = glassOctaveHueShift(octave)
-    const glassLightHue = (210 + glassShift) % 360
+    // Warm daylight behind the window — distinct from cobalt panes and from
+    // the neutral-warm empty bays. Octave rotation tints the clerestory light
+    // without pulling it back into the same blue band as the jewels.
+    const glassLightHue = (42 + glassShift) % 360
     return {
       '--cube-top': `hsl(${topHue}, ${sat}%, 66%)`,
       '--cube-left': `hsl(${baseHue}, ${sat}%, 48%)`,
@@ -735,14 +738,14 @@ type JewelFacets = {
   '--cube-right': string
 }
 const GLASS_JEWELS: JewelFacets[] = [
-  // Sapphire — deep navy blue
-  { '--cube-top': '#4f7ee0', '--cube-left': '#234c9e', '--cube-right': '#122a63' },
-  // Turquoise
-  { '--cube-top': '#3fd7d2', '--cube-left': '#13a3a6', '--cube-right': '#085f68' },
-  // Emerald
-  { '--cube-top': '#52d886', '--cube-left': '#1aa95c', '--cube-right': '#0a6836' },
-  // Amethyst
-  { '--cube-top': '#b888ea', '--cube-left': '#8a4fd2', '--cube-right': '#511f92' },
+  // Cobalt — deep royal blue (cool, clearly not teal or empty-pane wash)
+  { '--cube-top': '#4a7de8', '--cube-left': '#2456b8', '--cube-right': '#123070' },
+  // Amber — warm gold (max separation from the blues)
+  { '--cube-top': '#f0b830', '--cube-left': '#c88610', '--cube-right': '#805608' },
+  // Emerald — saturated green
+  { '--cube-top': '#40d070', '--cube-left': '#18a050', '--cube-right': '#0a6030' },
+  // Amethyst — rich violet (far from cobalt on the wheel)
+  { '--cube-top': '#b070e8', '--cube-left': '#8040c0', '--cube-right': '#481878' },
 ]
 
 // Small deterministic string hash (FNV-1a). Stable across renders/reloads so
@@ -1007,65 +1010,6 @@ const buildLayout = (boardDef: BoardDefinition): BoardLayout => {
     positions,
     width,
     height,
-    offsetX: -minX + HEX_SIZE * 1.25,
-    offsetY: -minY + HEX_SIZE * 1.25,
-  }
-}
-
-// Stained-glass only: nudge each of the seven rosettes radially outward by
-// a small fraction of its center's offset from the board origin, opening a
-// thin sliver of the lit glass field BETWEEN the rosettes (the central
-// flower sits at the origin, so it doesn't move; the six outer flowers
-// drift out along their own spokes). Returns a fresh layout — every
-// consumer (cell render, click, drag mapping, clears, ripple) reads
-// `boardLayout.positions`, so moving the cells here keeps hit-testing
-// pixel-accurate without any special-casing downstream.
-const ROSETTE_SEPARATION = 0.1
-const buildRosetteSeparatedLayout = (
-  layout: BoardLayout,
-  geometry: BoardGeometry,
-  sep: number = ROSETTE_SEPARATION,
-): BoardLayout => {
-  const cellOffset: Record<string, { x: number; y: number }> = {}
-  for (const center of geometry.flowerCenters) {
-    const { x: ox, y: oy } = axialToPixel(center.q, center.r)
-    for (let dq = -geometry.flowerRadius; dq <= geometry.flowerRadius; dq++) {
-      const drMin = Math.max(-geometry.flowerRadius, -dq - geometry.flowerRadius)
-      const drMax = Math.min(geometry.flowerRadius, -dq + geometry.flowerRadius)
-      for (let dr = drMin; dr <= drMax; dr++) {
-        cellOffset[axialToId({ q: center.q + dq, r: center.r + dr })] = {
-          x: ox * sep,
-          y: oy * sep,
-        }
-      }
-    }
-  }
-  const positions: Record<string, { x: number; y: number }> = {}
-  let minX = Infinity
-  let maxX = -Infinity
-  let minY = Infinity
-  let maxY = -Infinity
-  for (const id in layout.positions) {
-    const p = layout.positions[id]
-    const off = cellOffset[id] ?? { x: 0, y: 0 }
-    const np = { x: p.x + off.x, y: p.y + off.y }
-    positions[id] = np
-    minX = Math.min(minX, np.x)
-    maxX = Math.max(maxX, np.x)
-    minY = Math.min(minY, np.y)
-    maxY = Math.max(maxY, np.y)
-  }
-  // Recompute the viewBox to bound the spread-out cells (same margin as
-  // buildLayout). The board SVG fits this viewBox into its fixed on-screen
-  // box, so the separated board lands on the EXACT same footprint as the
-  // un-separated board — it cannot clip the frame — while the inter-rosette
-  // gaps keep their full size and the cells simply render a touch smaller
-  // to make room. (The earlier bug kept the original viewBox, so the spread
-  // cells pushed past it and got clipped by the opening.)
-  return {
-    positions,
-    width: maxX - minX + HEX_SIZE * 2.5,
-    height: maxY - minY + HEX_SIZE * 2.5,
     offsetX: -minX + HEX_SIZE * 1.25,
     offsetY: -minY + HEX_SIZE * 1.25,
   }
@@ -1378,6 +1322,42 @@ const buildBoardOutlineSegments = (
 
   return segments
 }
+
+const segmentKey = (seg: Segment): string =>
+  seg.x1 <= seg.x2
+    ? `${seg.x1.toFixed(2)},${seg.y1.toFixed(2)}|${seg.x2.toFixed(2)},${seg.y2.toFixed(2)}`
+    : `${seg.x2.toFixed(2)},${seg.y2.toFixed(2)}|${seg.x1.toFixed(2)},${seg.y1.toFixed(2)}`
+
+const hexEdgeSegment = (
+  cx: number,
+  cy: number,
+  side: number,
+): Segment => {
+  const angleA = ((60 * side - 30) * Math.PI) / 180
+  const angleB = ((60 * ((side + 1) % 6) - 30) * Math.PI) / 180
+  return {
+    x1: cx + HEX_SIZE * Math.cos(angleA),
+    y1: cy + HEX_SIZE * Math.sin(angleA),
+    x2: cx + HEX_SIZE * Math.cos(angleB),
+    y2: cy + HEX_SIZE * Math.sin(angleB),
+  }
+}
+
+// De-dupe identical edge segments (shared rosette borders emit twice).
+const dedupeSegments = (segments: Segment[]): Segment[] => {
+  const seen = new Set<string>()
+  const result: Segment[] = []
+  for (const seg of segments) {
+    const key = segmentKey(seg)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(seg)
+  }
+  return result
+}
+
+const isBoundaryCell = (cell: BoardDefinition['cells'][number], cells: Set<string>) =>
+  directions.some((dir) => !cells.has(axialToId(addAxial(cell.coord, dir))))
 
 // Bundle of pre-baked render data for one board. We compute one of
 // these per mode at module load and pick the right one based on
@@ -3172,6 +3152,67 @@ function App() {
     [game.mode],
   )
   const boardDef = boardRender.boardDef
+  const boardCellIdSet = useMemo(
+    () => new Set(boardDef.cells.map((c) => c.id)),
+    [boardDef],
+  )
+  const glassBoundaryCellIds = useMemo(
+    () =>
+      new Set(
+        boardDef.cells
+          .filter((cell) => isBoundaryCell(cell, boardCellIdSet))
+          .map((cell) => cell.id),
+      ),
+    [boardDef, boardCellIdSet],
+  )
+  // Outer hull segments — suppress the dark shadow stroke on the board edge
+  // while keeping it between rosettes (carved depth there).
+  const glassExteriorEdgeKeys = useMemo(
+    () => new Set(boardRender.outlineSegments.map(segmentKey)),
+    [boardRender],
+  )
+  const glassInterRosetteFlowerBackSegments = useMemo(
+    () =>
+      dedupeSegments(boardRender.flowerBoundarySegments).filter(
+        (seg) => !glassExteriorEdgeKeys.has(segmentKey(seg)),
+      ),
+    [boardRender, glassExteriorEdgeKeys],
+  )
+  const glassInterRosetteFlowerFrontSegments = useMemo(
+    () =>
+      dedupeSegments(boardRender.flowerBoundarySegments).filter(
+        (seg) => !glassExteriorEdgeKeys.has(segmentKey(seg)),
+      ),
+    [boardRender, glassExteriorEdgeKeys],
+  )
+  // Inter-rosette stone ribs — interior lead must not cross these edges.
+  const glassFlowerBoundaryEdgeKeys = useMemo(
+    () =>
+      new Set(
+        dedupeSegments(boardRender.flowerBoundarySegments).map(segmentKey),
+      ),
+    [boardRender],
+  )
+  // Hull rim lead — one closed path, inset to the glass lip, above stone.
+  const glassHullLeadLoop = useMemo(() => {
+    const loop = stitchClosedLoop(boardRender.outlineSegments)
+    if (loop.length < 3) return null
+    return insetClosedLoop(loop, 2.5, {
+      x: boardRender.layout.width / 2,
+      y: boardRender.layout.height / 2,
+    })
+  }, [boardRender])
+  // Stone tracery is wider than the thin pane lead, so it gets a deeper
+  // perimeter clip. This keeps inter-rosette mullions from crossing over the
+  // interior side of the exterior stone reveal at hull junctions.
+  const glassStoneTraceryClipLoop = useMemo(() => {
+    const loop = stitchClosedLoop(boardRender.outlineSegments)
+    if (loop.length < 3) return null
+    return insetClosedLoop(loop, 7.5, {
+      x: boardRender.layout.width / 2,
+      y: boardRender.layout.height / 2,
+    })
+  }, [boardRender])
   // True iff the player committed to a session this load — either by having
   // an in-progress game restored from storage, or by explicitly starting /
   // resetting a run from the menu, or by placing their first piece. Once
@@ -3834,18 +3875,10 @@ function App() {
       ? raw
       : 'wood'
   })
-  // Board cell positions. In the Stained Glass theme the seven rosettes are
-  // pushed slightly apart so the lit glass field shows between them; every
-  // other theme uses the raw, fully-tessellated layout. Computed off the
-  // reactive `theme` so it follows live theme switches, and memoized so the
-  // positions object stays referentially stable for downstream deps.
-  const boardLayout = useMemo(
-    () =>
-      theme === 'glass'
-        ? buildRosetteSeparatedLayout(boardRender.layout, boardRender.geometry)
-        : boardRender.layout,
-    [boardRender, theme],
-  )
+  // Board cell positions — fully tessellated for every theme (including
+  // stained glass). Rosette tracery is painted by per-rosette boundary
+  // strokes, not by separating the clusters.
+  const boardLayout = boardRender.layout
   // Stained-glass only: the hue rotation applied to every jewel (and the
   // backlight) at the current octave. Threaded into all jewelStyle() calls
   // so the hand, ghost, placed cubes, and lock-in animation all wear the
@@ -10781,20 +10814,93 @@ function App() {
                     <stop offset="46%" stopColor="#ffffff" stopOpacity="0.12" />
                     <stop offset="100%" stopColor="#000000" stopOpacity="0.32" />
                   </radialGradient>
-                  {/* Single-tone hex pane volume. A lit crown high on the
-                      pane (light entering the glass), a clear translucent
-                      mid, and a shadowed foot + darkened leaded rim give a
-                      thick hand-cut piece of cathedral glass its depth
-                      WITHOUT any cube faceting. Painted (normal blend, so
-                      the dark stops actually sink the edges) over the flat
-                      jewel fill. */}
-                  <radialGradient id="glass-pane-depth" cx="50%" cy="32%" r="74%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
-                    <stop offset="26%" stopColor="#ffffff" stopOpacity="0.16" />
-                    <stop offset="52%" stopColor="#ffffff" stopOpacity="0" />
-                    <stop offset="78%" stopColor="#000000" stopOpacity="0.16" />
-                    <stop offset="100%" stopColor="#000000" stopOpacity="0.5" />
+                  {/* Single-tone hex pane volume — a whisper of edge
+                      darkening only. Real cathedral glass is flat; depth
+                      comes from light passing through, not a hot crown on
+                      every pane. */}
+                  <radialGradient id="glass-pane-depth" cx="50%" cy="48%" r="68%">
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+                    <stop offset="68%" stopColor="#ffffff" stopOpacity="0" />
+                    <stop offset="86%" stopColor="#000000" stopOpacity="0.06" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0.18" />
                   </radialGradient>
+                  {/* Board-space limestone ramps. These use the same vertical
+                      clerestory light as the page wall, so the hull reveal
+                      and rosette tracery read as stone cut from the
+                      surrounding masonry rather than as a separate board
+                      layer. */}
+                  <linearGradient
+                    id="glass-stone-face-gradient"
+                    gradientUnits="userSpaceOnUse"
+                    x1={0}
+                    y1={0}
+                    x2={0}
+                    y2={boardLayout.height}
+                  >
+                    <stop offset="0%" stopColor="var(--glass-stone-raise)" />
+                    <stop offset="46%" stopColor="var(--glass-stone-face)" />
+                    <stop offset="78%" stopColor="var(--glass-stone)" />
+                    <stop offset="100%" stopColor="var(--glass-stone-deep)" />
+                  </linearGradient>
+                  <linearGradient
+                    id="glass-stone-joint-gradient"
+                    gradientUnits="userSpaceOnUse"
+                    x1={0}
+                    y1={0}
+                    x2={0}
+                    y2={boardLayout.height}
+                  >
+                    <stop offset="0%" stopColor="var(--glass-stone-face)" />
+                    <stop offset="54%" stopColor="var(--glass-stone)" />
+                    <stop offset="100%" stopColor="var(--glass-stone-deep)" />
+                  </linearGradient>
+                  <linearGradient
+                    id="glass-stone-arris-gradient"
+                    gradientUnits="userSpaceOnUse"
+                    x1={0}
+                    y1={0}
+                    x2={0}
+                    y2={boardLayout.height}
+                  >
+                    <stop offset="0%" stopColor="rgba(255, 244, 214, 0.38)" />
+                    <stop offset="58%" stopColor="rgba(255, 244, 214, 0.1)" />
+                    <stop offset="100%" stopColor="rgba(255, 244, 214, 0)" />
+                  </linearGradient>
+                  <pattern
+                    id="glass-stone-speckle"
+                    patternUnits="userSpaceOnUse"
+                    width="42"
+                    height="42"
+                  >
+                    <rect width="42" height="42" fill="transparent" />
+                    <circle cx="7" cy="9" r="0.7" fill="rgba(255, 244, 214, 0.22)" />
+                    <circle cx="30" cy="14" r="0.55" fill="rgba(255, 244, 214, 0.16)" />
+                    <circle cx="18" cy="31" r="0.6" fill="rgba(0, 0, 0, 0.18)" />
+                    <circle cx="37" cy="35" r="0.45" fill="rgba(0, 0, 0, 0.14)" />
+                  </pattern>
+                  <pattern
+                    id="glass-pane-seed"
+                    patternUnits="userSpaceOnUse"
+                    width="34"
+                    height="34"
+                  >
+                    <rect width="34" height="34" fill="transparent" />
+                    <circle cx="6" cy="8" r="0.65" fill="rgba(255, 255, 255, 0.28)" />
+                    <circle cx="24" cy="12" r="0.5" fill="rgba(255, 255, 255, 0.2)" />
+                    <circle cx="15" cy="25" r="0.55" fill="rgba(0, 0, 0, 0.18)" />
+                    <path
+                      d="M3 22 C10 18 16 20 22 15 S30 11 33 15"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.13)"
+                      strokeWidth="0.7"
+                    />
+                    <path
+                      d="M2 5 C9 9 13 6 19 10 S28 17 33 13"
+                      fill="none"
+                      stroke="rgba(0,0,0,0.12)"
+                      strokeWidth="0.65"
+                    />
+                  </pattern>
                   {/* Seedy antique-glass refraction: low-frequency fractal
                       noise displaces the backlight layer it's applied to, so
                       the light bleeding through ripples and pools the way it
@@ -10817,7 +10923,7 @@ function App() {
                     <feDisplacementMap
                       in="SourceGraphic"
                       in2="noise"
-                      scale={14}
+                      scale={7}
                       xChannelSelector="R"
                       yChannelSelector="G"
                     />
@@ -10835,6 +10941,19 @@ function App() {
                     <stop className="glass-field-stop-mid" offset="52%" />
                     <stop className="glass-field-stop-edge" offset="100%" />
                   </radialGradient>
+                  {/* One soft diagonal glare across the whole aperture —
+                      board-level, not per-pane hotspots. */}
+                  <linearGradient
+                    id="glass-glare"
+                    x1="8%"
+                    y1="4%"
+                    x2="78%"
+                    y2="88%"
+                  >
+                    <stop offset="0%" stopColor="rgba(255, 252, 244, 0.42)" />
+                    <stop offset="38%" stopColor="rgba(255, 252, 244, 0.08)" />
+                    <stop offset="100%" stopColor="rgba(255, 252, 244, 0)" />
+                  </linearGradient>
                   <clipPath
                     id="glass-field-clip"
                     clipPathUnits="userSpaceOnUse"
@@ -10852,6 +10971,30 @@ function App() {
                       )
                     })}
                   </clipPath>
+                  {glassHullLeadLoop && (
+                    <clipPath
+                      id="glass-internal-lead-clip"
+                      clipPathUnits="userSpaceOnUse"
+                    >
+                      <polygon
+                        points={glassHullLeadLoop
+                          .map((v) => `${v.x},${v.y}`)
+                          .join(' ')}
+                      />
+                    </clipPath>
+                  )}
+                  {glassStoneTraceryClipLoop && (
+                    <clipPath
+                      id="glass-stone-tracery-clip"
+                      clipPathUnits="userSpaceOnUse"
+                    >
+                      <polygon
+                        points={glassStoneTraceryClipLoop
+                          .map((v) => `${v.x},${v.y}`)
+                          .join(' ')}
+                      />
+                    </clipPath>
+                  )}
                 </>
               )}
               {rippleCells.length > 0 && rippleCenter && (
@@ -10896,10 +11039,30 @@ function App() {
                   clipPath="url(#glass-field-clip)"
                   filter="url(#glass-refract)"
                 />
+                <rect
+                  x={0}
+                  y={0}
+                  width={boardLayout.width}
+                  height={boardLayout.height}
+                  fill="url(#glass-glare)"
+                  clipPath="url(#glass-field-clip)"
+                  className="hexaclear-glass-glare"
+                />
               </g>
             )}
 
-            {/* Board hull behind everything */}
+            {theme === 'glass' && glassHullLeadLoop && (
+              <polygon
+                points={glassHullLeadLoop
+                  .map((v) => `${v.x},${v.y}`)
+                  .join(' ')}
+                className="hexaclear-glass-recess-shadow"
+                aria-hidden="true"
+                pointerEvents="none"
+              />
+            )}
+
+            {/* Board hull — outer stone reveal (below glass panes). */}
             {boardRender.outlineSegments.map((seg, idx) => (
               <line
                 key={`outline-back-${idx}`}
@@ -10920,6 +11083,32 @@ function App() {
                 className="hexaclear-board-outline-front"
               />
             ))}
+            {theme === 'glass' &&
+              boardRender.outlineSegments.map((seg, idx) => (
+                <line
+                  key={`outline-arris-${idx}`}
+                  x1={seg.x1}
+                  y1={seg.y1}
+                  x2={seg.x2}
+                  y2={seg.y2}
+                  className="hexaclear-board-outline-arris"
+                  aria-hidden="true"
+                  pointerEvents="none"
+                />
+              ))}
+            {theme === 'glass' &&
+              boardRender.outlineSegments.map((seg, idx) => (
+                <line
+                  key={`outline-texture-${idx}`}
+                  x1={seg.x1}
+                  y1={seg.y1}
+                  x2={seg.x2}
+                  y2={seg.y2}
+                  className="hexaclear-board-outline-texture"
+                  aria-hidden="true"
+                  pointerEvents="none"
+                />
+              ))}
 
             {(() => {
               return boardDef.cells.map((cell) => {
@@ -11071,16 +11260,6 @@ function App() {
                     '--cell-conflict-color'
                   ] = conflictStrokeColor
                 }
-                const polygonStyle =
-                  partnerHueStyle ||
-                  tintOverlayColor ||
-                  conflictStrokeColor
-                    ? { ...(partnerHueStyle ?? {}), ...cellTintStyle }
-                    : undefined
-                // Glass theme: color each filled cube with its persisted
-                // jewel (or a deterministic fallback from the cell id for
-                // pre-seeded cells). Skipped for rubies (own palette) and
-                // multiplayer (partner-hue identity wins).
                 const glassJewelStyle =
                   (theme === 'glass' || theme === 'mondrian') &&
                   !isGolden &&
@@ -11090,6 +11269,35 @@ function App() {
                           jewelIndexForPieceCube(cell.id, 0),
                       )
                     : null
+                let polygonStyle: React.CSSProperties | undefined
+                if (theme === 'glass' && isFilled) {
+                  if (isPartnerOwned && partnerHueStyle) {
+                    polygonStyle = {
+                      ...partnerHueStyle,
+                      ...(tintOverlayColor || conflictStrokeColor
+                        ? cellTintStyle
+                        : {}),
+                    }
+                  } else if (!isGolden && glassJewelStyle) {
+                    polygonStyle = { ...glassJewelStyle }
+                  } else if (
+                    tintOverlayColor ||
+                    conflictStrokeColor ||
+                    partnerHueStyle
+                  ) {
+                    polygonStyle = {
+                      ...(partnerHueStyle ?? {}),
+                      ...cellTintStyle,
+                    }
+                  }
+                } else {
+                  polygonStyle =
+                    partnerHueStyle ||
+                    tintOverlayColor ||
+                    conflictStrokeColor
+                      ? { ...(partnerHueStyle ?? {}), ...cellTintStyle }
+                      : undefined
+                }
                 const cubeStyle = glassJewelStyle ?? partnerHueStyle
 
                 return (
@@ -11117,6 +11325,7 @@ function App() {
                         'hexaclear-hex',
                         isFilled ? 'filled' : 'empty',
                         isGolden ? 'golden' : '',
+                        isDailyTarget && !isFilledVisible ? 'daily-target' : '',
                         isClearing ? 'clearing' : '',
                         isInvalidDrop ? 'invalid-drop' : '',
                         willClearInPreview ? 'preview-clear' : '',
@@ -11148,6 +11357,30 @@ function App() {
                         }
                       }}
                     />
+                    {theme === 'glass' && (
+                      <polygon
+                        points={points}
+                        className={[
+                          'hexaclear-pane-surface',
+                          isFilled ? 'filled' : 'empty',
+                          isGolden ? 'golden' : '',
+                          isDailyTarget && !isFilledVisible
+                            ? 'daily-target'
+                            : '',
+                          isClearing ? 'clearing' : '',
+                          willClearInPreview ? 'preview-clear' : '',
+                          inPreview
+                            ? previewValid
+                              ? 'preview-valid'
+                              : 'preview-invalid'
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        aria-hidden="true"
+                        pointerEvents="none"
+                      />
+                    )}
                     <g
                       className={[
                         'hexaclear-hex-bevels',
@@ -11210,7 +11443,12 @@ function App() {
                           {cellTintGlyphByCellId[cell.id]}
                         </text>
                       )}
-                    {(isFilled || (isDailyTarget && isDailyHitPulsing)) && !isRecentlyPlaced && (
+                    {(isFilled || (isDailyTarget && isDailyHitPulsing)) &&
+                      !isRecentlyPlaced &&
+                      (theme !== 'glass' ||
+                        isGolden ||
+                        isDailyTarget ||
+                        !!cellGlyphByCellId[cell.id]) && (
                       <CubeLines
                         cx={cx}
                         cy={cy}
@@ -11289,14 +11527,10 @@ function App() {
                         {cell.coord.q},{cell.coord.r}
                       </text>
                     )}
-                    {/* Lead-came outline — drawn ON TOP of cube faces so the
-                        dark lead shows on every edge, including shared edges
-                        between adjacent filled panes (faces cover the hex
-                        polygon stroke from both sides). Glass theme styles
-                        this as thick beaded came; other themes leave it off. */}
-                    <polygon
-                      points={points}
-                      className={[
+                    {/* Lead came — pane-to-pane only; stone mullions own
+                        inter-rosette edges (see glassFlowerBoundaryEdgeKeys). */}
+                    {(() => {
+                      const outlineClasses = [
                         'hexaclear-cell-outline',
                         isFilled ? 'filled' : 'empty',
                         isGolden ? 'golden' : '',
@@ -11309,14 +11543,76 @@ function App() {
                           : '',
                       ]
                         .filter(Boolean)
-                        .join(' ')}
-                      aria-hidden="true"
-                      pointerEvents="none"
-                    />
+                        .join(' ')
+                      if (theme === 'glass') {
+                        return Array.from({ length: 6 }, (_, side) => {
+                          const dir = directions[EDGE_DIRECTION_INDEX[side]]
+                          const neighborId = axialToId(
+                            addAxial(cell.coord, dir),
+                          )
+                          if (!boardCellIdSet.has(neighborId)) return null
+                          const edge = hexEdgeSegment(cx, cy, side)
+                          if (
+                            glassFlowerBoundaryEdgeKeys.has(segmentKey(edge))
+                          ) {
+                            return null
+                          }
+                          const isPerimeterAdjacent =
+                            glassBoundaryCellIds.has(cell.id) ||
+                            glassBoundaryCellIds.has(neighborId)
+                          return (
+                            <line
+                              key={`lead-${side}`}
+                              x1={edge.x1}
+                              y1={edge.y1}
+                              x2={edge.x2}
+                              y2={edge.y2}
+                              className={[
+                                outlineClasses,
+                                isPerimeterAdjacent
+                                  ? 'perimeter-adjacent'
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              clipPath={
+                                glassHullLeadLoop
+                                  ? 'url(#glass-internal-lead-clip)'
+                                  : undefined
+                              }
+                              aria-hidden="true"
+                              pointerEvents="none"
+                            />
+                          )
+                        })
+                      }
+                      return (
+                        <polygon
+                          points={points}
+                          className={outlineClasses}
+                          aria-hidden="true"
+                          pointerEvents="none"
+                        />
+                      )
+                    })()}
                   </g>
                 )
               })
             })()}
+
+            {/* Hull rim lead on the glass lip — before inter-rosette stone so
+                internal mullions wrap over it at junctions. Exterior frame
+                stone is the board outline above (drawn before panes). */}
+            {theme === 'glass' && glassHullLeadLoop && (
+              <polygon
+                points={glassHullLeadLoop
+                  .map((v) => `${v.x},${v.y}`)
+                  .join(' ')}
+                className="hexaclear-glass-perimeter-lead"
+                aria-hidden="true"
+                pointerEvents="none"
+              />
+            )}
 
             {/* Stained-glass shatter. Only in the glass theme, only while
                 a clear is in flight (clearingCells drains after 600ms — the
@@ -11556,7 +11852,12 @@ function App() {
             {/* Rosette boundaries should sit above the static board but below
                 the final cube pop overlay so the highlight never hides the
                 animation. */}
-            {boardRender.flowerBoundarySegments.map((seg, idx) => (
+            {/* Rosette stone tracery — inter-rosette ribs only in glass (exterior
+                hull stone is the board outline); drawn above hull lead. */}
+            {(theme === 'glass'
+              ? glassInterRosetteFlowerBackSegments
+              : boardRender.flowerBoundarySegments
+            ).map((seg, idx) => (
               <line
                 key={`flower-back-${idx}`}
                 x1={seg.x1}
@@ -11564,10 +11865,18 @@ function App() {
                 x2={seg.x2}
                 y2={seg.y2}
                 className="hexaclear-flower-boundary-back"
+                clipPath={
+                  theme === 'glass' && glassStoneTraceryClipLoop
+                    ? 'url(#glass-stone-tracery-clip)'
+                    : undefined
+                }
               />
             ))}
             <g className="hexaclear-flower-boundary-group">
-              {boardRender.flowerBoundarySegments.map((seg, idx) => (
+              {(theme === 'glass'
+                ? glassInterRosetteFlowerFrontSegments
+                : boardRender.flowerBoundarySegments
+              ).map((seg, idx) => (
                 <line
                   key={`flower-front-${idx}`}
                   x1={seg.x1}
@@ -11575,8 +11884,49 @@ function App() {
                   x2={seg.x2}
                   y2={seg.y2}
                   className="hexaclear-flower-boundary"
+                  clipPath={
+                    theme === 'glass' && glassStoneTraceryClipLoop
+                      ? 'url(#glass-stone-tracery-clip)'
+                      : undefined
+                  }
                 />
               ))}
+              {theme === 'glass' &&
+                glassInterRosetteFlowerFrontSegments.map((seg, idx) => (
+                  <line
+                    key={`flower-arris-${idx}`}
+                    x1={seg.x1}
+                    y1={seg.y1}
+                    x2={seg.x2}
+                    y2={seg.y2}
+                    className="hexaclear-flower-boundary-arris"
+                    clipPath={
+                      glassStoneTraceryClipLoop
+                        ? 'url(#glass-stone-tracery-clip)'
+                        : undefined
+                    }
+                    aria-hidden="true"
+                    pointerEvents="none"
+                  />
+                ))}
+              {theme === 'glass' &&
+                glassInterRosetteFlowerFrontSegments.map((seg, idx) => (
+                  <line
+                    key={`flower-texture-${idx}`}
+                    x1={seg.x1}
+                    y1={seg.y1}
+                    x2={seg.x2}
+                    y2={seg.y2}
+                    className="hexaclear-flower-boundary-texture"
+                    clipPath={
+                      glassStoneTraceryClipLoop
+                        ? 'url(#glass-stone-tracery-clip)'
+                        : undefined
+                    }
+                    aria-hidden="true"
+                    pointerEvents="none"
+                  />
+                ))}
             </g>
             {/* Win98 etched-groove rosette frame. One closed
                 polygon per rosette per groove tone; CSS hides the
@@ -17358,6 +17708,7 @@ const PiecePreview = ({
               <polygon
                 points={points}
                 className="hexaclear-hex piece"
+                style={cubeStyles?.[idx]}
               />
               <g
                 className="hexaclear-hex-bevels piece"
@@ -17471,6 +17822,7 @@ const PiecePreview = ({
             <polygon
               points={points}
               className="hexaclear-hex piece"
+              style={cubeStyles?.[idx]}
             />
             <g
               className="hexaclear-hex-bevels piece"
