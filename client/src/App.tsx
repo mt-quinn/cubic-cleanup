@@ -170,50 +170,20 @@ type AudiusAlbumQueue = {
 
 type PlayAudiusTrackOptions = {
   resolveAlbum?: boolean
+  fallbackOnError?: boolean
 }
 
 type AudiusRepeatMode = 'none' | 'album' | 'track'
 type AudiusAlbumResolveStatus = 'idle' | 'resolving' | 'resolved'
 
 const AUDIUS_APP_NAME = 'cubekill-visualizer-poc'
-// Audius publishes a list of healthy discovery hosts here. We resolve one at
-// runtime so a single dead/deprecated node can't take down the whole theme.
-const AUDIUS_DISCOVERY_URL = 'https://api.audius.co'
-const AUDIUS_FALLBACK_HOST = 'https://api.audius.co'
-let audiusApiBase = `${AUDIUS_FALLBACK_HOST}/v1`
-let audiusHostPromise: Promise<string> | null = null
-
-const discoverAudiusHost = async (): Promise<string> => {
-  const res = await fetch(AUDIUS_DISCOVERY_URL)
-  if (!res.ok) throw new Error(`Audius discovery returned ${res.status}`)
-  const json = (await res.json()) as { data?: unknown }
-  const hosts = Array.isArray(json.data)
-    ? json.data.filter(
-        (host): host is string => typeof host === 'string' && host.length > 0,
-      )
-    : []
-  if (hosts.length === 0) throw new Error('Audius discovery returned no hosts.')
-  const host = hosts[Math.floor(Math.random() * hosts.length)]
-  return host.replace(/\/+$/, '')
-}
-
-// Resolves (and caches) a healthy Audius host. On failure we keep the fallback
-// host and clear the cache so a later call can retry discovery.
-const ensureAudiusApiBase = (): Promise<string> => {
-  if (!audiusHostPromise) {
-    audiusHostPromise = discoverAudiusHost()
-      .then((host) => {
-        audiusApiBase = `${host}/v1`
-        return audiusApiBase
-      })
-      .catch(() => {
-        audiusHostPromise = null
-        audiusApiBase = `${AUDIUS_FALLBACK_HOST}/v1`
-        return audiusApiBase
-      })
-  }
-  return audiusHostPromise
-}
+// Audius now recommends the canonical REST server for querying and streaming.
+// Keeping the player on that stable host avoids random discovery-node streams
+// that can intermittently reject CORS or fail media playback.
+const AUDIUS_API_BASE = 'https://api.audius.co/v1'
+const audiusApiBase = AUDIUS_API_BASE
+const ensureAudiusApiBase = (): Promise<string> =>
+  Promise.resolve(AUDIUS_API_BASE)
 const AUDIUS_ANALYSER_SILENT_FRAME_LIMIT = 90
 const AUDIUS_ANALYSER_SILENCE_EPSILON = 1
 const AUDIUS_MIN_DYNAMIC_RANGE = 14
@@ -551,6 +521,75 @@ const formatAudiusDuration = (seconds: number): string => {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins}:${String(secs).padStart(2, '0')}`
+}
+
+type AudiusPlaybackSnapshot = {
+  selectedTrackId: string | null
+  searchQuery: string
+  tracks: AudiusTrack[]
+  position: number
+  duration: number
+  wasPlaying: boolean
+  savedAt: number
+}
+
+const AUDIUS_PLAYBACK_SNAPSHOT_KEY = 'cubic-audius-playback-v1'
+const AUDIUS_PLAYBACK_MAX_TRACKS = 40
+
+const sanitizeAudiusTrackCache = (value: unknown): AudiusTrack[] =>
+  normalizeAudiusTracks(Array.isArray(value) ? value : [])
+
+const readAudiusPlaybackSnapshot = (): AudiusPlaybackSnapshot | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(AUDIUS_PLAYBACK_SNAPSHOT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<AudiusPlaybackSnapshot>
+    const tracks = sanitizeAudiusTrackCache(parsed.tracks)
+    return {
+      selectedTrackId:
+        typeof parsed.selectedTrackId === 'string'
+          ? parsed.selectedTrackId
+          : null,
+      searchQuery:
+        typeof parsed.searchQuery === 'string' && parsed.searchQuery.trim()
+          ? parsed.searchQuery
+          : 'lofi',
+      tracks,
+      position:
+        typeof parsed.position === 'number' && Number.isFinite(parsed.position)
+          ? Math.max(0, parsed.position)
+          : 0,
+      duration:
+        typeof parsed.duration === 'number' && Number.isFinite(parsed.duration)
+          ? Math.max(0, parsed.duration)
+          : 0,
+      wasPlaying: parsed.wasPlaying === true,
+      savedAt:
+        typeof parsed.savedAt === 'number' && Number.isFinite(parsed.savedAt)
+          ? parsed.savedAt
+          : 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+const writeAudiusPlaybackSnapshot = (
+  snapshot: AudiusPlaybackSnapshot,
+): void => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(
+      AUDIUS_PLAYBACK_SNAPSHOT_KEY,
+      JSON.stringify({
+        ...snapshot,
+        tracks: snapshot.tracks.slice(0, AUDIUS_PLAYBACK_MAX_TRACKS),
+      }),
+    )
+  } catch {
+    // Best-effort persistence only.
+  }
 }
 
 // === Procedural score-tier palette =================================
@@ -1355,9 +1394,6 @@ const dedupeSegments = (segments: Segment[]): Segment[] => {
   }
   return result
 }
-
-const isBoundaryCell = (cell: BoardDefinition['cells'][number], cells: Set<string>) =>
-  directions.some((dir) => !cells.has(axialToId(addAxial(cell.coord, dir))))
 
 // Bundle of pre-baked render data for one board. We compute one of
 // these per mode at module load and pick the right one based on
@@ -3156,15 +3192,6 @@ function App() {
     () => new Set(boardDef.cells.map((c) => c.id)),
     [boardDef],
   )
-  const glassBoundaryCellIds = useMemo(
-    () =>
-      new Set(
-        boardDef.cells
-          .filter((cell) => isBoundaryCell(cell, boardCellIdSet))
-          .map((cell) => cell.id),
-      ),
-    [boardDef, boardCellIdSet],
-  )
   // Outer hull segments — suppress the dark shadow stroke on the board edge
   // while keeping it between rosettes (carved depth there).
   const glassExteriorEdgeKeys = useMemo(
@@ -3928,13 +3955,19 @@ function App() {
   const audiusSilentFrameCountRef = useRef(0)
   const audiusAnalyserWarningShownRef = useRef(false)
   const audiusAlbumResolveTokenRef = useRef(0)
-  const [audiusTracks, setAudiusTracks] = useState<AudiusTrack[]>([])
+  const audiusFailedStreamIdsRef = useRef<Set<string>>(new Set())
+  const [initialAudiusPlaybackSnapshot] = useState(readAudiusPlaybackSnapshot)
+  const [audiusTracks, setAudiusTracks] = useState<AudiusTrack[]>(
+    () => initialAudiusPlaybackSnapshot?.tracks ?? [],
+  )
   const [audiusAlbumQueue, setAudiusAlbumQueue] =
     useState<AudiusAlbumQueue | null>(null)
   const [audiusSelectedTrackId, setAudiusSelectedTrackId] = useState<
     string | null
-  >(null)
-  const [audiusSearchQuery, setAudiusSearchQuery] = useState('lofi')
+  >(() => initialAudiusPlaybackSnapshot?.selectedTrackId ?? null)
+  const [audiusSearchQuery, setAudiusSearchQuery] = useState(
+    () => initialAudiusPlaybackSnapshot?.searchQuery ?? 'lofi',
+  )
   const [audiusStatus, setAudiusStatus] = useState<
     'idle' | 'loading' | 'playing' | 'paused' | 'error'
   >('idle')
@@ -3960,10 +3993,67 @@ function App() {
     const parsed = raw == null ? Number.NaN : Number(raw)
     return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0.65
   })
-  const [audiusPlaybackPosition, setAudiusPlaybackPosition] = useState(0)
-  const [audiusPlaybackDuration, setAudiusPlaybackDuration] = useState(0)
+  const [audiusPlaybackPosition, setAudiusPlaybackPosition] = useState(
+    () => initialAudiusPlaybackSnapshot?.position ?? 0,
+  )
+  const [audiusPlaybackDuration, setAudiusPlaybackDuration] = useState(
+    () => initialAudiusPlaybackSnapshot?.duration ?? 0,
+  )
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      writeAudiusPlaybackSnapshot({
+        selectedTrackId: audiusSelectedTrackId,
+        searchQuery: audiusSearchQuery,
+        tracks: audiusTracks,
+        position: audiusPlaybackPosition,
+        duration: audiusPlaybackDuration,
+        wasPlaying: audiusStatus === 'playing',
+        savedAt: Date.now(),
+      })
+    }, 250)
+    return () => window.clearTimeout(timeout)
+  }, [
+    audiusPlaybackDuration,
+    audiusPlaybackPosition,
+    audiusSearchQuery,
+    audiusSelectedTrackId,
+    audiusStatus,
+    audiusTracks,
+  ])
+  const getAudiusPlaybackTracks = useCallback((): AudiusTrack[] => {
+    const byId = new Map<string, AudiusTrack>()
+    audiusTracks.forEach((track) => byId.set(track.id, track))
+    audiusAlbumQueue?.tracks.forEach((track) => {
+      if (!byId.has(track.id)) byId.set(track.id, track)
+    })
+    return [...byId.values()]
+  }, [audiusAlbumQueue, audiusTracks])
+  const getFallbackAudiusTrack = useCallback(
+    (failedTrackId: string): AudiusTrack | null => {
+      const tracks = getAudiusPlaybackTracks()
+      if (tracks.length <= 1) return null
+      const failedIndex = tracks.findIndex((track) => track.id === failedTrackId)
+      for (let offset = 1; offset < tracks.length; offset += 1) {
+        const index =
+          failedIndex >= 0
+            ? (failedIndex + offset) % tracks.length
+            : offset - 1
+        const candidate = tracks[index]
+        if (
+          candidate &&
+          candidate.id !== failedTrackId &&
+          !audiusFailedStreamIdsRef.current.has(candidate.id)
+        ) {
+          return candidate
+        }
+      }
+      return null
+    },
+    [getAudiusPlaybackTracks],
+  )
   const loadAudiusTracks = useCallback(async (query?: string) => {
     audiusAlbumResolveTokenRef.current += 1
+    audiusFailedStreamIdsRef.current.clear()
     setAudiusAlbumQueue(null)
     setAudiusAlbumResolveStatus('idle')
     setAudiusStatus((current) => (current === 'playing' ? current : 'loading'))
@@ -3971,15 +4061,31 @@ function App() {
     const trimmed = query?.trim() ?? ''
     try {
       await ensureAudiusApiBase()
-      const endpoint = trimmed
-        ? buildAudiusApiUrl('/tracks/search', { query: trimmed, limit: 8 })
-        : buildAudiusApiUrl('/tracks/trending', { limit: 8 })
-      const res = await fetch(endpoint)
-      if (!res.ok) throw new Error(`Audius returned ${res.status}`)
-      const json = (await res.json()) as { data?: unknown }
-      const tracks = normalizeAudiusTracks(json.data)
+      const requests = trimmed
+        ? [
+            buildAudiusApiUrl('/tracks/search', { query: trimmed, limit: 8 }),
+            buildAudiusApiUrl('/tracks/trending', { limit: 8 }),
+          ]
+        : [buildAudiusApiUrl('/tracks/trending', { limit: 8 })]
+      let tracks: AudiusTrack[] = []
+      let lastError: Error | null = null
+      for (const endpoint of requests) {
+        try {
+          const res = await fetch(endpoint)
+          if (!res.ok) throw new Error(`Audius returned ${res.status}`)
+          const json = (await res.json()) as { data?: unknown }
+          tracks = normalizeAudiusTracks(json.data)
+          if (tracks.length > 0) break
+          lastError = new Error('No playable public tracks returned.')
+        } catch (error) {
+          lastError =
+            error instanceof Error
+              ? error
+              : new Error('Unable to load Audius tracks.')
+        }
+      }
       if (tracks.length === 0) {
-        throw new Error('No playable public tracks returned.')
+        throw lastError ?? new Error('No playable public tracks returned.')
       }
       setAudiusTracks(tracks)
       setAudiusSelectedTrackId((prev) =>
@@ -4172,59 +4278,98 @@ function App() {
       const id = trackId ?? audiusSelectedTrackId ?? audiusTracks[0]?.id
       const audio = audiusAudioRef.current
       if (!id || !audio) return false
-      setAudiusSelectedTrackId(id)
-      setShowAudiusVolume(false)
-      setAudiusError(null)
-      setAudiusStatus('loading')
-      audiusEnergyFloorRef.current = 0
-      audiusEnergyPeakRef.current = 64
-      audiusPulseEnvelopeRef.current = 0
-      audiusBassEnvelopeRef.current = 0
-      audiusMidEnvelopeRef.current = 0
-      audiusTrebleEnvelopeRef.current = 0
-      audiusOnsetEnvelopeRef.current = 0
-      audiusIntensityEnvelopeRef.current = 0
-      audiusBreathPhaseRef.current = 0
-      audiusHueRef.current = 0
-      audiusCubeHueRef.current = 0
-      audiusLastBeatAtRef.current = 0
-      audiusSilentFrameCountRef.current = 0
-      audiusAnalyserWarningShownRef.current = false
-      setAudiusAnalyserLive(false)
-      setAudiusPlaybackPosition(0)
-      audio.crossOrigin = 'anonymous'
-      audio.volume = 1
-      try {
-        await ensureAudiusApiBase()
-        audio.src = buildAudiusStreamUrl(id)
-        const analyser = ensureAudiusAnalyser()
-        if (!analyser) {
-          throw new Error('Browser could not create an Audius audio analyser.')
+
+      const attemptPlay = async (targetId: string): Promise<boolean> => {
+        const resumePosition =
+          targetId === audiusSelectedTrackId ? audiusPlaybackPosition : 0
+        setAudiusSelectedTrackId(targetId)
+        setShowAudiusVolume(false)
+        setAudiusError(null)
+        setAudiusStatus('loading')
+        audiusEnergyFloorRef.current = 0
+        audiusEnergyPeakRef.current = 64
+        audiusPulseEnvelopeRef.current = 0
+        audiusBassEnvelopeRef.current = 0
+        audiusMidEnvelopeRef.current = 0
+        audiusTrebleEnvelopeRef.current = 0
+        audiusOnsetEnvelopeRef.current = 0
+        audiusIntensityEnvelopeRef.current = 0
+        audiusBreathPhaseRef.current = 0
+        audiusHueRef.current = 0
+        audiusCubeHueRef.current = 0
+        audiusLastBeatAtRef.current = 0
+        audiusSilentFrameCountRef.current = 0
+        audiusAnalyserWarningShownRef.current = false
+        setAudiusAnalyserLive(false)
+        setAudiusPlaybackPosition(resumePosition)
+        audio.crossOrigin = 'anonymous'
+        audio.volume = 1
+
+        const applyResumePosition = () => {
+          if (resumePosition <= 1) return
+          try {
+            const duration = Number.isFinite(audio.duration)
+              ? audio.duration
+              : resumePosition
+            audio.currentTime = Math.min(resumePosition, Math.max(0, duration - 1))
+          } catch {
+            // Some Audius streams are not seekable until more metadata arrives.
+          }
         }
-        const ctx = audiusAudioContextRef.current
-        if (analyser && ctx && (ctx.state as string) === 'suspended') {
-          await ctx.resume()
+
+        try {
+          await ensureAudiusApiBase()
+          audio.src = buildAudiusStreamUrl(targetId)
+          audio.addEventListener('loadedmetadata', applyResumePosition, {
+            once: true,
+          })
+          const analyser = ensureAudiusAnalyser()
+          if (!analyser) {
+            throw new Error('Browser could not create an Audius audio analyser.')
+          }
+          const ctx = audiusAudioContextRef.current
+          if (analyser && ctx && (ctx.state as string) === 'suspended') {
+            await ctx.resume()
+          }
+          await audio.play()
+          applyResumePosition()
+          audiusFailedStreamIdsRef.current.delete(targetId)
+          setAudiusStatus('playing')
+          return true
+        } catch {
+          audio.removeEventListener('loadedmetadata', applyResumePosition)
+          audiusFailedStreamIdsRef.current.add(targetId)
+          return false
         }
-        await audio.play()
-        setAudiusStatus('playing')
+      }
+
+      if (await attemptPlay(id)) {
         if (options.resolveAlbum !== false) {
           void resolveAudiusAlbumQueueForTrack(id)
         }
         return true
-      } catch (error) {
-        setAudiusError(
-          error instanceof Error
-            ? error.message
-            : 'Browser blocked Audius playback.',
-        )
-        setAudiusStatus('error')
-        return false
       }
+
+      const fallback =
+        options.fallbackOnError === false ? null : getFallbackAudiusTrack(id)
+      if (fallback && (await attemptPlay(fallback.id))) {
+        setAudiusError(null)
+        if (options.resolveAlbum !== false) {
+          void resolveAudiusAlbumQueueForTrack(fallback.id)
+        }
+        return true
+      }
+
+      setAudiusError('Audius playback failed for this track.')
+      setAudiusStatus('error')
+      return false
     },
     [
+      audiusPlaybackPosition,
       audiusSelectedTrackId,
       audiusTracks,
       ensureAudiusAnalyser,
+      getFallbackAudiusTrack,
       resolveAudiusAlbumQueueForTrack,
     ],
   )
@@ -9464,6 +9609,18 @@ function App() {
         }}
         onError={() => {
           if (theme !== 'audius') return
+          const failedTrackId = audiusSelectedTrackId
+          if (failedTrackId) {
+            audiusFailedStreamIdsRef.current.add(failedTrackId)
+            const fallback = getFallbackAudiusTrack(failedTrackId)
+            if (fallback) {
+              void playAudiusTrack(fallback.id, {
+                resolveAlbum: false,
+                fallbackOnError: false,
+              })
+              return
+            }
+          }
           setAudiusStatus('error')
           setAudiusError('Audius playback failed for this track.')
         }}
@@ -9532,6 +9689,8 @@ function App() {
                   setAudiusAlbumResolveStatus('idle')
                   setAudiusAutoTitleTrackId(null)
                   setShowAudiusVolume(false)
+                  setAudiusPlaybackPosition(0)
+                  setAudiusPlaybackDuration(0)
                   setAudiusSelectedTrackId(e.target.value)
                   playUiClick()
                 }}
@@ -10814,16 +10973,29 @@ function App() {
                     <stop offset="46%" stopColor="#ffffff" stopOpacity="0.12" />
                     <stop offset="100%" stopColor="#000000" stopOpacity="0.32" />
                   </radialGradient>
-                  {/* Single-tone hex pane volume — a whisper of edge
-                      darkening only. Real cathedral glass is flat; depth
-                      comes from light passing through, not a hot crown on
-                      every pane. */}
-                  <radialGradient id="glass-pane-depth" cx="50%" cy="48%" r="68%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
-                    <stop offset="68%" stopColor="#ffffff" stopOpacity="0" />
-                    <stop offset="86%" stopColor="#000000" stopOpacity="0.06" />
-                    <stop offset="100%" stopColor="#000000" stopOpacity="0.18" />
+                  {/* Pane volume: luminous center, darker thickness at the
+                      leaded edge. This is intentionally stronger than a
+                      decorative texture; it makes each hex read as glass
+                      transmitting light instead of a flat colored tile. */}
+                  <radialGradient id="glass-pane-depth" cx="46%" cy="38%" r="78%">
+                    <stop offset="0%" stopColor="#fff9df" stopOpacity="0.34" />
+                    <stop offset="36%" stopColor="#ffffff" stopOpacity="0.12" />
+                    <stop offset="64%" stopColor="#ffffff" stopOpacity="0" />
+                    <stop offset="84%" stopColor="#15120b" stopOpacity="0.22" />
+                    <stop offset="100%" stopColor="#050402" stopOpacity="0.48" />
                   </radialGradient>
+                  <linearGradient
+                    id="glass-pane-sheen"
+                    x1="12%"
+                    y1="4%"
+                    x2="86%"
+                    y2="92%"
+                  >
+                    <stop offset="0%" stopColor="#fff9e4" stopOpacity="0.38" />
+                    <stop offset="20%" stopColor="#ffffff" stopOpacity="0.1" />
+                    <stop offset="48%" stopColor="#ffffff" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                  </linearGradient>
                   {/* Board-space limestone ramps. These use the same vertical
                       clerestory light as the page wall, so the hull reveal
                       and rosette tracery read as stone cut from the
@@ -11361,7 +11533,7 @@ function App() {
                       <polygon
                         points={points}
                         className={[
-                          'hexaclear-pane-surface',
+                          'hexaclear-pane-depth',
                           isFilled ? 'filled' : 'empty',
                           isGolden ? 'golden' : '',
                           isDailyTarget && !isFilledVisible
@@ -11369,6 +11541,46 @@ function App() {
                             : '',
                           isClearing ? 'clearing' : '',
                           willClearInPreview ? 'preview-clear' : '',
+                          inPreview
+                            ? previewValid
+                              ? 'preview-valid'
+                              : 'preview-invalid'
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        aria-hidden="true"
+                        pointerEvents="none"
+                      />
+                    )}
+                    {theme === 'glass' && (
+                      <polygon
+                        points={points}
+                        className={[
+                          'hexaclear-pane-sheen',
+                          isFilled ? 'filled' : 'empty',
+                          isGolden ? 'golden' : '',
+                          isClearing ? 'clearing' : '',
+                          inPreview
+                            ? previewValid
+                              ? 'preview-valid'
+                              : 'preview-invalid'
+                            : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        aria-hidden="true"
+                        pointerEvents="none"
+                      />
+                    )}
+                    {theme === 'glass' && (
+                      <polygon
+                        points={points}
+                        className={[
+                          'hexaclear-pane-seed',
+                          isFilled ? 'filled' : 'empty',
+                          isGolden ? 'golden' : '',
+                          isClearing ? 'clearing' : '',
                           inPreview
                             ? previewValid
                               ? 'preview-valid'
@@ -11557,9 +11769,6 @@ function App() {
                           ) {
                             return null
                           }
-                          const isPerimeterAdjacent =
-                            glassBoundaryCellIds.has(cell.id) ||
-                            glassBoundaryCellIds.has(neighborId)
                           return (
                             <line
                               key={`lead-${side}`}
@@ -11567,14 +11776,7 @@ function App() {
                               y1={edge.y1}
                               x2={edge.x2}
                               y2={edge.y2}
-                              className={[
-                                outlineClasses,
-                                isPerimeterAdjacent
-                                  ? 'perimeter-adjacent'
-                                  : '',
-                              ]
-                                .filter(Boolean)
-                                .join(' ')}
+                              className={outlineClasses}
                               clipPath={
                                 glassHullLeadLoop
                                   ? 'url(#glass-internal-lead-clip)'
