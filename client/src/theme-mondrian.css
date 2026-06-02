@@ -1,0 +1,1386 @@
+/* ====================================================================
+   Abstract — "De Stijl Grid"  (data-theme="mondrian")
+   --------------------------------------------------------------------
+   A Neoplastic painting that plays itself: a warm-white canvas
+   partitioned by heavy black orthogonal bars, filled with flat planes
+   of pure primary red / blue / yellow. The discipline IS the identity —
+   only three primaries + black + warm white, with a sparing neutral
+   grey. Nothing here is illusionistic: no gloss, no gradient bevels on
+   the painted planes; the thick matte black edge does the structural
+   work.
+
+   See Documentation/Mondrian Theme Proposal.md for the full spec.
+   ==================================================================== */
+
+:root[data-theme="mondrian"] {
+  --md-ground: #f4f1e8; /* warm-white canvas / unpainted field */
+  --md-ground-2: #eae6da; /* faintly darker plate for panels */
+  --md-line: #141210; /* the black grid line / leading / cube edges */
+  --md-line-hi: #000000; /* heaviest structural bars */
+  --md-red: #c8252b; /* primary red */
+  --md-blue: #1d3a8f; /* primary blue (cobalt / ultramarine) */
+  --md-yellow: #f3c20b; /* primary yellow (chrome yellow) */
+  --md-grey: #7a746a; /* neutral grey plane — dark enough to read against empty canvas */
+
+  /* Cubes resolve through these (paletteForTier snaps them to a primary
+     above tier 0). Resting (tier 0) look = a red block. Faces carry only
+     a hair of value difference; the heavy black edges are the structure. */
+  --cube-top: #d6342f;
+  --cube-left: #b62027;
+  --cube-right: #8f181d;
+  --cube-stroke: var(--md-line);
+  --score-tier-accent: var(--md-yellow);
+  --cube-inverse-bright: #ffffff; /* about-to-clear drains to white */
+  --cube-inverse-dim: var(--md-grey);
+
+  /* The "bonus" (ruby) cube is repainted as the lone solid-black plane —
+     the heaviest weight in the composition, and the natural bonus accent. */
+  --cube-golden-top: #14110e;
+  --cube-golden-left: #14110e;
+  --cube-golden-right: #14110e;
+
+  /* Reusable type tokens. */
+  --md-font: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+  --md-font-black: 'Archivo Black', 'Archivo', Arial, sans-serif;
+
+  /* Layout — vertical De Stijl rule sits just left of the title with a
+     small gallery margin (see reference comp). */
+  --md-root-max: 540px;
+  --md-root-pad-x: clamp(1rem, 4vw, 1.6rem);
+  --md-cross-gap: 0.55rem;
+  --md-cross-x: calc(
+    (100vw - min(var(--md-root-max), 100vw)) / 2 + var(--md-root-pad-x) -
+      var(--md-cross-gap)
+  );
+}
+
+/* ====================================================================
+   The wall behind everything: a warm-white gallery, faint canvas tooth
+   ==================================================================== */
+[data-theme="mondrian"] body,
+[data-theme="mondrian"] .cubic-viewport {
+  background:
+    /* bottom horizontal rule — a composition line near the hand tray */
+    linear-gradient(0deg, transparent calc(88% - 2px), var(--md-line) 88%, transparent calc(88% + 3px)),
+    var(--md-ground-2);
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
+  color: var(--md-line);
+}
+
+[data-theme="mondrian"] .cubic-viewport::before,
+[data-theme="mondrian"] .cubic-viewport::after {
+  display: none;
+}
+
+[data-theme="mondrian"] .hexaclear-root {
+  position: relative;
+  max-width: var(--md-root-max);
+  padding: clamp(1rem, 4dvh, 3rem) var(--md-root-pad-x);
+  background: transparent;
+  box-shadow: none;
+}
+/* Vertical De Stijl rule — locked to the title's left edge, not a fixed
+   viewport %. Stays aligned with the C in CUBEKILL as the centered column
+   narrows or widens. */
+[data-theme="mondrian"] .hexaclear-root::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--md-cross-x);
+  width: 5px;
+  margin-left: -2px;
+  background: var(--md-line);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ====================================================================
+   Header — uppercase geometric grotesque + a primary accent block
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-header {
+  background: transparent;
+  border: none;
+  gap: 0.7rem;
+}
+
+[data-theme="mondrian"] .hexaclear-title {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  font-size: 1.7rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--md-line-hi);
+  /* a hard black rule under the wordmark with a red node — De Stijl chrome */
+  background: none;
+  -webkit-text-fill-color: var(--md-line-hi);
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  text-shadow: none;
+  padding-bottom: 0.18em;
+  border-bottom: 4px solid var(--md-line-hi);
+}
+
+/* ---- HUD readouts: primary-block plaques bounded by black ---------- */
+[data-theme="mondrian"] .hexaclear-live-stat,
+[data-theme="mondrian"] .hexaclear-best-banner {
+  background: var(--md-ground);
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--md-line);
+  /* Give the readout text room to breathe inside its black-bounded block
+     instead of being pressed against the edges. */
+  padding: 0.34em 0.7em;
+}
+/* The live SCORE plaque is the "loud" primary block (yellow); BEST is the
+   quiet canvas plate. Asymmetry by design. */
+[data-theme="mondrian"] .hexaclear-live-stat {
+  background: var(--md-yellow);
+}
+[data-theme="mondrian"] .hexaclear-live-stat::before,
+[data-theme="mondrian"] .hexaclear-best-banner::before {
+  content: none;
+}
+[data-theme="mondrian"] .hexaclear-live-stat .label,
+[data-theme="mondrian"] .hexaclear-best-banner .label {
+  font-family: var(--md-font);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--md-line);
+  text-shadow: none;
+  opacity: 1;
+}
+[data-theme="mondrian"] .hexaclear-live-stat .value,
+[data-theme="mondrian"] .hexaclear-best-banner .value {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+
+/* ---- Mode toggle: a black lintel, active tab = filled primary block - */
+[data-theme="mondrian"] .hexaclear-mode-toggle {
+  padding: 3px;
+  gap: 3px;
+  background: var(--md-line-hi);
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-mode-toggle .mode-pill {
+  font-family: var(--md-font);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 0;
+  background: var(--md-ground);
+  color: var(--md-line);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-mode-toggle .mode-pill.active {
+  background: var(--md-blue);
+  color: var(--md-ground);
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-mode-toggle .mode-pill:not(.active):hover {
+  background: var(--md-grey);
+  color: var(--md-line-hi);
+}
+
+/* ---- Menu button: a black-bounded plaque ---------------------------- */
+[data-theme="mondrian"] .hexaclear-menu-button {
+  font-family: var(--md-font);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--md-ground);
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  color: var(--md-line-hi);
+  text-shadow: none;
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-menu-button:hover {
+  background: var(--md-red);
+  color: var(--md-ground);
+}
+
+/* Daily-mode History button (top-bar control) — same block as the menu. */
+[data-theme="mondrian"] .hexaclear-history-button {
+  font-family: var(--md-font);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--md-ground);
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  color: var(--md-line-hi);
+  text-shadow: none;
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-history-button:hover {
+  background: var(--md-blue);
+  color: var(--md-ground);
+}
+[data-theme="mondrian"] .hexaclear-history-button.is-archive {
+  background: var(--md-yellow);
+  color: var(--md-line-hi);
+}
+
+/* ====================================================================
+   The board — a white canvas inside a heavy black frame
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-board-wrapper {
+  position: relative;
+  background: var(--md-ground);
+  border: 6px solid var(--md-line-hi);
+  border-radius: 0;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  overflow: visible;
+}
+[data-theme="mondrian"] .hexaclear-board-wrapper::before,
+[data-theme="mondrian"] .hexaclear-board-wrapper::after {
+  content: none;
+}
+
+[data-theme="mondrian"] .hexaclear-board {
+  position: relative;
+  z-index: 2;
+}
+
+/* No tessellated hull ring — the frame (above) is the boundary. */
+[data-theme="mondrian"] .hexaclear-board-outline-back {
+  stroke: none;
+}
+[data-theme="mondrian"] .hexaclear-board-outline-front {
+  stroke: none;
+}
+
+/* ---- Empty cells: unpainted warm-white canvas, hairline black grid -- */
+[data-theme="mondrian"] .hexaclear-slot-fill {
+  fill: var(--md-ground);
+}
+[data-theme="mondrian"] .hexaclear-hex.empty {
+  fill: transparent;
+  stroke: var(--md-line);
+  stroke-width: 4.6;
+}
+/* (filled-cell fill/stroke — the flat black plane-boundary — is defined in
+   the cube section below, next to the facet rules it works with.) */
+[data-theme="mondrian"] .hexaclear-hex.clearing,
+[data-theme="mondrian"] .hexaclear-hex.clearing-line,
+[data-theme="mondrian"] .hexaclear-hex.clearing-flower-center,
+[data-theme="mondrian"] .hexaclear-hex.clearing-flower-ring {
+  fill: transparent;
+  stroke: color-mix(in srgb, var(--md-line) 32%, transparent);
+}
+
+/* ---- Cubes: FLAT primary hexagons, not isometric blocks ------------ */
+/* De Stijl reads in flat planes, so we collapse the three isometric facets
+   into a single flat hexagon. Each piece-cube is dealt a persistent pure
+   color (App.tsx MONDRIAN_PRIMARIES: red / blue / yellow / neutral grey)
+   that fills all three facets identically; here we erase every internal
+   edge by stroking each facet in its OWN fill color, so the diagonal "Y"
+   that makes a cube read as 3D vanishes and only a solid hexagon remains.
+   The single heavy black hexagon outline is carried by .hexaclear-hex
+   (below), the way a Mondrian plane is bounded by one black rule. */
+[data-theme="mondrian"] .hexaclear-hex-cube .cube-face {
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  /* anti-illusionistic: kill any inherited gloss/drop-shadow */
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-hex-cube .cube-top {
+  stroke: var(--cube-top);
+}
+[data-theme="mondrian"] .hexaclear-hex-cube .cube-left {
+  stroke: var(--cube-left);
+}
+[data-theme="mondrian"] .hexaclear-hex-cube .cube-right {
+  stroke: var(--cube-right);
+}
+
+/* The single black plane-boundary: one crisp hexagon outline per filled
+   cell. The cube facets paint over its inner half, so only a clean outer
+   black rule remains — the flat-plane border. */
+[data-theme="mondrian"] .hexaclear-hex.filled {
+  fill: transparent;
+  stroke: var(--md-line-hi);
+  stroke-width: 8;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+/* The bonus "ruby" plane (golden cube) — a flat solid-black hexagon, the
+   one weighted black plane in the composition. Its "+10" glyph flips to the
+   warm-white canvas colour so it stays legible on black. */
+[data-theme="mondrian"] .hexaclear-hex-cube.golden .cube-face {
+  fill: var(--md-line-hi);
+  stroke: var(--md-line-hi);
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-hex-cube.golden .hexaclear-gem-label {
+  fill: var(--md-ground);
+  text-shadow: none;
+}
+
+/* Daily-mode numbered targets: solid black planes with warm-white numerals,
+   same weight as the bonus ruby (+10) — a labelled black block in the grid. */
+[data-theme="mondrian"] .hexaclear-hex-cube.daily-target {
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-hex-cube.daily-target .cube-face {
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-hex-cube.daily-target .cube-top,
+[data-theme="mondrian"] .hexaclear-hex-cube.daily-target .cube-left,
+[data-theme="mondrian"] .hexaclear-hex-cube.daily-target .cube-right {
+  fill: var(--md-line-hi);
+  stroke: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-daily-number-centered {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  font-size: 1.65rem;
+  fill: var(--md-ground);
+  stroke: none;
+  filter: none;
+}
+
+/* ====================================================================
+   Rosette framing — thick black structural bars
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-flower-boundary-group {
+  filter: none;
+}
+/* Round caps + joins: a miter join on the acute angles where the rosette
+   bars meet throws off sharp spikes/protrusions at the vertices. Round
+   keeps the bars heavy and clean where they intersect. */
+[data-theme="mondrian"] .hexaclear-flower-boundary-back {
+  stroke: var(--md-line-hi);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+[data-theme="mondrian"] .hexaclear-flower-boundary {
+  stroke: var(--md-line-hi);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ====================================================================
+   Placement feedback — flat, hard-edged, no glow
+   --------------------------------------------------------------------
+   NOTE: never use !important on animated cell fill/stroke — it would
+   silently kill the clear keyframes (Authoring Guide §8).
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-hex.preview-valid {
+  fill: color-mix(in srgb, var(--md-blue) 22%, transparent);
+  stroke: var(--md-line-hi);
+  stroke-width: 2.4;
+}
+[data-theme="mondrian"] .hexaclear-hex.preview-invalid {
+  fill: color-mix(in srgb, var(--md-red) 30%, transparent);
+  stroke: var(--md-line-hi);
+  stroke-width: 2.4;
+}
+[data-theme="mondrian"] .hexaclear-placement-ghost .placement-ghost-valid {
+  fill: transparent;
+  stroke: var(--md-line-hi);
+  stroke-width: 2.4;
+}
+[data-theme="mondrian"] .hexaclear-placement-ghost .placement-ghost-invalid {
+  fill: color-mix(in srgb, var(--md-red) 38%, transparent);
+  stroke: var(--md-line-hi);
+}
+
+/* About-to-clear: the completing cluster LOCKS IN as a bold chrome-yellow
+   bar — De Stijl's loudest primary — every cell snapping to a solid yellow
+   plane behind a heavy black ring, pulsing once to announce the clear before
+   the canvas reclaims the cells. Empty cells the piece would fill paint in
+   too, so the whole bar reads as one finished composition block.
+   (No !important on these animated fills/strokes — Authoring Guide §8.) */
+[data-theme="mondrian"] .hexaclear-hex.empty.preview-clear {
+  fill: var(--md-yellow);
+  fill-opacity: 1;
+  stroke: var(--md-line-hi);
+  stroke-width: 4;
+  animation: mondrian-clear-pulse 560ms ease-in-out infinite;
+}
+[data-theme="mondrian"] .hexaclear-hex.filled.preview-clear {
+  stroke: var(--md-line-hi);
+  stroke-width: 4;
+}
+
+@keyframes mondrian-clear-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ====================================================================
+   Octave escalation — a STRICT static ramp in black only
+   --------------------------------------------------------------------
+   The engine's generic octave layers tint the background + grid + cube
+   edges with the score-tier accent. That would smuggle a fourth, drifting
+   colour into a palette whose entire identity is "only three primaries +
+   black + white." So we neutralise the colour-bleeding layers and express
+   escalation two disciplined ways: (1) paletteForTier quantizes the cube
+   to a different pure primary as you climb (red → blue → yellow), and
+   (2) the black grid quietly thickens at higher octaves (a denser
+   composition), never gaining colour. No per-frame runtime.
+   ==================================================================== */
+/* Kill the drifting accent-tinted background wash + any bg pattern so the
+   canvas stays a clean warm white at every octave. */
+[data-theme="mondrian"] .cubic-viewport.octave-1::before,
+[data-theme="mondrian"] .cubic-viewport.octave-5::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  opacity: 0 !important;
+}
+/* Octave 2+ : the empty grid stays black — just a hair heavier (denser
+   composition), never accent-tinted. */
+[data-theme="mondrian"] .cubic-viewport.octave-2 .hexaclear-hex.empty {
+  stroke: var(--md-line);
+  stroke-width: 5.2;
+}
+[data-theme="mondrian"] .cubic-viewport.octave-3 .hexaclear-hex.empty,
+[data-theme="mondrian"] .cubic-viewport.octave-4 .hexaclear-hex.empty,
+[data-theme="mondrian"] .cubic-viewport.octave-5 .hexaclear-hex.empty {
+  stroke: var(--md-line);
+  stroke-width: 5.8;
+}
+/* Octave 3+ : the engine re-strokes cube facets with the drifting tier
+   accent and an "edge pulse" animation, which would resurrect the 3D cube
+   look (a lit internal Y) and a fourth colour. Hold the flat plane: each
+   facet stays stroked in its OWN fill, no pulse, at every octave. */
+[data-theme="mondrian"] .cubic-viewport[class*="octave-"] .hexaclear-hex-cube .cube-face {
+  animation: none !important;
+  stroke-opacity: 1;
+  stroke-width: 1.2;
+}
+[data-theme="mondrian"] .cubic-viewport[class*="octave-"] .hexaclear-hex-cube .cube-top {
+  stroke: var(--cube-top);
+}
+[data-theme="mondrian"] .cubic-viewport[class*="octave-"] .hexaclear-hex-cube .cube-left {
+  stroke: var(--cube-left);
+}
+[data-theme="mondrian"] .cubic-viewport[class*="octave-"] .hexaclear-hex-cube .cube-right {
+  stroke: var(--cube-right);
+}
+
+/* Filled cubes in an about-to-clear bar repaint to the same chrome yellow as
+   the empty cells beside them, so the entire completing line reads as one
+   solid yellow block. Placed AFTER the octave facet rules above so the yellow
+   wins over the per-octave self-colour at every octave. */
+[data-theme="mondrian"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-top,
+[data-theme="mondrian"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-left,
+[data-theme="mondrian"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube .cube-right {
+  fill: var(--md-yellow);
+  stroke: var(--md-yellow);
+}
+[data-theme="mondrian"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube {
+  animation: mondrian-clear-pulse 560ms ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="mondrian"] .hexaclear-hex.empty.preview-clear,
+  [data-theme="mondrian"] .hexaclear-hex.preview-clear ~ .hexaclear-hex-cube {
+    animation: none;
+  }
+}
+
+/* ====================================================================
+   Board HUD — streak / score popups in geometric black
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-board-hud .board-hud-block {
+  font-family: var(--md-font);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-board-hud .board-hud-block .label,
+[data-theme="mondrian"] .hexaclear-board-hud .board-hud-block .value {
+  color: var(--md-line);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-score-popup {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  border-radius: 0;
+  border: 3px solid var(--md-line-hi);
+  background: var(--md-yellow);
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+
+/* Undo control — a white block bounded by black, matching the menu button;
+   no orange pill. Turns red on hover (the "take it back" accent). */
+[data-theme="mondrian"] .hexaclear-undo-button {
+  font-family: var(--md-font);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--md-ground);
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  color: var(--md-line-hi);
+  text-shadow: none;
+  box-shadow: none;
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-undo-button:hover {
+  background: var(--md-red);
+  color: var(--md-ground);
+}
+
+/* ====================================================================
+   Hand tray + hold — a second framed canvas of loose primary blocks
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-hand {
+  background: var(--md-ground);
+  border: 5px solid var(--md-line-hi);
+  border-radius: 0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+[data-theme="mondrian"] .hexaclear-hold {
+  background: var(--md-ground-2);
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-piece-button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-hold-label {
+  font-family: var(--md-font);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--md-line);
+}
+/* Selected piece / live hold drop target: a heavy black highlight (no glow). */
+[data-theme="mondrian"] .hexaclear-piece-button.selected,
+[data-theme="mondrian"] .hexaclear-hold.is-drop-active,
+[data-theme="mondrian"] .hexaclear-hold.selected {
+  border-color: var(--md-blue);
+  box-shadow: inset 0 0 0 2px var(--md-blue);
+}
+[data-theme="mondrian"] .hexaclear-hold.unplayable .hexaclear-piece-svg,
+[data-theme="mondrian"] .hexaclear-piece-button.unplayable {
+  filter: grayscale(0.7) brightness(0.85);
+  opacity: 0.5;
+}
+
+/* Hand/hold/catalog pieces: flat primary planes with one heavy black rule,
+   matching the board. The per-cube primary is painted by the flat cube
+   facets on top (via the inline cubeStyles --cube-* vars); the hex polygon
+   underneath carries only the single black plane-boundary, so it stays
+   transparent and never leaks a stray rim colour. */
+[data-theme="mondrian"] .hexaclear-hex.piece {
+  fill: transparent;
+  stroke: var(--md-line-hi);
+  stroke-width: 4.5;
+  stroke-linejoin: round;
+}
+
+/* The heavy black rule on every piece hex, drawn ON TOP of the flat cubes so
+   it shows on shared edges between adjacent hexes too (the cubes cover the
+   underlying .piece stroke from both sides). This is what makes a multi-cube
+   piece read as separate black-ruled planes, like the painting. */
+[data-theme="mondrian"] .hexaclear-piece-outline {
+  fill: none;
+  stroke: var(--md-line-hi);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+/* No isometric bevels anywhere — Mondrian planes are dead flat. */
+[data-theme="mondrian"] .hexaclear-hex-bevels {
+  display: none;
+}
+
+/* ====================================================================
+   Overlays / modals — framed white canvases with black rules
+   --------------------------------------------------------------------
+   The base menu stylesheet pins background / border / radius / colour
+   with `!important` (its rounded brown pills + cards), so the visual
+   properties below are `!important` too — that, not raw specificity, is
+   what wins the cascade. Three button tiers (canvas / primary / danger)
+   use mutually-exclusive selectors.
+   ==================================================================== */
+
+/* Scrim: a soft neutral wash so the white card reads as a framed painting
+   floating over the gallery, not a sharp dark square. */
+[data-theme="mondrian"] .hexaclear-overlay {
+  background: rgba(20, 18, 16, 0.55);
+  backdrop-filter: none;
+}
+
+[data-theme="mondrian"] .hexaclear-overlay-card,
+[data-theme="mondrian"] .hexaclear-audio-unlock-card,
+[data-theme="mondrian"] .hexaclear-menu-card,
+[data-theme="mondrian"] .hexaclear-scores-card,
+[data-theme="mondrian"] .hexaclear-stats-card,
+[data-theme="mondrian"] .hexaclear-account-card,
+[data-theme="mondrian"] .hexaclear-scoring-card,
+[data-theme="mondrian"] .hexaclear-history-card,
+[data-theme="mondrian"] .hexaclear-gameover-card,
+[data-theme="mondrian"] .hexaclear-coop-waiting-card,
+[data-theme="mondrian"] .hexaclear-coop-error-card {
+  color: var(--md-line);
+  background: var(--md-ground) !important;
+  border: 6px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  /* asymmetric De Stijl accent: a heavy primary rule capping the top */
+  border-top: 10px solid var(--md-blue) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  filter: none !important;
+}
+
+/* Titles — heavy geometric grotesque, black, with a black underrule. */
+[data-theme="mondrian"] .hexaclear-overlay-card .title,
+[data-theme="mondrian"] .hexaclear-audio-unlock-title,
+[data-theme="mondrian"] .hexaclear-menu-nav-title,
+[data-theme="mondrian"] .hexaclear-pvp-win-title,
+[data-theme="mondrian"] .hexaclear-pvp-shame-title {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+
+/* Section labels + supporting copy: bold uppercase grotesque. */
+[data-theme="mondrian"] .hexaclear-overlay-card .score,
+[data-theme="mondrian"] .hexaclear-scores-empty,
+[data-theme="mondrian"] .hexaclear-scores-your-rank,
+[data-theme="mondrian"] .hexaclear-history-legend,
+[data-theme="mondrian"] .hexaclear-coop-instructions,
+[data-theme="mondrian"] .hexaclear-coop-code,
+[data-theme="mondrian"] .hexaclear-menu-nav-tease,
+[data-theme="mondrian"] .hexaclear-menu-hero-hint,
+[data-theme="mondrian"] .hexaclear-menu-zone-label,
+[data-theme="mondrian"] .hexaclear-menu-settings-group-label,
+[data-theme="mondrian"] .hexaclear-scores-section-label,
+[data-theme="mondrian"] .hexaclear-stats-section-label,
+[data-theme="mondrian"] .hexaclear-gameover-headline-label,
+[data-theme="mondrian"] .hexaclear-gameover-subhead,
+[data-theme="mondrian"] .hexaclear-run-stat-label,
+[data-theme="mondrian"] .hexaclear-menu-settings-account-text {
+  font-family: var(--md-font);
+  color: var(--md-line);
+  opacity: 1;
+}
+[data-theme="mondrian"] .hexaclear-menu-zone-label,
+[data-theme="mondrian"] .hexaclear-menu-settings-group-label,
+[data-theme="mondrian"] .hexaclear-scores-section-label,
+[data-theme="mondrian"] .hexaclear-stats-section-label {
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Headline values — heavy black numerals. */
+[data-theme="mondrian"] .hexaclear-gameover-headline-value,
+[data-theme="mondrian"] .hexaclear-run-stat-value,
+[data-theme="mondrian"] .hexaclear-scores-value,
+[data-theme="mondrian"] .hexaclear-profile-summary-value,
+[data-theme="mondrian"] .hexaclear-performance-feature-value,
+[data-theme="mondrian"] .hexaclear-record-value {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+
+/* Stats screen body text — every secondary label/value defaults to the base
+   theme's gold accent, which reads as faint light-gold on the warm-white
+   card. Force the whole stats body onto the black-ink palette: labels in the
+   regular grotesque, inline values in heavy black. */
+[data-theme="mondrian"] .hexaclear-profile-summary-label,
+[data-theme="mondrian"] .hexaclear-performance-feature-label,
+[data-theme="mondrian"] .hexaclear-mode-ledger-label,
+[data-theme="mondrian"] .hexaclear-statline-label,
+[data-theme="mondrian"] .hexaclear-record-label,
+[data-theme="mondrian"] .hexaclear-stats-tracking-since,
+[data-theme="mondrian"] .hexaclear-profile-summary-line > span {
+  font-family: var(--md-font);
+  font-weight: 600;
+  color: var(--md-line);
+  opacity: 1;
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-mode-ledger-value,
+[data-theme="mondrian"] .hexaclear-statline-value,
+[data-theme="mondrian"] .hexaclear-profile-summary-line > strong {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+
+/* --- Tier 1: default control — a white tablet bounded by black -------- */
+[data-theme="mondrian"] .hexaclear-overlay-card
+  button:not(.hexaclear-menu-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-history-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle):not(.hexaclear-menu-chip-warn):not(.hexaclear-menu-chip-danger):not(.hexaclear-menu-danger-button):not(.hexaclear-menu-new-game-hero):not(.hexaclear-menu-resume-hero):not(.hexaclear-gameover-cta),
+[data-theme="mondrian"] .hexaclear-gameover-cta-secondary,
+[data-theme="mondrian"] .hexaclear-gameover-cta-share,
+[data-theme="mondrian"] .hexaclear-coop-cta {
+  border: 3px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  background: var(--md-ground) !important;
+  box-shadow: none !important;
+  filter: none;
+  color: var(--md-line-hi) !important;
+  font-family: var(--md-font) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+[data-theme="mondrian"] .hexaclear-overlay-card
+  button:not(.hexaclear-menu-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-history-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle):not(.hexaclear-menu-chip-warn):not(.hexaclear-menu-chip-danger):not(.hexaclear-menu-danger-button):not(.hexaclear-menu-new-game-hero):not(.hexaclear-menu-resume-hero):not(.hexaclear-gameover-cta):hover,
+[data-theme="mondrian"] .hexaclear-gameover-cta-secondary:hover,
+[data-theme="mondrian"] .hexaclear-gameover-cta-share:hover,
+[data-theme="mondrian"] .hexaclear-coop-cta:hover {
+  background: var(--md-blue) !important;
+  color: var(--md-ground) !important;
+}
+
+/* Multiplayer cluster (Co-op/PvP toggle + Copy Link) is overlaid on the
+   board in big mode. The heavier De Stijl borders made it spill onto the
+   board's black frame, so the whole cluster is tightened and inset to clear
+   the frame. */
+[data-theme="mondrian"] .hexaclear-coop-block {
+  gap: 6px;
+  margin: 8px 10px 0 0;
+}
+[data-theme="mondrian"] .hexaclear-coop-cta {
+  font-size: 0.72rem !important;
+  padding: 0.32rem 0.62rem !important;
+  letter-spacing: 0.06em !important;
+}
+
+/* Co-op / PvP toggle — a black lintel with white inactive pills (the
+   active pill is the blue tier-2 block below). */
+[data-theme="mondrian"] .hexaclear-coop-mode-toggle {
+  padding: 2px;
+  gap: 2px;
+  background: var(--md-line-hi);
+  border: 2px solid var(--md-line-hi);
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-coop-mode-pill {
+  font-family: var(--md-font);
+  font-weight: 800;
+  font-size: 0.62rem;
+  padding: 0.18rem 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 0;
+  background: var(--md-ground);
+  color: var(--md-line);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-coop-mode-pill:hover:not(.is-active) {
+  background: var(--md-grey);
+  color: var(--md-line-hi);
+}
+
+/* --- Tier 2: primary action — a filled blue block ------------------- */
+[data-theme="mondrian"] .hexaclear-menu-new-game-hero,
+[data-theme="mondrian"] .hexaclear-menu-resume-hero,
+[data-theme="mondrian"] .hexaclear-menu-chip.is-primary,
+[data-theme="mondrian"] .hexaclear-gameover-cta:not(.hexaclear-gameover-cta-secondary):not(.hexaclear-gameover-cta-share),
+[data-theme="mondrian"] .hexaclear-coop-mode-pill.is-active {
+  border: 3px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  background: var(--md-blue) !important;
+  color: var(--md-ground) !important;
+  font-family: var(--md-font) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: none;
+  box-shadow: none !important;
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-menu-new-game-hero:hover,
+[data-theme="mondrian"] .hexaclear-menu-resume-hero:hover,
+[data-theme="mondrian"] .hexaclear-menu-chip.is-primary:hover,
+[data-theme="mondrian"] .hexaclear-gameover-cta:not(.hexaclear-gameover-cta-secondary):not(.hexaclear-gameover-cta-share):hover {
+  filter: brightness(1.12);
+}
+
+/* --- Tier 3: destructive — a filled red block ----------------------- */
+[data-theme="mondrian"] .hexaclear-menu-chip-warn,
+[data-theme="mondrian"] .hexaclear-menu-chip-danger,
+[data-theme="mondrian"] .hexaclear-menu-link.is-danger,
+[data-theme="mondrian"] .hexaclear-menu-danger-button {
+  border: 3px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  background: var(--md-red) !important;
+  color: var(--md-ground) !important;
+  font-family: var(--md-font) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: none;
+  box-shadow: none !important;
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-menu-chip-warn:hover,
+[data-theme="mondrian"] .hexaclear-menu-chip-danger:hover,
+[data-theme="mondrian"] .hexaclear-menu-link.is-danger:hover,
+[data-theme="mondrian"] .hexaclear-menu-danger-button:hover {
+  filter: brightness(1.1);
+}
+
+/* Pause-menu zones are NOT boxes — strip the chrome so labelled groups of
+   blocks sit directly on the white canvas. */
+[data-theme="mondrian"] .hexaclear-menu-zone,
+[data-theme="mondrian"] .hexaclear-menu-settings-zone,
+[data-theme="mondrian"] .hexaclear-menu-settings-body {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  padding: 0 !important;
+  filter: none !important;
+}
+
+/* Inline setting control labels (volume readout, Mute, Reduced motion,
+   Colorblind) — the base paints these faint gold. */
+[data-theme="mondrian"] .hexaclear-menu-settings-audio-readout,
+[data-theme="mondrian"] .hexaclear-menu-settings-mute,
+[data-theme="mondrian"] .hexaclear-menu-settings-mute span,
+[data-theme="mondrian"] .hexaclear-menu-settings-toggle-row,
+[data-theme="mondrian"] .hexaclear-menu-settings-toggle-row span {
+  font-family: var(--md-font);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-line);
+}
+
+/* Volume slider — a black track with a primary-blue thumb (matte, square). */
+[data-theme="mondrian"] .hexaclear-menu-settings-audio input[type="range"] {
+  accent-color: var(--md-blue);
+  height: 6px;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-audio input[type="range"]::-webkit-slider-runnable-track {
+  background: var(--md-line-hi);
+  border-radius: 0;
+  height: 6px;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-audio input[type="range"]::-moz-range-track {
+  background: var(--md-line-hi);
+  border-radius: 0;
+  height: 6px;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-audio input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 0;
+  background: var(--md-blue);
+  border: 2px solid var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-audio input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  background: var(--md-blue);
+  border: 2px solid var(--md-line-hi);
+}
+
+/* Checkboxes pick up the primary blue. */
+[data-theme="mondrian"] .hexaclear-menu-settings-mute input[type="checkbox"],
+[data-theme="mondrian"] .hexaclear-menu-settings-toggle-row input[type="checkbox"] {
+  accent-color: var(--md-blue);
+}
+
+/* The collapsed Settings strip — a white block bounded by black, geometric
+   black lettering (the base paints it as a faint gold pill). */
+[data-theme="mondrian"] .hexaclear-menu-settings-strip {
+  border: 3px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  background: var(--md-ground) !important;
+  color: var(--md-line) !important;
+  font-family: var(--md-font) !important;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-zone.is-expanded .hexaclear-menu-settings-strip {
+  border-color: var(--md-line-hi) !important;
+  background: var(--md-ground-2) !important;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover {
+  background: var(--md-blue) !important;
+  border-color: var(--md-line-hi) !important;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover .hexaclear-menu-settings-strip-icon,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover .hexaclear-menu-settings-strip-label,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover .hexaclear-menu-settings-strip-summary,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover .hexaclear-menu-settings-strip-summary span,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover .hexaclear-menu-settings-strip-dot,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip:hover .hexaclear-menu-settings-strip-chevron {
+  color: var(--md-ground);
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-icon,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-label,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-chevron {
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-label {
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-summary,
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-summary span {
+  color: color-mix(in srgb, var(--md-line) 70%, transparent);
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-strip-dot {
+  color: color-mix(in srgb, var(--md-line) 45%, transparent);
+}
+
+/* Content recesses (settings groups, stat/score sections, rules,
+   piecetiary tiles, PvP panels): a flat neutral plate bounded by a black
+   hairline — De Stijl panels, never gradient niches. */
+[data-theme="mondrian"] .hexaclear-menu-settings-group,
+[data-theme="mondrian"] .hexaclear-stats-section,
+[data-theme="mondrian"] .hexaclear-scores-section,
+[data-theme="mondrian"] .hexaclear-account-copy,
+[data-theme="mondrian"] .hexaclear-account-summary,
+[data-theme="mondrian"] .hexaclear-account-stat,
+[data-theme="mondrian"] .hexaclear-scoring-rule,
+[data-theme="mondrian"] .hexaclear-piecetiary-cell,
+[data-theme="mondrian"] .hexaclear-coop-status,
+[data-theme="mondrian"] .hexaclear-pvp-hud,
+[data-theme="mondrian"] .hexaclear-pvp-tracks,
+[data-theme="mondrian"] .hexaclear-pvp-standings,
+[data-theme="mondrian"] .hexaclear-profile-summary {
+  border: 2px solid var(--md-line-hi);
+  border-radius: 0;
+  -webkit-clip-path: none;
+  clip-path: none;
+  background: var(--md-ground-2);
+  box-shadow: none;
+  color: var(--md-line);
+}
+/* Audio + account rows are plain layout rows inside their group. */
+[data-theme="mondrian"] .hexaclear-menu-settings-audio,
+[data-theme="mondrian"] .hexaclear-menu-settings-account {
+  background: none;
+  border: none;
+  box-shadow: none;
+  -webkit-clip-path: none;
+  clip-path: none;
+}
+[data-theme="mondrian"] .hexaclear-menu-settings-group,
+[data-theme="mondrian"] .hexaclear-stats-section,
+[data-theme="mondrian"] .hexaclear-scores-section,
+[data-theme="mondrian"] .hexaclear-account-copy,
+[data-theme="mondrian"] .hexaclear-account-summary,
+[data-theme="mondrian"] .hexaclear-account-stat,
+[data-theme="mondrian"] .hexaclear-scoring-rule,
+[data-theme="mondrian"] .hexaclear-coop-status,
+[data-theme="mondrian"] .hexaclear-pvp-hud,
+[data-theme="mondrian"] .hexaclear-pvp-tracks,
+[data-theme="mondrian"] .hexaclear-pvp-standings,
+[data-theme="mondrian"] .hexaclear-profile-summary {
+  padding: 0.6rem 0.78rem;
+}
+
+/* Divider rules between rows — hard black hairlines. */
+[data-theme="mondrian"] .hexaclear-gameover-section + .hexaclear-gameover-section,
+[data-theme="mondrian"] .hexaclear-scores-section + .hexaclear-scores-section,
+[data-theme="mondrian"] .hexaclear-scores-row + .hexaclear-scores-row,
+[data-theme="mondrian"] .hexaclear-statline,
+[data-theme="mondrian"] .hexaclear-record-row {
+  border-color: color-mix(in srgb, var(--md-line) 30%, transparent);
+}
+[data-theme="mondrian"] .hexaclear-scores-row.recent,
+[data-theme="mondrian"] .hexaclear-scores-row-pinned {
+  background: color-mix(in srgb, var(--md-yellow) 24%, transparent);
+}
+[data-theme="mondrian"] .hexaclear-run-strip {
+  border-block-color: var(--md-line-hi);
+  background: var(--md-ground-2);
+}
+
+/* --- Tab strips (how-to-play / high-scores): black lintel, primary tab - */
+[data-theme="mondrian"] .hexaclear-scoring-tabs,
+[data-theme="mondrian"] .hexaclear-scores-tabs {
+  padding: 3px;
+  gap: 3px;
+  border: 3px solid var(--md-line-hi);
+  border-radius: 0;
+  -webkit-clip-path: none;
+  clip-path: none;
+  background: var(--md-line-hi);
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-scoring-tab,
+[data-theme="mondrian"] .hexaclear-scores-tab {
+  font-family: var(--md-font);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 0;
+  background: var(--md-ground);
+  color: var(--md-line);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-scoring-tab.is-active,
+[data-theme="mondrian"] .hexaclear-scores-tab.is-active {
+  background: var(--md-red);
+  color: var(--md-ground);
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-scoring-tab:not(.is-active):hover,
+[data-theme="mondrian"] .hexaclear-scores-tab:not(.is-active):hover {
+  background: var(--md-grey);
+  color: var(--md-line-hi);
+}
+
+/* ====================================================================
+   Piecetiary — catalog tiles + labels in geometric black
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-piecetiary-cell:hover,
+[data-theme="mondrian"] .hexaclear-piecetiary-cell:focus-visible {
+  border-color: var(--md-blue);
+  background: color-mix(in srgb, var(--md-blue) 10%, var(--md-ground-2));
+  outline: none;
+}
+[data-theme="mondrian"] .hexaclear-piecetiary-cell.has-history {
+  border-color: var(--md-line-hi);
+  box-shadow: inset 0 0 0 2px var(--md-yellow);
+}
+[data-theme="mondrian"] .hexaclear-piecetiary-notation {
+  font-family: var(--md-font);
+  font-weight: 800;
+  color: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-piecetiary-name {
+  font-family: var(--md-font);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--md-line);
+}
+
+/* Text-style links (Close, Back-as-link, restart link) — black geometric
+   underline, blue on hover. (These keep the base's link layout, not a block.) */
+[data-theme="mondrian"] .hexaclear-menu-link,
+[data-theme="mondrian"] .hexaclear-menu-restart-link {
+  color: var(--md-line) !important;
+  font-family: var(--md-font);
+  font-weight: 700;
+  text-decoration-color: color-mix(in srgb, var(--md-line) 45%, transparent);
+}
+[data-theme="mondrian"] .hexaclear-menu-link:hover,
+[data-theme="mondrian"] .hexaclear-menu-restart-link:hover {
+  color: var(--md-blue) !important;
+  text-decoration-color: var(--md-blue);
+}
+[data-theme="mondrian"] .hexaclear-menu-link-sep {
+  color: color-mix(in srgb, var(--md-line) 40%, transparent);
+}
+
+/* Piece-detail popover text + preview plate. */
+[data-theme="mondrian"] .hexaclear-piece-detail-nickname {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-piece-detail-notation {
+  font-family: var(--md-font);
+  font-weight: 700;
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-piece-detail-preview {
+  background: var(--md-ground-2);
+  border: 2px solid var(--md-line-hi);
+  border-radius: 0;
+}
+[data-theme="mondrian"] .hexaclear-piece-detail-stat dt,
+[data-theme="mondrian"] .hexaclear-piece-detail-empty {
+  font-family: var(--md-font);
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-piece-detail-stat dd {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+}
+
+/* ====================================================================
+   Scoring rules (How to Play) — flat primary chips, black copy
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-scoring-rule-title {
+  font-family: var(--md-font);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-scoring-rule-desc {
+  font-family: var(--md-font);
+  color: var(--md-line);
+  opacity: 0.85;
+}
+/* The hex score chips become flat primary planes (no gradient/gloss). */
+[data-theme="mondrian"] .hexaclear-chip {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-chip-gold,
+[data-theme="mondrian"] .hexaclear-chip-big,
+[data-theme="mondrian"] .hexaclear-chip-multiplier,
+[data-theme="mondrian"] .hexaclear-chip-goal,
+[data-theme="mondrian"] .hexaclear-chip-trophy {
+  background: var(--md-yellow);
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-chip-ruby {
+  background: var(--md-red);
+  color: var(--md-ground);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-chip-neutral,
+[data-theme="mondrian"] .hexaclear-chip-small {
+  background: var(--md-grey);
+  color: var(--md-line-hi);
+}
+
+/* ====================================================================
+   High-scores list — black-on-white rows, primary rank chips
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-scores-row {
+  font-family: var(--md-font);
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-scores-name {
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-scores-value {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-scores-row.recent .hexaclear-scores-name,
+[data-theme="mondrian"] .hexaclear-scores-row.recent .hexaclear-scores-value {
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+
+/* Rank chips: solid primary blocks bounded by black. Top three take the
+   three primaries; the rest are neutral grey. */
+[data-theme="mondrian"] .hexaclear-rank-chip {
+  border: 2px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  background: var(--md-grey) !important;
+  color: var(--md-line-hi) !important;
+  font-family: var(--md-font-black) !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
+}
+[data-theme="mondrian"] .hexaclear-rank-chip.hexaclear-chip-trophy {
+  background: var(--md-red) !important;
+  color: var(--md-ground) !important;
+}
+[data-theme="mondrian"] .hexaclear-rank-chip.hexaclear-chip-gold {
+  background: var(--md-yellow) !important;
+}
+
+/* Show-global toggle: a square black-bounded switch that flips to blue. */
+[data-theme="mondrian"] .hexaclear-scores-global-toggle {
+  font-family: var(--md-font);
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-scores-global-toggle input[type='checkbox'] {
+  border-radius: 0;
+  border: 2px solid var(--md-line-hi);
+  background: var(--md-ground);
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-scores-global-toggle input[type='checkbox']::after {
+  border-radius: 0;
+  background: var(--md-line-hi);
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-scores-global-toggle input[type='checkbox']:checked {
+  border-color: var(--md-line-hi);
+  background: var(--md-blue);
+  box-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-scores-global-toggle input[type='checkbox']:checked::after {
+  background: var(--md-ground);
+  box-shadow: none;
+}
+
+/* Pager label + page-step / expand toggles. */
+[data-theme="mondrian"] .hexaclear-scores-page-label {
+  font-family: var(--md-font);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-overlay-card button.hexaclear-scores-page-step,
+[data-theme="mondrian"] .hexaclear-overlay-card button.hexaclear-scores-expand-toggle {
+  border: 3px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  background: var(--md-ground) !important;
+  color: var(--md-line-hi) !important;
+  font-family: var(--md-font) !important;
+  font-weight: 800 !important;
+  box-shadow: none !important;
+}
+
+/* ====================================================================
+   Daily-history calendar — each day a small white block bounded by black
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-history-weekday {
+  font-family: var(--md-font);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-history-cell:not(.hexaclear-history-cell-blank) {
+  border: 3px solid var(--md-line-hi) !important;
+  border-radius: 0 !important;
+  -webkit-clip-path: none !important;
+  clip-path: none !important;
+  background: var(--md-ground) !important;
+  box-shadow: none !important;
+  filter: none;
+  color: var(--md-line) !important;
+  padding: 0.3rem 0.2rem !important;
+}
+[data-theme="mondrian"] .hexaclear-history-day {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+}
+[data-theme="mondrian"] .hexaclear-history-best {
+  font-family: var(--md-font);
+  color: var(--md-line);
+}
+[data-theme="mondrian"] .hexaclear-history-cell:disabled {
+  background: var(--md-ground-2) !important;
+  box-shadow: none !important;
+  filter: none;
+  opacity: 0.45;
+  color: var(--md-line) !important;
+}
+/* Today — a blue fillet inside the black frame. */
+[data-theme="mondrian"] .hexaclear-history-cell.is-today {
+  box-shadow: inset 0 0 0 3px var(--md-blue) !important;
+}
+/* A cleared / selected day — a filled yellow block. */
+[data-theme="mondrian"] .hexaclear-history-cell.is-cleared,
+[data-theme="mondrian"] .hexaclear-history-cell.is-active,
+[data-theme="mondrian"] .hexaclear-history-cell.is-cleared.is-active {
+  background: var(--md-yellow) !important;
+  color: var(--md-line-hi) !important;
+  border: 3px solid var(--md-line-hi) !important;
+  box-shadow: none !important;
+  filter: none;
+}
+[data-theme="mondrian"] .hexaclear-history-cell.is-cleared .hexaclear-history-day,
+[data-theme="mondrian"] .hexaclear-history-cell.is-active .hexaclear-history-day,
+[data-theme="mondrian"] .hexaclear-history-cell.is-cleared .hexaclear-history-best,
+[data-theme="mondrian"] .hexaclear-history-cell.is-active .hexaclear-history-best {
+  color: var(--md-line-hi);
+}
+
+/* ====================================================================
+   Replay reel — cubes as flat primaries
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-reel-hex {
+  fill: var(--md-ground);
+  stroke: color-mix(in srgb, var(--md-line) 32%, transparent);
+}
+[data-theme="mondrian"] .hexaclear-reel-cube:not(.is-ruby) {
+  fill: var(--md-blue);
+  stroke: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-reel-cube.is-ruby {
+  fill: var(--md-red);
+  stroke: var(--md-line-hi);
+}
+[data-theme="mondrian"] .hexaclear-reel-cell.is-placed-now .hexaclear-reel-cube:not(.is-ruby) {
+  fill: var(--md-yellow);
+}
+[data-theme="mondrian"] .hexaclear-reel-points {
+  font-family: var(--md-font-black);
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-reel-title,
+[data-theme="mondrian"] .hexaclear-reel-caption {
+  font-family: var(--md-font);
+  color: var(--md-line);
+}
+
+/* ====================================================================
+   Form inputs — white field, black hairline, square
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-input,
+[data-theme="mondrian"] .hexaclear-menu-settings-select,
+[data-theme="mondrian"] .hexaclear-menu-settings-text,
+[data-theme="mondrian"] .hexaclear-coop-share-input,
+[data-theme="mondrian"] .hexaclear-account-form input,
+[data-theme="mondrian"] input[type="text"] {
+  border: 2px solid var(--md-line-hi);
+  border-radius: 0;
+  background: var(--md-ground);
+  color: var(--md-line);
+  font-family: var(--md-font);
+}
+[data-theme="mondrian"] .hexaclear-input:focus,
+[data-theme="mondrian"] .hexaclear-menu-settings-select:focus,
+[data-theme="mondrian"] .hexaclear-menu-settings-text:focus,
+[data-theme="mondrian"] .hexaclear-coop-share-input:focus,
+[data-theme="mondrian"] .hexaclear-account-form input:focus,
+[data-theme="mondrian"] input[type="text"]:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--md-blue);
+}

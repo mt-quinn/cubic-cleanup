@@ -692,27 +692,35 @@
    Empty cells — dark leaded openings
    ==================================================================== */
 /* Empty panes are clear leaded glass: a faint blue tint over the lit
-   field so the continuous backlight glows through, divided only by the
-   dark lead came. */
+   field so the continuous backlight glows through. The dark lead came
+   is painted by .hexaclear-cell-outline on top (below), not here — the
+   base hex carries only the glass tint. */
 [data-theme="glass"] .hexaclear-hex.empty {
   fill: rgba(11, 27, 56, 0.28);
   fill-opacity: 1;
-  stroke: var(--glass-came);
-  stroke-width: 5.2;
-  stroke-linejoin: round;
+  stroke: none;
 }
 [data-theme="glass"] .hexaclear-slot-fill {
   fill: rgba(8, 20, 44, 0.42);
 }
 
 /* ====================================================================
-   Raised lead came — the convincing part
+   Raised lead came — thick beaded H-channel
    --------------------------------------------------------------------
-   Every cell's bevel polylines (hidden in the base theme) become the
-   rounded came bead: a pewter highlight catches light on the upper
-   edges, a black core sinks the lower edges, so the lead reads as a
-   physically extruded H-channel rather than a flat line.
+   The on-top .hexaclear-cell-outline carries the heavy dark lead bead;
+   the inset bevel polylines add a pewter crown highlight and a sunken
+   underside so the came reads as physically extruded solder, not a flat
+   SVG stroke.
    ==================================================================== */
+[data-theme="glass"] .hexaclear-cell-outline {
+  fill: none;
+  stroke: var(--glass-came);
+  stroke-width: 7.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke;
+}
 [data-theme="glass"] .hexaclear-hex-bevels {
   display: block;
 }
@@ -722,19 +730,17 @@
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-/* A restrained, dim pewter sheen rides the lit (upper-left) crown of the
-   dark lead bead; a black underside on the lower-right rounds it. Kept
-   dim + thin so the came reads as DARK lead with a subtle catch of light,
-   not bright grey piping. */
+/* Pewter crown — a bright catch of window-light on the upper-left bead. */
 [data-theme="glass"] .hexaclear-hex-bevel-highlight {
-  stroke: #6a6770;
-  stroke-width: 1;
-  opacity: 0.3;
+  stroke: var(--glass-came-hi);
+  stroke-width: 2.2;
+  opacity: 0.55;
 }
+/* Sunken underside — the dark trough beneath the bead. */
 [data-theme="glass"] .hexaclear-hex-bevel-shadow {
-  stroke: #000000;
-  stroke-width: 2.6;
-  opacity: 0.62;
+  stroke: var(--glass-came-lo);
+  stroke-width: 4.8;
+  opacity: 0.88;
 }
 
 /* ====================================================================
@@ -742,12 +748,10 @@
    ==================================================================== */
 [data-theme="glass"] .hexaclear-hex.filled {
   fill: transparent;
-  stroke: var(--glass-came);
-  stroke-width: 5.4;
-  stroke-linejoin: round;
+  stroke: none;
 }
 [data-theme="glass"] .hexaclear-hex.filled.golden {
-  stroke: var(--glass-came);
+  stroke: none;
 }
 
 /* Each filled cell is ONE hand-cut hexagonal pane of glass, not a cube.
@@ -917,10 +921,10 @@
   opacity: 0.55;
 }
 /* The pane's leaded rim turns to a glowing gold filament. */
-[data-theme="glass"] .hexaclear-hex.filled.preview-clear {
+[data-theme="glass"] .hexaclear-cell-outline.filled.preview-clear {
   stroke: #fff2c4;
   stroke-opacity: 0.95;
-  stroke-width: 2.4;
+  stroke-width: 5;
 }
 
 /* Empty cells inside the clear (the holes the dropped piece plugs): a
@@ -929,9 +933,13 @@
    yet. */
 [data-theme="glass"] .hexaclear-hex.empty.preview-clear {
   fill: rgba(255, 244, 214, 0.16);
+  stroke: none;
+  animation: glass-preview-rim 720ms ease-in-out infinite alternate;
+}
+[data-theme="glass"] .hexaclear-cell-outline.empty.preview-clear {
   stroke: #ffe9b0;
   stroke-opacity: 0.95;
-  stroke-width: 3;
+  stroke-width: 5.5;
   animation: glass-preview-rim 720ms ease-in-out infinite alternate;
 }
 
@@ -978,6 +986,10 @@
     animation: none !important;
     filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
   }
+  [data-theme="glass"] .hexaclear-cell-outline.empty.preview-clear {
+    animation: none !important;
+    filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
+  }
 }
 [data-theme="glass"]
   .cubic-viewport.reduced-motion
@@ -993,6 +1005,12 @@
 [data-theme="glass"]
   .cubic-viewport.reduced-motion
   .hexaclear-hex.empty.preview-clear {
+  animation: none !important;
+  filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
+}
+[data-theme="glass"]
+  .cubic-viewport.reduced-motion
+  .hexaclear-cell-outline.empty.preview-clear {
   animation: none !important;
   filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
 }
@@ -1131,8 +1149,19 @@
 [data-theme="glass"] .hexaclear-hex.piece {
   fill: var(--cube-top);
   fill-opacity: 0.94;
+  stroke: none;
+}
+
+/* Dark-lead came on every hand/hold jewel, drawn ON TOP of the cube faces so
+   the lead shows between adjacent cubes in a piece (the faces otherwise cover
+   the shared edge from both sides), reading as leaded panes like the board. */
+[data-theme="glass"] .hexaclear-piece-outline {
+  fill: none;
   stroke: var(--glass-came);
-  stroke-width: 1.6;
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 [data-theme="glass"] .hexaclear-hold.unplayable .hexaclear-piece-svg,
 [data-theme="glass"] .hexaclear-piece-button.unplayable {

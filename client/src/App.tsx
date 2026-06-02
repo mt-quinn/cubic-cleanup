@@ -126,13 +126,14 @@ type HoverInfo = {
 // lead came + a shatter-on-clear). The active id lives on
 // <html data-theme="..."> and every theme-specific CSS rule is scoped under
 // that attribute so switching is a single DOM write.
-type ThemeId = 'wood' | 'win98' | 'audius' | 'glass'
+type ThemeId = 'wood' | 'win98' | 'audius' | 'glass' | 'mondrian'
 
 const THEME_OPTIONS: { id: ThemeId; label: string }[] = [
   { id: 'wood', label: 'Cubekill (default)' },
   { id: 'win98', label: 'Windows 98' },
   { id: 'audius', label: 'Music Visualizer' },
   { id: 'glass', label: 'Stained Glass' },
+  { id: 'mondrian', label: 'Abstract' },
 ]
 
 type AudiusTrack = {
@@ -175,7 +176,44 @@ type AudiusRepeatMode = 'none' | 'album' | 'track'
 type AudiusAlbumResolveStatus = 'idle' | 'resolving' | 'resolved'
 
 const AUDIUS_APP_NAME = 'cubekill-visualizer-poc'
-const AUDIUS_API_BASE = 'https://discoveryprovider.audius.co/v1'
+// Audius publishes a list of healthy discovery hosts here. We resolve one at
+// runtime so a single dead/deprecated node can't take down the whole theme.
+const AUDIUS_DISCOVERY_URL = 'https://api.audius.co'
+const AUDIUS_FALLBACK_HOST = 'https://api.audius.co'
+let audiusApiBase = `${AUDIUS_FALLBACK_HOST}/v1`
+let audiusHostPromise: Promise<string> | null = null
+
+const discoverAudiusHost = async (): Promise<string> => {
+  const res = await fetch(AUDIUS_DISCOVERY_URL)
+  if (!res.ok) throw new Error(`Audius discovery returned ${res.status}`)
+  const json = (await res.json()) as { data?: unknown }
+  const hosts = Array.isArray(json.data)
+    ? json.data.filter(
+        (host): host is string => typeof host === 'string' && host.length > 0,
+      )
+    : []
+  if (hosts.length === 0) throw new Error('Audius discovery returned no hosts.')
+  const host = hosts[Math.floor(Math.random() * hosts.length)]
+  return host.replace(/\/+$/, '')
+}
+
+// Resolves (and caches) a healthy Audius host. On failure we keep the fallback
+// host and clear the cache so a later call can retry discovery.
+const ensureAudiusApiBase = (): Promise<string> => {
+  if (!audiusHostPromise) {
+    audiusHostPromise = discoverAudiusHost()
+      .then((host) => {
+        audiusApiBase = `${host}/v1`
+        return audiusApiBase
+      })
+      .catch(() => {
+        audiusHostPromise = null
+        audiusApiBase = `${AUDIUS_FALLBACK_HOST}/v1`
+        return audiusApiBase
+      })
+  }
+  return audiusHostPromise
+}
 const AUDIUS_ANALYSER_SILENT_FRAME_LIMIT = 90
 const AUDIUS_ANALYSER_SILENCE_EPSILON = 1
 const AUDIUS_MIN_DYNAMIC_RANGE = 14
@@ -361,8 +399,11 @@ const buildAudiusApiUrl = (
   Object.entries(params).forEach(([key, value]) => {
     search.set(key, String(value))
   })
-  return `${AUDIUS_API_BASE}${path}?${search.toString()}`
+  return `${audiusApiBase}${path}?${search.toString()}`
 }
+
+const buildAudiusStreamUrl = (id: string): string =>
+  `${audiusApiBase}/tracks/${id}/stream?app_name=${AUDIUS_APP_NAME}`
 
 const normalizeAudiusPlaylistIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) return []
@@ -622,6 +663,37 @@ const paletteForTier = (
       '--glass-light-hue': `${glassLightHue}`,
     } as React.CSSProperties
   }
+  if (theme === 'mondrian') {
+    // De Stijl: the discipline is ONLY three primaries, so we do not let
+    // the golden-angle hue drift continuously. Quantize the tier hue to
+    // the nearest of red / blue / yellow and snap the whole cube to that
+    // primary's fixed, near-flat plane (the heavy black edges in
+    // theme-mondrian.css do the structural work, not face shading).
+    // Escalation reads as the composition gaining color, expressed by the
+    // static octave CSS layers — not a hue sweep.
+    const PRIMARIES = [
+      { h: 0, top: '#d6342f', left: '#b62027', right: '#8f181d' }, // red
+      { h: 222, top: '#2f55c4', left: '#1d3a8f', right: '#142a6b' }, // blue
+      { h: 48, top: '#ffd21f', left: '#f3c20b', right: '#caa006' }, // yellow
+    ]
+    const hueDist = (a: number, b: number) => {
+      const d = Math.abs(((a - b) % 360) + 360) % 360
+      return Math.min(d, 360 - d)
+    }
+    const primary = PRIMARIES.reduce((best, p) =>
+      hueDist(baseHue, p.h) < hueDist(baseHue, best.h) ? p : best,
+    )
+    return {
+      '--cube-top': primary.top,
+      '--cube-left': primary.left,
+      '--cube-right': primary.right,
+      '--score-tier-accent': 'var(--md-yellow)',
+      // About-to-clear drains to clean white; dim companion is the neutral
+      // grey plane so the doomed cluster reads as "draining" not recoloring.
+      '--cube-inverse-bright': '#ffffff',
+      '--cube-inverse-dim': 'var(--md-grey)',
+    } as React.CSSProperties
+  }
   // Wood theme: softer saturation, brighter top face for the
   // painterly "ambient light" cube look.
   const baseSat = 78 + satBump
@@ -700,6 +772,27 @@ const jewelStyle = (
     ? (jewel as unknown as React.CSSProperties)
     : rotateJewelFacets(jewel, hueShift)
 }
+
+// De Stijl primary palette for the Abstract theme. A "cube" renders as a
+// FLAT hexagon here (theme-mondrian.css hides the isometric edges + per-face
+// shading), so all three facets carry the SAME pure color — a flat painted
+// plane, not a shaded block. The fourth entry is the neutral grey De Stijl
+// uses sparingly. Length matches GLASS_JEWELS (4) so the shared
+// jewelIndexForPieceCube() hashing assigns a stable color per piece-cube for
+// both themes: the color is set when a piece is dealt, follows it into the
+// hand preview, persists onto the board (glassCellColors), and is echoed in
+// the piecetiary — exactly like the cathedral jewels.
+const MONDRIAN_PRIMARIES: JewelFacets[] = [
+  { '--cube-top': '#c8252b', '--cube-left': '#c8252b', '--cube-right': '#c8252b' }, // red
+  { '--cube-top': '#1d3a8f', '--cube-left': '#1d3a8f', '--cube-right': '#1d3a8f' }, // blue
+  { '--cube-top': '#f3c20b', '--cube-left': '#f3c20b', '--cube-right': '#f3c20b' }, // yellow
+  { '--cube-top': '#7a746a', '--cube-left': '#7a746a', '--cube-right': '#7a746a' }, // neutral grey
+]
+const primaryStyle = (index: number): React.CSSProperties =>
+  MONDRIAN_PRIMARIES[
+    ((index % MONDRIAN_PRIMARIES.length) + MONDRIAN_PRIMARIES.length) %
+      MONDRIAN_PRIMARIES.length
+  ] as unknown as React.CSSProperties
 
 // Self-rendered cube palette in the wood theme. Mirrors the
 // `--cube-{top,right,left}` defaults declared in index.css. We hold
@@ -1388,6 +1481,7 @@ const buildHexBevelPaths = (
 const CubeLines = ({
   cx,
   cy,
+  size = HEX_SIZE,
   variant = 'normal',
   dailyHits,
   extraClasses = [],
@@ -1396,6 +1490,10 @@ const CubeLines = ({
 }: {
   cx: number
   cy: number
+  // Cube radius. Defaults to the board cell size; the hand/hold preview
+  // passes its smaller PREVIEW_SIZE so the cube exactly fits its hex cell
+  // instead of overflowing it and burying the cell's outline stroke.
+  size?: number
   variant?: 'normal' | 'dailyTarget' | 'golden'
   dailyHits?: number
   extraClasses?: string[]
@@ -1408,7 +1506,7 @@ const CubeLines = ({
   playerGlyph?: string
 }) => {
   const vertices: { x: number; y: number }[] = []
-  const radius = HEX_SIZE
+  const radius = size
   for (let i = 0; i < 6; i++) {
     const angleRad = ((60 * i - 30) * Math.PI) / 180
     const x = cx + radius * Math.cos(angleRad)
@@ -3729,7 +3827,12 @@ function App() {
   const [theme, setTheme] = useState<ThemeId>(() => {
     if (typeof window === 'undefined') return 'wood'
     const raw = window.localStorage.getItem('cubic-theme')
-    return raw === 'win98' || raw === 'audius' ? raw : 'wood'
+    return raw === 'win98' ||
+      raw === 'audius' ||
+      raw === 'glass' ||
+      raw === 'mondrian'
+      ? raw
+      : 'wood'
   })
   // Board cell positions. In the Stained Glass theme the seven rosettes are
   // pushed slightly apart so the lit glass field shows between them; every
@@ -3833,10 +3936,11 @@ function App() {
     setAudiusStatus((current) => (current === 'playing' ? current : 'loading'))
     setAudiusError(null)
     const trimmed = query?.trim() ?? ''
-    const endpoint = trimmed
-      ? buildAudiusApiUrl('/tracks/search', { query: trimmed, limit: 8 })
-      : buildAudiusApiUrl('/tracks/trending', { limit: 8 })
     try {
+      await ensureAudiusApiBase()
+      const endpoint = trimmed
+        ? buildAudiusApiUrl('/tracks/search', { query: trimmed, limit: 8 })
+        : buildAudiusApiUrl('/tracks/trending', { limit: 8 })
       const res = await fetch(endpoint)
       if (!res.ok) throw new Error(`Audius returned ${res.status}`)
       const json = (await res.json()) as { data?: unknown }
@@ -4057,8 +4161,9 @@ function App() {
       setAudiusPlaybackPosition(0)
       audio.crossOrigin = 'anonymous'
       audio.volume = 1
-      audio.src = `${AUDIUS_API_BASE}/tracks/${id}/stream?app_name=${AUDIUS_APP_NAME}`
       try {
+        await ensureAudiusApiBase()
+        audio.src = buildAudiusStreamUrl(id)
         const analyser = ensureAudiusAnalyser()
         if (!analyser) {
           throw new Error('Browser could not create an Audius audio analyser.')
@@ -5370,7 +5475,7 @@ function App() {
       // index, same as the hand preview) onto the board cells it fills. The
       // target cell for cube i is the piece origin + the cube's relative
       // axial offset — exactly the mapping getBestPlacementPreview uses.
-      if (theme === 'glass') {
+      if (theme === 'glass' || theme === 'mondrian') {
         const placedBoardDef = getBoardDefinitionForMode(current.mode)
         const originCell = placedBoardDef.cells.find((c) => c.id === cellId)
         if (originCell) {
@@ -7657,7 +7762,7 @@ function App() {
   // (board goes empty) and bounds the map to ≤49 entries without any
   // bespoke reset wiring.
   useEffect(() => {
-    if (theme !== 'glass') return
+    if (theme !== 'glass' && theme !== 'mondrian') return
     setGlassCellColors((prev) => {
       let changed = false
       const next: Record<string, number> = {}
@@ -7679,7 +7784,21 @@ function App() {
       ? piece.shape.cells.map((_, i) =>
           jewelStyle(jewelIndexForPieceCube(piece.id, i), glassHueShift),
         )
-      : undefined
+      : theme === 'mondrian'
+        ? piece.shape.cells.map((_, i) =>
+            primaryStyle(jewelIndexForPieceCube(piece.id, i)),
+          )
+        : undefined
+
+  // Shared resolver for a single board cube's persisted color in the two
+  // "painted-cube" themes (glass jewels, abstract primaries). Falls back to a
+  // deterministic color from the cell id for pre-seeded / ruby-respawned cells.
+  const paintedCellStyle = (index: number): React.CSSProperties | null =>
+    theme === 'glass'
+      ? jewelStyle(index, glassHueShift)
+      : theme === 'mondrian'
+        ? primaryStyle(index)
+        : null
 
   // Drive the screenshake animation. Removes the class, forces a reflow,
   // sets the amplitude variable, then re-adds the class so consecutive
@@ -7772,7 +7891,12 @@ function App() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     document.documentElement.dataset.theme = theme
-    const faviconHref = theme === 'win98' ? '/win_favicon.png' : '/favicon.png'
+    const faviconHref =
+      theme === 'win98'
+        ? '/win_favicon.png'
+        : theme === 'mondrian'
+          ? '/mondrian_favicon.png'
+          : '/favicon.png'
     const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
     if (link && link.getAttribute('href') !== faviconHref) {
       link.setAttribute('href', faviconHref)
@@ -10958,11 +11082,12 @@ function App() {
                 // pre-seeded cells). Skipped for rubies (own palette) and
                 // multiplayer (partner-hue identity wins).
                 const glassJewelStyle =
-                  theme === 'glass' && !isGolden && !isMultiplayer
-                    ? jewelStyle(
+                  (theme === 'glass' || theme === 'mondrian') &&
+                  !isGolden &&
+                  !isMultiplayer
+                    ? paintedCellStyle(
                         glassCellColors[cell.id] ??
                           jewelIndexForPieceCube(cell.id, 0),
-                        glassHueShift,
                       )
                     : null
                 const cubeStyle = glassJewelStyle ?? partnerHueStyle
@@ -11164,6 +11289,30 @@ function App() {
                         {cell.coord.q},{cell.coord.r}
                       </text>
                     )}
+                    {/* Lead-came outline — drawn ON TOP of cube faces so the
+                        dark lead shows on every edge, including shared edges
+                        between adjacent filled panes (faces cover the hex
+                        polygon stroke from both sides). Glass theme styles
+                        this as thick beaded came; other themes leave it off. */}
+                    <polygon
+                      points={points}
+                      className={[
+                        'hexaclear-cell-outline',
+                        isFilled ? 'filled' : 'empty',
+                        isGolden ? 'golden' : '',
+                        isClearing ? 'clearing' : '',
+                        willClearInPreview ? 'preview-clear' : '',
+                        inPreview
+                          ? previewValid
+                            ? 'preview-valid'
+                            : 'preview-invalid'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-hidden="true"
+                      pointerEvents="none"
+                    />
                   </g>
                 )
               })
@@ -11530,12 +11679,13 @@ function App() {
                     // placement animation flashes the default sapphire palette
                     // before snapping to the piece's real color.
                     const glassJewelStyle =
-                      theme === 'glass' && !isGolden && !isMultiplayer
-                        ? jewelStyle(
+                      (theme === 'glass' || theme === 'mondrian') &&
+                      !isGolden &&
+                      !isMultiplayer
+                        ? (paintedCellStyle(
                             glassCellColors[cell.id] ??
                               jewelIndexForPieceCube(cell.id, 0),
-                            glassHueShift,
-                          )
+                          ) ?? undefined)
                         : undefined
                     return (
                       <CubeLines
@@ -13982,7 +14132,9 @@ function App() {
                       ? 'Audius'
                       : theme === 'glass'
                         ? 'Glass'
-                        : 'Cubekill'
+                        : theme === 'mondrian'
+                          ? 'Abstract'
+                          : 'Cubekill'
                 const selectedAudiusTrack = audiusTrackOptions.find(
                   (track) => track.id === audiusSelectedTrackId,
                 )
@@ -14784,7 +14936,16 @@ function App() {
                                           ),
                                         ),
                                       )
-                                    : undefined
+                                    : theme === 'mondrian'
+                                      ? variant.cells.map((_, i) =>
+                                          primaryStyle(
+                                            jewelIndexForPieceCube(
+                                              variant.id,
+                                              i,
+                                            ),
+                                          ),
+                                        )
+                                      : undefined
                                 }
                               />
                             </div>
@@ -17336,7 +17497,26 @@ const PiecePreview = ({
             key={`cube-${idx}`}
             cx={cx}
             cy={cy}
+            size={PREVIEW_SIZE}
             style={cubeStyles?.[idx]}
+          />
+        )
+      })}
+      {/* Outline pass — drawn ON TOP of the cubes so the black rule shows on
+          every edge, including the shared edge between two adjacent cubes in
+          a piece (which the cubes otherwise cover from both sides). Only
+          themes that opt in (e.g. Abstract/Glass) paint a stroke here; other
+          themes leave it transparent. */}
+      {centers.map(({ x, y }, idx) => {
+        const cx = CARD_W / 2 + (x - centerX)
+        const cy = CARD_H / 2 + (y - centerY)
+        return (
+          <polygon
+            key={`outline-${idx}`}
+            points={buildPreviewHexPoints(cx, cy)}
+            className="hexaclear-piece-outline"
+            aria-hidden="true"
+            pointerEvents="none"
           />
         )
       })}

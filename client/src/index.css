@@ -2,6 +2,7 @@
 @import url('./theme-win98.css');
 @import url('./theme-audius.css');
 @import url('./theme-glass.css');
+@import url('./theme-mondrian.css');
 
 :root {
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
@@ -2107,6 +2108,21 @@ body {
 .hexaclear-hex.piece {
   fill: #ffe9c6;
   stroke: #3f2315;
+}
+
+/* On-top outline pass for hand/hold/catalog piece previews. Invisible by
+   default (themes opt in) — a bare SVG polygon would otherwise default to a
+   black fill and paint over the cubes. */
+.hexaclear-piece-outline {
+  fill: none;
+  stroke: none;
+}
+
+/* On-top lead outline for board cells. Invisible unless a theme opts in
+   (glass paints thick beaded came here so filled panes still show lead). */
+.hexaclear-cell-outline {
+  fill: none;
+  stroke: none;
 }
 
 .hexaclear-overlay {
