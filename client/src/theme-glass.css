@@ -1143,15 +1143,14 @@
 /* ====================================================================
    Overlays / modals — illuminated reliquary panels
    ==================================================================== */
+/* The cathedral theme has no rounded board container — the glass field
+   bleeds seamlessly into the surrounding masonry — so the inset:0 dim
+   would paint as a hard-edged square floating over a borderless field.
+   Drop the dim entirely; the modal panels are opaque carved stone with
+   heavy cast shadows and read fine over the lit board on their own. */
 [data-theme="glass"] .hexaclear-overlay {
-  background:
-    radial-gradient(
-      circle at 50% 38%,
-      color-mix(in srgb, var(--glass-gold) 8%, transparent),
-      rgba(0, 0, 0, 0.74) 46%,
-      rgba(0, 0, 0, 0.92)
-    );
-  backdrop-filter: blur(2px);
+  background: none;
+  backdrop-filter: none;
 }
 
 [data-theme="glass"] .hexaclear-overlay-card,

@@ -2115,6 +2115,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Match the board container's rounded corners so the dim doesn't paint
+     a sharp-cornered square over the panel's rounded edges. `inherit`
+     tracks whatever radius the wrapper uses per theme (e.g. square in
+     win98). The modal card is a flex child, not clipped, so tall cards
+     still overflow the wrapper as before. */
+  border-radius: inherit;
   background: radial-gradient(circle, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.95));
   /* Tall modal cards (e.g. high scores with many entries) can overflow
      the board wrapper and visually extend down over the hand area.
