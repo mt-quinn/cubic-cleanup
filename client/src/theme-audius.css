@@ -86,11 +86,11 @@
 
 [data-theme="audius"] .hexaclear-audius-deck {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "utility"
-    "modes"
-    "readouts";
+    "brand utility"
+    "modes modes"
+    "readouts readouts";
   align-items: center;
   gap: 0.35rem;
   flex: 0 0 auto;
@@ -106,8 +106,12 @@
 }
 
 [data-theme="audius"] .hexaclear-audius-brand {
-  display: grid;
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   line-height: 1;
+  padding: 0.1rem 0;
 }
 
 [data-theme="audius"] .hexaclear-audius-brand-kicker,
@@ -122,13 +126,19 @@
 }
 
 [data-theme="audius"] .hexaclear-audius-brand-title {
-  font-family: 'Monoton', system-ui, sans-serif;
-  font-size: clamp(1.25rem, 3.4dvh, 2rem);
-  letter-spacing: 0.08em;
-  color: color-mix(in srgb, var(--audius-cube-top) 76%, #fff5ca);
+  font-family: 'Orbitron', 'Nunito', system-ui, sans-serif;
+  font-weight: 900;
+  font-size: clamp(1.6rem, 4.6dvh, 2.6rem);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  /* Orbitron's tracking adds trailing space after the last glyph; nudge
+     right so the wordmark stays optically centered under the kicker. */
+  text-indent: 0.22em;
+  color: color-mix(in srgb, var(--audius-cube-top) 88%, #fff5ca);
   text-shadow:
-    0 0 1px rgba(255, 255, 255, 0.8),
-    0 0 11px color-mix(in srgb, var(--audius-cube-left) 56%, transparent);
+    0 0 1px rgba(255, 255, 255, 0.85),
+    0 0 12px color-mix(in srgb, var(--audius-cube-left) 60%, transparent),
+    0 0 26px color-mix(in srgb, var(--audius-cube-top) 30%, transparent);
 }
 
 [data-theme="audius"] .hexaclear-audius-mode-bank,
@@ -141,8 +151,10 @@
 
 [data-theme="audius"] .hexaclear-audius-utility-row {
   grid-area: utility;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
 }
 
 [data-theme="audius"] .hexaclear-audius-mode-bank {
@@ -152,7 +164,17 @@
 }
 
 [data-theme="audius"] .hexaclear-audius-menu-button {
-  width: 100%;
+  width: auto;
+}
+
+/* Give the Menu / History utility buttons real heft so they read as
+   siblings of the wide Endless/Daily/Multi mode bank rather than tiny
+   pills floating in the corner. They size up to a comfortable width and
+   share the space evenly when both are present. */
+[data-theme="audius"] .hexaclear-audius-utility-row .hexaclear-audius-menu-button,
+[data-theme="audius"] .hexaclear-audius-utility-row .hexaclear-audius-history-button {
+  flex: 1 1 0;
+  min-width: 8.5rem;
 }
 
 [data-theme="audius"] .hexaclear-audius-mode,
@@ -883,6 +905,10 @@
   stroke-opacity: 1;
   stroke-width: 4.6;
   vector-effect: non-scaling-stroke;
+  /* Undo the board's music-driven hue-rotate (see #audius-invalid-counter in
+     App.tsx) so the invalid cue can never sweep into a "valid"-looking
+     green/blue — it stays red. */
+  filter: url(#audius-invalid-counter);
 }
 
 [data-theme="audius"] .hexaclear-placement-ghost .placement-ghost-valid {
@@ -897,6 +923,9 @@
   stroke: #ff5d8c;
   stroke-width: 4;
   vector-effect: non-scaling-stroke;
+  /* Same counter-rotation as the invalid hex preview above — keep the
+     rejected-piece ghost red regardless of the board's hue sweep. */
+  filter: url(#audius-invalid-counter);
 }
 
 [data-theme="audius"] .hexaclear-hex.preview-clear {
@@ -1466,6 +1495,11 @@
 [data-theme="audius"] .hexaclear-scoring-card .hexaclear-reset,
 [data-theme="audius"] .hexaclear-scores-card .hexaclear-reset,
 [data-theme="audius"] .hexaclear-account-card .hexaclear-reset {
+  /* The board sits at z-index 2 and the now-playing card at 8 inside the
+     board wrapper; without an explicit z-index the Undo button paints
+     beneath the board (z-index: auto) so the board's SVG swallows every
+     click. Lift it above the in-wrapper layers so it's actually usable. */
+  z-index: 9;
   border: 1px solid color-mix(in srgb, var(--audius-cube-top) 28%, #30263b);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent),
@@ -1828,10 +1862,26 @@
   }
 
   [data-theme="audius"] .hexaclear-audius-deck {
+    /* Side-by-side title + buttons can't fit on a phone without the big
+       wordmark overlapping the buttons, so stack the header: title on its
+       own row, then a full-width Menu/History row. */
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "brand"
+      "utility"
+      "modes"
+      "readouts";
     gap: 0.28rem;
     padding: 0.32rem;
     border-radius: 0.95rem;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-brand {
+    justify-content: center;
+  }
+
+  [data-theme="audius"] .hexaclear-audius-utility-row {
+    justify-content: stretch;
   }
 
   [data-theme="audius"] .hexaclear-audius-mode-bank {
@@ -1856,6 +1906,13 @@
     min-height: 1.65rem;
     padding: 0.22rem 0.5rem;
     font-size: 0.58rem;
+  }
+
+  /* On their own stacked row the buttons fill the full width as an even
+     pair instead of carrying the desktop min-width. */
+  [data-theme="audius"] .hexaclear-audius-utility-row .hexaclear-audius-menu-button,
+  [data-theme="audius"] .hexaclear-audius-utility-row .hexaclear-audius-history-button {
+    min-width: 0;
   }
 
   [data-theme="audius"] .hexaclear-audius-readout {

@@ -3534,6 +3534,14 @@ function App() {
   // Ever-advancing hue angle for the whole-cube-layer filter. Always drifts
   // while playing (constant rotation) and speeds up with the music.
   const audiusCubeHueRef = useRef(0)
+  // The board's music-reactive filter hue-rotates the entire cube layer
+  // (0–360°), which would also sweep the red "invalid placement" preview
+  // through green/blue and make it read as a *valid* drop. This SVG filter
+  // counter-rotates by the negative angle on just the invalid-preview
+  // elements so their net hue stays the authored danger-red. Driven from the
+  // analyser loop (CSS filters on inner SVG nodes are ignored on iOS, so a
+  // referenced <filter> is the cross-browser path — same as #audius-clear-invert).
+  const audiusInvalidCounterRef = useRef<SVGFEColorMatrixElement | null>(null)
   const audiusLastBeatAtRef = useRef(0)
   const audiusLastVisualFrameAtRef = useRef(0)
   const audiusSilentFrameCountRef = useRef(0)
@@ -7528,6 +7536,10 @@ function App() {
       })
       rootEl?.classList.remove(...AUDIUS_STAGE_BEAT_CLASSES)
       clearAudiusStageCanvas(canvasEl)
+      // The board's hue-rotate is off in these states, so the invalid-preview
+      // counter-rotation must return to identity too — otherwise it would be
+      // the only rotation left and would push the cue off red.
+      audiusInvalidCounterRef.current?.setAttribute('values', '0')
       return
     }
     let frame = 0
@@ -7799,6 +7811,14 @@ function App() {
       rootEl?.style.setProperty(
         '--audius-cube-hue-rotate',
         `${audiusCubeHueRef.current.toFixed(1)}deg`,
+      )
+      // Cancel that same rotation on the invalid-placement preview so it
+      // never drifts off red. The board applies hue-rotate(+X) to its whole
+      // subtree; this primitive pre-rotates the preview by -X (sRGB, to match
+      // CSS filter semantics) so the two compose back to the authored red.
+      audiusInvalidCounterRef.current?.setAttribute(
+        'values',
+        (-audiusCubeHueRef.current).toFixed(1),
       )
       audiusCanvasVisualRef.current = {
         bass,
@@ -9481,6 +9501,9 @@ function App() {
         aria-label="Music visualizer game controls"
         aria-hidden={theme !== 'audius'}
       >
+        <div className="hexaclear-audius-brand">
+          <span className="hexaclear-audius-brand-title">Cubekill</span>
+        </div>
         <div className="hexaclear-audius-mode-bank">
           {isMultiplayer ? (
             <span className="hexaclear-audius-mode active" aria-disabled="true">
@@ -10204,6 +10227,30 @@ function App() {
                     <feFuncG type="linear" slope="1.28" />
                     <feFuncB type="linear" slope="1.28" />
                   </feComponentTransfer>
+                </filter>
+              )}
+              {/* Counter-rotation for the invalid-placement preview. The
+                  board's CSS filter hue-rotates the whole cube layer by a
+                  music-driven angle X (0–360°); this pre-rotates the preview
+                  by -X (updated each analyser frame via
+                  audiusInvalidCounterRef) so the two cancel and the danger
+                  cue stays red instead of sweeping into green/blue. The
+                  generous region keeps the non-scaling preview stroke from
+                  being clipped by the filter box. */}
+              {theme === 'audius' && (
+                <filter
+                  id="audius-invalid-counter"
+                  colorInterpolationFilters="sRGB"
+                  x="-50%"
+                  y="-50%"
+                  width="200%"
+                  height="200%"
+                >
+                  <feColorMatrix
+                    ref={audiusInvalidCounterRef}
+                    type="hueRotate"
+                    values="0"
+                  />
                 </filter>
               )}
               {rippleCells.length > 0 && rippleCenter && (
