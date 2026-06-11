@@ -4583,6 +4583,97 @@ body {
   }
 }
 
+/* DEAL-IN: run-start choreography. While the viewport carries
+   `is-dealing-in`, board cells pop in on a rosette-by-rosette cascade
+   (per-cell delay baked into --hexaclear-deal-delay by the render
+   data), the hand fly-in waits for the board (per-button delay var
+   gains a +400ms base in JSX), and the wordmark + score readout each
+   take one small beat near the end. Board chrome (panel, outline,
+   grooves) stays static — only the playable surface builds.
+
+   The class is removed ~2.1s after the run starts (or instantly on any
+   pointerdown = skip), at which point every rule here stops applying
+   and cells snap to their normal styling. See Documentation/Deal-In
+   and Living Board Plan.md. */
+.cubic-viewport.is-dealing-in .hexaclear-cell {
+  animation: hexaclear-cell-dealin 230ms cubic-bezier(0.3, 1.1, 0.45, 1)
+    both;
+  animation-delay: var(--hexaclear-deal-delay, 0ms);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes hexaclear-cell-dealin {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Wordmark shimmer as the cascade resolves (~620ms), then the score
+   readout pops awake (~750ms). Generic selectors cover the wood theme;
+   themed readouts (Win98 LCD, Audius) get their own pass later. */
+.cubic-viewport.is-dealing-in .hexaclear-title {
+  animation: hexaclear-dealin-title 360ms ease-out 620ms both;
+}
+
+@keyframes hexaclear-dealin-title {
+  0% {
+    filter: brightness(1);
+  }
+  45% {
+    filter: brightness(1.35);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+.cubic-viewport.is-dealing-in .hexaclear-live-stat .value {
+  animation: hexaclear-dealin-stat 240ms ease-out 750ms both;
+}
+
+@keyframes hexaclear-dealin-stat {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Reduced motion: the cascade collapses to one quiet 150ms board fade.
+   No per-cell animation, no chrome beats (JS also skips the audio
+   ticks and shortens the active window). */
+.cubic-viewport.reduced-motion.is-dealing-in .hexaclear-cell,
+.cubic-viewport.reduced-motion.is-dealing-in .hexaclear-title,
+.cubic-viewport.reduced-motion.is-dealing-in .hexaclear-live-stat .value {
+  animation: none;
+}
+
+.cubic-viewport.reduced-motion.is-dealing-in .hexaclear-board {
+  animation: hexaclear-dealin-fade 150ms ease-out both;
+}
+
+@keyframes hexaclear-dealin-fade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 .hexaclear-piece-button.selected {
   background: rgba(255, 213, 123, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255, 213, 123, 0.55);

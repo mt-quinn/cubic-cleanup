@@ -639,6 +639,29 @@ const playOneShot = (key: SoundKey) => {
 
 export const playClickDown = () => playOneShot('clickDown')
 export const playClickUp = () => playOneShot('clickUp')
+
+// Deal-in tick: one per rosette as the board cascades in at the start
+// of a fresh run. Reuses the clickUp buffer pitch-stepped upward across
+// the rosettes (playbackRate 1.0 -> 2.0) so the board "builds" musically
+// without any new audio asset, and quieter than a real UI click so the
+// seven ticks read as one gesture rather than seven button presses.
+export const playDealTick = (step: number, steps: number) => {
+  const ctx = readyContext()
+  if (!ctx) return
+  const buf = buffers['clickUp']
+  if (!buf) return
+  try {
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.playbackRate.value = 1 + step / Math.max(1, steps - 1)
+    const clipGain = ctx.createGain()
+    clipGain.gain.value = VOLUMES.clickUp * 0.45
+    src.connect(clipGain).connect(masterGainNode!)
+    src.start(0)
+  } catch {
+    // Ignore — playback is best-effort.
+  }
+}
 export const playError = () => playOneShot('error')
 export const playGameOver = () => playOneShot('gameOver')
 

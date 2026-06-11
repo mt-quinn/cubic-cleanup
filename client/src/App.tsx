@@ -34,7 +34,7 @@ import type {
   GameState,
 } from './game/gameLogic'
 import { axialToId, addAxial, directions } from './game/hexTypes'
-import type { BoardDefinition } from './game/hexTypes'
+import type { Axial, BoardDefinition } from './game/hexTypes'
 import {
   ALL_PIECE_VARIANTS,
   PIECE_VARIANT_NAMES,
@@ -59,6 +59,7 @@ import {
   playClearForStreakIndex,
   playClickDown,
   playClickUp,
+  playDealTick,
   playError,
   playGameOver,
   playUiClick,
@@ -1407,6 +1408,79 @@ type BoardRenderData = {
   flowerBoundaryLoops: { dark: Vec2[]; light: Vec2[] }[]
   outlineSegments: Segment[]
   geometry: BoardGeometry
+  // Deal-in cascade: per-cell animation delay (ms) for the run-start
+  // choreography. Rosettes pop in center-first then clockwise, cells
+  // within each rosette center-out. Pre-baked here so the cascade costs
+  // nothing at render time. See Documentation/Deal-In and Living Board
+  // Plan.md.
+  dealDelayByCellId: Record<string, number>
+}
+
+// Deal-in timing constants. The rosette stagger doubles as the audio
+// tick schedule (one pitch-stepped tick per rosette).
+const DEAL_IN_ROSETTE_STAGGER_MS = 45
+const DEAL_IN_CELL_STAGGER_STANDARD_MS = 12
+const DEAL_IN_CELL_STAGGER_BIG_MS = 5
+const DEAL_IN_HAND_BASE_DELAY_MS = 400
+// Active-state window. Long enough to cover the slowest hand fly-in
+// (base 400ms + slot 2 stagger 350ms + 900ms animation = 1650ms) so the
+// fly-in delay variable never changes under a running animation.
+const DEAL_IN_TOTAL_MS = 2100
+const DEAL_IN_REDUCED_MOTION_MS = 320
+
+const buildDealDelays = (
+  boardDef: BoardDefinition,
+  layout: BoardLayout,
+  geometry: BoardGeometry,
+  cellStaggerMs: number,
+): Record<string, number> => {
+  const axialDist = (a: Axial, b: Axial): number => {
+    const dq = a.q - b.q
+    const dr = a.r - b.r
+    return (Math.abs(dq) + Math.abs(dq + dr) + Math.abs(dr)) / 2
+  }
+  const screenPos = (coord: Axial): Vec2 => {
+    const pos = layout.positions[axialToId(coord)]
+    return { x: pos.x + layout.offsetX, y: pos.y + layout.offsetY }
+  }
+
+  // Rosette order: the center flower first, then the outer six clockwise
+  // by screen angle starting from "up". flowerCenters[0] is the origin
+  // rosette in both board layouts.
+  const boardCenter = screenPos(geometry.flowerCenters[0])
+  const clockwiseAngle = (coord: Axial): number => {
+    const p = screenPos(coord)
+    // atan2(dx, -dy): 0 at twelve o'clock, increasing clockwise.
+    const a = Math.atan2(p.x - boardCenter.x, -(p.y - boardCenter.y))
+    return a < 0 ? a + Math.PI * 2 : a
+  }
+  const orderedCenters = [
+    geometry.flowerCenters[0],
+    ...geometry.flowerCenters
+      .slice(1)
+      .sort((a, b) => clockwiseAngle(a) - clockwiseAngle(b)),
+  ]
+
+  // Assign each cell to its rosette (regions never overlap, so the
+  // unique center within flowerRadius is the owner).
+  const delays: Record<string, number> = {}
+  orderedCenters.forEach((center, rosetteIndex) => {
+    const members = boardDef.cells.filter(
+      (cell) => axialDist(cell.coord, center) <= geometry.flowerRadius,
+    )
+    // Center-out, then clockwise for stable, readable ordering.
+    members.sort((a, b) => {
+      const da = axialDist(a.coord, center)
+      const db = axialDist(b.coord, center)
+      if (da !== db) return da - db
+      return clockwiseAngle(a.coord) - clockwiseAngle(b.coord)
+    })
+    members.forEach((cell, cellIndex) => {
+      delays[cell.id] =
+        rosetteIndex * DEAL_IN_ROSETTE_STAGGER_MS + cellIndex * cellStaggerMs
+    })
+  })
+  return delays
 }
 
 const buildBoardRenderData = (mode: GameMode): BoardRenderData => {
@@ -1429,6 +1503,14 @@ const buildBoardRenderData = (mode: GameMode): BoardRenderData => {
     ),
     outlineSegments: buildBoardOutlineSegments(boardDef, layout),
     geometry,
+    dealDelayByCellId: buildDealDelays(
+      boardDef,
+      layout,
+      geometry,
+      mode === 'big'
+        ? DEAL_IN_CELL_STAGGER_BIG_MS
+        : DEAL_IN_CELL_STAGGER_STANDARD_MS,
+    ),
   }
 }
 
@@ -3334,6 +3416,77 @@ function App() {
       return { token: handFlyInToken, done: nextDone }
     })
   }
+  // ---- Deal-in (run-start choreography) -----------------------------
+  //
+  // While true, the board cells wear the rosette-cascade animation
+  // (per-cell delays pre-baked in BoardRenderData) and the hand fly-in
+  // gains a base delay so pieces deal in after the board builds. Fresh
+  // runs only; resumed games restore instantly. Any pointerdown skips.
+  // See Documentation/Deal-In and Living Board Plan.md.
+  const [dealInActive, setDealInActive] = useState(false)
+  const dealInTimersRef = useRef<number[]>([])
+  const dealInSkipCleanupRef = useRef<(() => void) | null>(null)
+
+  const finishDealIn = useCallback(() => {
+    for (const t of dealInTimersRef.current) window.clearTimeout(t)
+    dealInTimersRef.current = []
+    if (dealInSkipCleanupRef.current) {
+      dealInSkipCleanupRef.current()
+      dealInSkipCleanupRef.current = null
+    }
+    setDealInActive(false)
+  }, [])
+
+  const reducedMotionRef = useRef(false)
+
+  const startDealIn = useCallback(() => {
+    finishDealIn()
+    setDealInActive(true)
+    // Remount the hand buttons so the fly-in always replays as part of
+    // the choreography (callers that already bump the token just merge
+    // into the same remount).
+    setHandFlyInToken((t) => t + 1)
+
+    if (reducedMotionRef.current) {
+      // Reduced motion: CSS collapses the cascade to a single short
+      // board fade; no audio ticks, short active window.
+      dealInTimersRef.current.push(
+        window.setTimeout(() => finishDealIn(), DEAL_IN_REDUCED_MOTION_MS),
+      )
+      return
+    }
+
+    // One pitch-stepped tick per rosette, on the rosette stagger clock.
+    // playDealTick no-ops while audio is locked/muted, so cold loads
+    // (no gesture yet) stay silent without special-casing here.
+    for (let i = 0; i < 7; i++) {
+      dealInTimersRef.current.push(
+        window.setTimeout(
+          () => playDealTick(i, 7),
+          i * DEAL_IN_ROSETTE_STAGGER_MS,
+        ),
+      )
+    }
+    dealInTimersRef.current.push(
+      window.setTimeout(() => finishDealIn(), DEAL_IN_TOTAL_MS),
+    )
+
+    // Skip on the next pointerdown. The gesture that *started* the run
+    // can't trigger this: its pointerdown happened before the click
+    // handler that called us. Cells snap to their final state and the
+    // hand fly-in fast-forwards (its delay variable drops by 400ms).
+    const onSkip = () => finishDealIn()
+    window.addEventListener('pointerdown', onSkip, {
+      capture: true,
+      once: true,
+    })
+    dealInSkipCleanupRef.current = () =>
+      window.removeEventListener('pointerdown', onSkip, { capture: true })
+  }, [finishDealIn])
+
+  // Unmount safety: clear any in-flight deal-in timers.
+  useEffect(() => () => finishDealIn(), [finishDealIn])
+
   // Radial particle bursts that fire at each ruby's old position when
   // it gets cleared. Each burst has a unique token; big-board moves can
   // queue several at once and they all animate independently before
@@ -3797,6 +3950,27 @@ function App() {
       return false
     }
   })
+  // Mirror into the ref the deal-in callbacks read (they're declared
+  // above this state and shouldn't re-create on a settings toggle).
+  useEffect(() => {
+    reducedMotionRef.current = reducedMotion
+  }, [reducedMotion])
+
+  // Cold-load deal-in: if the session opens onto a pristine board (a
+  // brand-new run, or a restored save with zero moves — visually
+  // identical), play the choreography once. Mid-run restores skip it,
+  // as do tutorial launches (the tutorial stages its own board) and
+  // multiplayer (server state arrives async; see plan doc). Audio ticks
+  // self-mute here because no gesture has unlocked the context yet.
+  useEffect(() => {
+    if (tutorialStage > 0) return
+    if (isMultiplayer) return
+    if (game.moves !== 0 || game.score !== 0 || game.gameOver) return
+    startDealIn()
+    // Mount-only by design: later pristine states (e.g. New Game) are
+    // handled at their own call sites.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // Colorblind support: opt-in. When on, the viewport carries an
   // `is-colorblind` class that lets CSS surface extra non-color
   // cues — a glyph on ruby cells, a stronger pattern on invalid
@@ -6638,6 +6812,7 @@ function App() {
     setClearingGoldenCellIds([])
     setPendingGoldenSpawnCellIds([])
     setScorePopup(null)
+    startDealIn()
   }
 
   // ---- First-launch micro-tutorial -----------------------------------
@@ -6680,14 +6855,14 @@ function App() {
     setSavedEndlessGame(fresh)
     setTutorialEndScreenPending(completed)
     setTutorialStage(0)
-    setHandFlyInToken((t) => t + 1)
+    startDealIn()
     try {
       window.localStorage.setItem(TUTORIAL_COMPLETED_KEY, '1')
     } catch {
       // Best-effort; if storage is unavailable, the tutorial will
       // re-fire next session, which is harmless.
     }
-  }, [])
+  }, [startDealIn])
 
   const skipTutorial = useCallback(() => {
     if (tutorialStageRef.current === 0) return
@@ -6770,6 +6945,7 @@ function App() {
     setPendingGoldenSpawnCellIds([])
     setScorePopup(null)
     setShowDailyHistory(false)
+    startDealIn()
   }
 
   // ---- Multiplayer handlers -----------------------------------------
@@ -7543,12 +7719,17 @@ function App() {
     else if (game.mode === 'big') setSavedBigGame(game)
 
     let nextGame: GameState
+    // Mode switches only deal in when they *create* a board; resuming a
+    // saved run restores instantly (the deal-in is a fresh-run ritual,
+    // not a transition effect).
+    let dealInFreshBoard = false
     if (target === 'endless') {
       if (savedEndlessGame) {
         nextGame = savedEndlessGame
       } else {
         nextGame = createInitialGameState()
         setSavedEndlessGame(nextGame)
+        dealInFreshBoard = true
       }
     } else if (target === 'daily') {
       if (savedDailyGame) {
@@ -7556,6 +7737,7 @@ function App() {
       } else {
         nextGame = createDailyGameState()
         setSavedDailyGame(nextGame)
+        dealInFreshBoard = true
       }
     } else {
       // target === 'big'
@@ -7564,10 +7746,12 @@ function App() {
       } else {
         nextGame = createBigGameState()
         setSavedBigGame(nextGame)
+        dealInFreshBoard = true
       }
     }
 
     setGame(nextGame)
+    if (dealInFreshBoard) startDealIn()
     setTutorialEndScreenPending(false)
     setSelectedPieceId(null)
     setHover(null)
@@ -9564,6 +9748,7 @@ function App() {
       className={[
         'cubic-viewport',
         hitstop ? 'hitstop' : '',
+        dealInActive ? 'is-dealing-in' : '',
         reducedMotion ? 'reduced-motion' : '',
         colorblindSupport ? 'is-colorblind' : '',
         tutorialStage > 0 ? 'is-tutorial-active' : '',
@@ -11489,7 +11674,18 @@ function App() {
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    style={tintOverlayColor ? cellTintStyle : undefined}
+                    style={
+                      dealInActive
+                        ? ({
+                            ...(tintOverlayColor ? cellTintStyle : {}),
+                            ['--hexaclear-deal-delay' as string]: `${
+                              boardRender.dealDelayByCellId[cell.id] ?? 0
+                            }ms`,
+                          } as React.CSSProperties)
+                        : tintOverlayColor
+                        ? cellTintStyle
+                        : undefined
+                    }
                   >
                     <polygon
                       points={points}
@@ -14583,6 +14779,7 @@ function App() {
                       setDailyHighScoreSaved(false)
                       setSelectedPieceId(null)
                       setHover(null)
+                      startDealIn()
                     }}
                   >
                     {game.dailyDateKey &&
@@ -17548,8 +17745,16 @@ function App() {
                   handButtonRefs.current[slotIndex] = el
                 }}
                 style={{
-                  ['--hexaclear-fly-in-delay' as string]:
-                    `${slotIndex * 175}ms`,
+                  // During the deal-in the hand waits for the board
+                  // cascade (base +400ms). dealInActive stays true past
+                  // the last fly-in's end (DEAL_IN_TOTAL_MS) so this
+                  // value never shrinks under a running animation —
+                  // except on explicit skip, where the jump-forward is
+                  // the desired fast-forward.
+                  ['--hexaclear-fly-in-delay' as string]: `${
+                    (dealInActive ? DEAL_IN_HAND_BASE_DELAY_MS : 0) +
+                    slotIndex * 175
+                  }ms`,
                 }}
                 className={[
                   'hexaclear-piece-button',
