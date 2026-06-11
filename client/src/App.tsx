@@ -14943,6 +14943,14 @@ function App() {
                             playUiClick()
                             setHasStartedSession(true)
                             setShowMenu(false)
+                            // The board is already pristine (this hero
+                            // only exists pre-first-move), so there's no
+                            // state to create — but "New Game" is the
+                            // player's explicit "begin", so the deal-in
+                            // ritual replays as the menu drops away.
+                            // Mount may have already played it to an
+                            // empty room; this is the one that counts.
+                            startDealIn()
                           }}
                         >
                           New Game
