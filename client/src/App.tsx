@@ -3611,8 +3611,8 @@ function App() {
   //
   // Mechanics: each filled cell's <g> is DOM-cloned into an overlay
   // layer (theme-perfect for free — wood cubes, win98 tiles, glass
-  // panes all carry their own markup), the original is hidden via the
-  // `collapse-hidden` class, and the clone runs one shared keyframe
+  // panes all carry their own markup), the original re-renders as a
+  // genuine EMPTY pocket, and the clone runs one shared keyframe
   // animation driven by per-cube CSS vars (delay, duration, drift,
   // drop, bounce, rotation). The "physics" is a staged settle: cubes
   // are bucketed into columns and stacked in release order. Disabled
@@ -3721,6 +3721,43 @@ function App() {
       playCollapseClatter(impacts[i])
     }
 
+    // Clone the debris NOW, synchronously, while the DOM still shows
+    // the filled cells — the setCollapse commit below re-renders the
+    // originals as empty pockets (the socket stays, the cube leaves),
+    // so cloning any later would capture empty cells. Clones go into
+    // the React-untouched overlay layer with their per-cube animation
+    // vars; both changes land in the same paint, so there's no frame
+    // of doubled or missing cubes.
+    const layer = collapseLayerRef.current
+    const svg = svgRef.current
+    if (layer && svg) {
+      layer.replaceChildren()
+      for (const cube of cubes) {
+        const cellEl = svg.querySelector(
+          `[data-cell-id="${CSS.escape(cube.id)}"]`,
+        )
+        if (!cellEl) continue
+        const clone = cellEl.cloneNode(true) as SVGGElement
+        clone.removeAttribute('data-cell-id')
+        clone
+          .querySelectorAll('[tabindex]')
+          .forEach((n) => n.removeAttribute('tabindex'))
+        const wrapper = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'g',
+        )
+        wrapper.setAttribute('class', 'hexaclear-collapse-cube')
+        wrapper.style.setProperty('--cc-delay', `${cube.delayMs}ms`)
+        wrapper.style.setProperty('--cc-dur', `${cube.durMs}ms`)
+        wrapper.style.setProperty('--cc-drift', `${cube.driftX}px`)
+        wrapper.style.setProperty('--cc-dy', `${cube.dy}px`)
+        wrapper.style.setProperty('--cc-bounce', `${cube.bounce}px`)
+        wrapper.style.setProperty('--cc-rot', `${cube.rot}deg`)
+        wrapper.appendChild(clone)
+        layer.appendChild(wrapper)
+      }
+    }
+
     setCollapse((prev) => ({ token: (prev?.token ?? 0) + 1, cubes }))
     setCollapseSwept(false)
   }, [boardRender, game.board])
@@ -3746,43 +3783,6 @@ function App() {
       }
     }
   }, [collapse, game.gameOver])
-
-  // Build the debris clones once the collapse-hidden classes have
-  // committed: clone each doomed cell wholesale (hex, cube, jewels,
-  // labels — whatever the theme drew), strip interactivity, attach the
-  // per-cube animation vars, and let CSS drop them.
-  useLayoutEffect(() => {
-    if (!collapse) return
-    const layer = collapseLayerRef.current
-    const svg = svgRef.current
-    if (!layer || !svg) return
-    if (layer.childElementCount > 0) return // already built for this token
-    for (const cube of collapse.cubes) {
-      const cellEl = svg.querySelector(
-        `[data-cell-id="${CSS.escape(cube.id)}"]`,
-      )
-      if (!cellEl) continue
-      const clone = cellEl.cloneNode(true) as SVGGElement
-      clone.classList.remove('collapse-hidden')
-      clone.removeAttribute('data-cell-id')
-      clone
-        .querySelectorAll('[tabindex]')
-        .forEach((n) => n.removeAttribute('tabindex'))
-      const wrapper = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'g',
-      )
-      wrapper.setAttribute('class', 'hexaclear-collapse-cube')
-      wrapper.style.setProperty('--cc-delay', `${cube.delayMs}ms`)
-      wrapper.style.setProperty('--cc-dur', `${cube.durMs}ms`)
-      wrapper.style.setProperty('--cc-drift', `${cube.driftX}px`)
-      wrapper.style.setProperty('--cc-dy', `${cube.dy}px`)
-      wrapper.style.setProperty('--cc-bounce', `${cube.bounce}px`)
-      wrapper.style.setProperty('--cc-rot', `${cube.rot}deg`)
-      wrapper.appendChild(clone)
-      layer.appendChild(wrapper)
-    }
-  }, [collapse])
 
   // ---- Living Board (liveness + critical pressure) -------------------
   //
@@ -11988,7 +11988,15 @@ function App() {
                 const points = buildHexPoints(cx, cy)
                 const bevel = buildHexBevelPaths(cx, cy)
 
-                const isFilledLogical = game.board[cell.id] === 'filled'
+                // Game-over collapse: a cell whose cube has popped
+                // loose renders as a genuine EMPTY pocket (the debris
+                // clone carries the filled visuals) — the socket
+                // stays, the cube leaves. Gated on gameOver since
+                // cell ids repeat across runs.
+                const isCollapsedOut =
+                  game.gameOver && collapseCellIdSet.has(cell.id)
+                const isFilledLogical =
+                  game.board[cell.id] === 'filled' && !isCollapsedOut
                 const isClearing = clearingCells.includes(cell.id)
                 const isPendingGoldenSpawn =
                   (game.mode === 'endless' || game.mode === 'big') &&
@@ -12012,6 +12020,7 @@ function App() {
                 const isRecentlyPlaced = recentlyPlacedCells.includes(cell.id)
                 const isInvalidDrop = invalidDropCellIds.includes(cell.id)
                 const isGolden =
+                  !isCollapsedOut &&
                   (game.mode === 'endless' || game.mode === 'big') &&
                   (clearingCells.length > 0
                     ? clearingGoldenCellIds.includes(cell.id)
@@ -12189,14 +12198,6 @@ function App() {
                     className={[
                       'hexaclear-cell',
                       isDeadCell ? 'cell-dead' : '',
-                      // Game-over collapse: this cell's visual has been
-                      // cloned into the debris layer; hide the original.
-                      // Gated on gameOver so a freshly-started run's
-                      // cells (same ids) are never hidden while the
-                      // debris is still being swept.
-                      game.gameOver && collapseCellIdSet.has(cell.id)
-                        ? 'collapse-hidden'
-                        : '',
                       isInvalidDrop ? 'invalid-drop' : '',
                       // Bubble PvP tint classes up to the cell wrapper
                       // so the SlotGeometry dimple (a sibling polygon

@@ -5107,14 +5107,10 @@ body {
    DOM clones of the real cells (theme-perfect by construction),
    driven by one shared keyframe + per-cube CSS vars set inline by
    App.tsx: --cc-delay/-dur/-drift/-dy/-bounce/-rot. The originals
-   wear `collapse-hidden`. The whole layer fades on `.swept` when the
+   re-render as empty pockets. The whole layer fades on `.swept` when the
    player leaves the game-over state. Inside the board SVG, so the
    wind-down desaturation grades the debris along with everything
    else. */
-.hexaclear-cell.collapse-hidden {
-  visibility: hidden;
-}
-
 .hexaclear-collapse-layer {
   pointer-events: none;
   transition: opacity 260ms ease;
