@@ -6900,7 +6900,7 @@ function App() {
           // text pop), reserved for impact moments. Priority per the
           // design doc: board clear outranks streak milestones, which
           // outrank the per-count combo call. Streak lines ride the
-          // streak hitting exactly 3/4/5/6 (streaks step by 1, so each
+          // streak hitting exactly 2/3/4/5 (streaks step by 1, so each
           // fires once per climb). Combo lines cover 2-6 patterns in
           // one placement; 7+ clamps to SEXTUPLE. Suppressed during
           // the tutorial — the first clear of a guided board is not a
@@ -6909,10 +6909,13 @@ function App() {
             const streakAfterClear = current.streak + 1
             const streak = (
               {
-                3: { cue: 'announceStreak3', text: 'Good Streak!' },
-                4: { cue: 'announceStreak4', text: 'Great Streak!' },
-                5: { cue: 'announceStreak5', text: 'Unbelievable!' },
-                6: { cue: 'announceStreak6', text: 'Godlike!' },
+                2: { cue: 'announceStreakGood', text: 'Good Streak!' },
+                3: { cue: 'announceStreakGreat', text: 'Great Streak!' },
+                4: {
+                  cue: 'announceStreakUnbelievable',
+                  text: 'Unbelievable!',
+                },
+                5: { cue: 'announceStreakGodlike', text: 'Godlike!' },
               } as const
             )[streakAfterClear]
             const combo = (
@@ -6932,7 +6935,7 @@ function App() {
               showAnnouncerPop(
                 streak.text,
                 'streak',
-                1.05 + (streakAfterClear - 3) * 0.1,
+                1.05 + (streakAfterClear - 2) * 0.1,
               )
             } else if (clearCount >= 2 && combo) {
               playAnnouncerCue(combo.cue)

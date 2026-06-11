@@ -79,10 +79,10 @@ export type AnnouncerCueKey =
   | 'announceCombo4'
   | 'announceCombo5'
   | 'announceCombo6'
-  | 'announceStreak3'
-  | 'announceStreak4'
-  | 'announceStreak5'
-  | 'announceStreak6'
+  | 'announceStreakGood'
+  | 'announceStreakGreat'
+  | 'announceStreakUnbelievable'
+  | 'announceStreakGodlike'
 
 const STREAKS: ClearStreakIndex[] = [1, 2, 3, 4, 5, 6, 7]
 const COMBOS: ClearComboIndex[] = [1, 2, 3]
@@ -120,18 +120,18 @@ const SOURCES: Record<SoundKey, string> = {
   // title slam's impact frame.
   cubekill: '/cubekill.wav',
   // Announcer: placement cues. Combo lines ride 2-6 patterns cleared
-  // in one placement; streak lines ride streaks 3/4/5/6
-  // (good → great → unbelievable → godlike).
+  // in one placement; streak lines are keyed by name (the streak
+  // numbers they attach to live in App.tsx, currently 2/3/4/5).
   announceBoardClear: '/boardclear.wav',
   announceCombo2: '/double.wav',
   announceCombo3: '/triple.wav',
   announceCombo4: '/quad.wav',
   announceCombo5: '/quintuple.wav',
   announceCombo6: '/sextuple.wav',
-  announceStreak3: '/goodstreak.wav',
-  announceStreak4: '/greatstreak.wav',
-  announceStreak5: '/unbelievablestreak.wav',
-  announceStreak6: '/godlikestreak.wav',
+  announceStreakGood: '/goodstreak.wav',
+  announceStreakGreat: '/greatstreak.wav',
+  announceStreakUnbelievable: '/unbelievablestreak.wav',
+  announceStreakGodlike: '/godlikestreak.wav',
 }
 
 const VOLUMES: Record<SoundKey, number> = {
@@ -152,10 +152,10 @@ const VOLUMES: Record<SoundKey, number> = {
   announceCombo4: 0.84,
   announceCombo5: 0.86,
   announceCombo6: 0.88,
-  announceStreak3: 0.82,
-  announceStreak4: 0.84,
-  announceStreak5: 0.86,
-  announceStreak6: 0.88,
+  announceStreakGood: 0.82,
+  announceStreakGreat: 0.84,
+  announceStreakUnbelievable: 0.86,
+  announceStreakGodlike: 0.88,
 }
 
 const LS_VOLUME_KEY = 'cubic-master-volume'

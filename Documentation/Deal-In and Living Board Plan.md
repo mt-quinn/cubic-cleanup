@@ -38,7 +38,7 @@
       one primary cue per placement; suppressed in tutorial and on game-ending placements;
       single-player only for now): boardclear.wav = board clear (outranks all);
       goodstreak/greatstreak/unbelievablestreak/godlikestreak.wav = streak exactly
-      3/4/5/6; double/triple/quad/quintuple/sextuple.wav = 2/3/4/5/6 patterns in one
+      2/3/4/5; double/triple/quad/quintuple/sextuple.wav = 2/3/4/5/6 patterns in one
       placement (lowest priority; 7+ clamps to sextuple). MultiClear.wav retired —
       replaced by the per-count combo lines.
 - [x] Announcer text pops (`showAnnouncerPop` + `.hexaclear-announcer-pop`): celebratory
