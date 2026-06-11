@@ -3409,26 +3409,25 @@
   opacity: 1;
 }
 
-/* Phase B — critical: empty faces KEEP their button-grey; only the
-   borders blink — thick alert-red inset outlines on the back half of
-   each pulse. A hard 50/50 blink (steps) replaces the smooth ember
-   pulse other themes use. */
-[data-theme="win98"] .cubic-viewport.is-critical .hexaclear-hex.empty {
-  animation: w98-alarm-stroke-blink 900ms step-end infinite;
+/* Phase B — critical: the shared alarm overlay becomes a thick red
+   inset border that hard-blinks on/off (steps, not eased breathing) —
+   faces keep their button grey. Epoch sync comes free from the
+   overlay architecture. */
+[data-theme="win98"] .hexaclear-alarm-overlay {
+  fill: none;
+  stroke: #d40000;
+  stroke-width: 3;
+  animation: w98-alarm-overlay-blink 900ms step-end infinite;
 }
 
-@keyframes w98-alarm-stroke-blink {
+@keyframes w98-alarm-overlay-blink {
   0%,
   49.9% {
-    fill: var(--w98-surface);
-    stroke: var(--w98-deep-shadow);
-    stroke-width: 1;
+    opacity: 0;
   }
   50%,
   100% {
-    fill: var(--w98-surface);
-    stroke: #d40000;
-    stroke-width: 3;
+    opacity: 1;
   }
 }
 
@@ -3452,14 +3451,10 @@
   }
 }
 
-/* Reduced motion: no blinking — steady alert states instead. */
-[data-theme="win98"]
-  .cubic-viewport.reduced-motion.is-critical
-  .hexaclear-hex.empty {
+/* Reduced motion: no blinking — a steady red border instead. */
+[data-theme="win98"] .cubic-viewport.reduced-motion .hexaclear-alarm-overlay {
   animation: none;
-  fill: var(--w98-surface);
-  stroke: #d40000;
-  stroke-width: 3;
+  opacity: 1;
 }
 
 [data-theme="win98"]

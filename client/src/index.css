@@ -5359,27 +5359,35 @@ body {
    `is-critical` lands on the viewport, so they're synchronized — the
    one-clock simultaneity is what reads as systemwide alarm.
 
-   The keyframes only define the 50% stop on purpose: the browser
-   interpolates from each element's OWN base paint, so every theme
-   pulses from its native empty-cell color toward the shared ember
-   without us hardcoding rest states. */
-.cubic-viewport.is-critical .hexaclear-hex.empty {
-  animation: hexaclear-alarm-stroke-pulse 900ms ease-in-out infinite;
+   The alarm is painted by a dedicated overlay polygon per cell (see
+   App.tsx) rather than by animating each cell's own paint: every
+   overlay mounts on the same commit when criticalActive flips, so
+   all pulses share one animation epoch by construction — cells that
+   empty mid-crisis flip only `visibility` (is-covered), never
+   restarting the clock. The overlay breathes an ember veil over
+   whatever the theme painted beneath, so it needs no knowledge of
+   base colors. */
+.hexaclear-alarm-overlay {
+  pointer-events: none;
+  fill: var(--hexaclear-alarm-fill);
+  stroke: var(--hexaclear-alarm-stroke);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  animation: hexaclear-alarm-overlay-pulse 900ms ease-in-out infinite;
 }
 
-.cubic-viewport.is-critical .hexaclear-cell .hexaclear-slot-fill {
-  animation: hexaclear-alarm-fill-pulse 900ms ease-in-out infinite;
+.hexaclear-alarm-overlay.is-covered {
+  visibility: hidden;
 }
 
-@keyframes hexaclear-alarm-stroke-pulse {
-  50% {
-    stroke: var(--hexaclear-alarm-stroke);
+@keyframes hexaclear-alarm-overlay-pulse {
+  0%,
+  100% {
+    opacity: 0;
   }
-}
-
-@keyframes hexaclear-alarm-fill-pulse {
   50% {
-    fill: var(--hexaclear-alarm-fill);
+    opacity: 0.55;
   }
 }
 
@@ -5427,16 +5435,9 @@ body {
   animation: none;
 }
 
-.cubic-viewport.reduced-motion.is-critical .hexaclear-hex.empty {
+.cubic-viewport.reduced-motion .hexaclear-alarm-overlay {
   animation: none;
-  stroke: var(--hexaclear-alarm-stroke);
-}
-
-.cubic-viewport.reduced-motion.is-critical
-  .hexaclear-cell
-  .hexaclear-slot-fill {
-  animation: none;
-  fill: var(--hexaclear-alarm-fill);
+  opacity: 0.45;
 }
 
 .cubic-viewport.reduced-motion.is-critical

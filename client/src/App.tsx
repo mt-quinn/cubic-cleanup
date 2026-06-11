@@ -12260,6 +12260,26 @@ function App() {
                         }
                       }}
                     />
+                    {/* Critical alarm overlay: one ember polygon per
+                        cell, ALL mounted on the same commit when
+                        criticalActive flips — so every pulse shares
+                        one animation epoch by construction. Cells
+                        that empty mid-crisis only flip `is-covered`
+                        (visibility), which never restarts the
+                        animation, so the board pulses as one organism
+                        no matter what clears underneath. */}
+                    {criticalActive && livenessEnabled && (
+                      <polygon
+                        points={points}
+                        className={[
+                          'hexaclear-alarm-overlay',
+                          isFilled ? 'is-covered' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        aria-hidden="true"
+                      />
+                    )}
                     {theme === 'glass' && (
                       <polygon
                         points={points}
