@@ -15674,6 +15674,34 @@ function App() {
                         </span>
                       </header>
                       <div className="hexaclear-pmenu-settings-body">
+                          <div className="hexaclear-menu-settings-group">
+                            <div className="hexaclear-menu-settings-group-label">
+                              Account
+                            </div>
+                            <div className="hexaclear-menu-settings-account">
+                              <span className="hexaclear-menu-settings-account-text">
+                                {authLoading
+                                  ? 'Checking account…'
+                                  : isAuthenticated
+                                  ? accountSyncState === 'syncing'
+                                    ? 'Syncing online stats…'
+                                    : 'Signed in — stats syncing across devices.'
+                                  : 'Local only — sign in to sync stats and daily history.'}
+                              </span>
+                              <button
+                                type="button"
+                                className="hexaclear-menu-settings-account-button"
+                                onClick={() => {
+                                  unlockAudioOnGesture()
+                                  playUiClick()
+                                  setShowMenu(false)
+                                  setShowAccount(true)
+                                }}
+                              >
+                                {isAuthenticated ? 'Manage' : 'Sign in'}
+                              </button>
+                            </div>
+                          </div>
 
                           <div className="hexaclear-menu-settings-group">
                             <div className="hexaclear-menu-settings-group-label">
@@ -15832,34 +15860,6 @@ function App() {
                             </div>
                           )}
 
-                          <div className="hexaclear-menu-settings-group">
-                            <div className="hexaclear-menu-settings-group-label">
-                              Account
-                            </div>
-                            <div className="hexaclear-menu-settings-account">
-                              <span className="hexaclear-menu-settings-account-text">
-                                {authLoading
-                                  ? 'Checking account…'
-                                  : isAuthenticated
-                                  ? accountSyncState === 'syncing'
-                                    ? 'Syncing online stats…'
-                                    : 'Signed in — stats syncing across devices.'
-                                  : 'Local only — sign in to sync stats and daily history.'}
-                              </span>
-                              <button
-                                type="button"
-                                className="hexaclear-menu-settings-account-button"
-                                onClick={() => {
-                                  unlockAudioOnGesture()
-                                  playUiClick()
-                                  setShowMenu(false)
-                                  setShowAccount(true)
-                                }}
-                              >
-                                {isAuthenticated ? 'Manage' : 'Sign in'}
-                              </button>
-                            </div>
-                          </div>
                       </div>
                     </div>
                     )}
