@@ -4215,10 +4215,22 @@ function App() {
   // key — means we can target the existing inner spans without
   // having to remount them on each tier crossing.
   const [tierPulseActive, setTierPulseActive] = useState(false)
+  // Continuity guards: a tier "increase" only deserves a pulse when it
+  // was EARNED — score climbing within the same run. Mode switches
+  // restore saved games (whose tier can be higher than the one we just
+  // left) and new games reset to 0; both move the tier without any
+  // scoring, and the refs must resync silently. Without these guards
+  // the congratulatory pulse fired on mode-screen swaps and on fresh
+  // runs right after a high-scoring game ended.
+  const prevPulseScoreRef = useRef<number>(game.score)
+  const prevPulseModeRef = useRef<GameMode>(game.mode)
   useEffect(() => {
+    const sameRunScoring =
+      game.mode === prevPulseModeRef.current &&
+      game.score >= prevPulseScoreRef.current
     const tierUp = scoreTier > prevScoreTierRef.current
     const octaveUp = scoreOctave > prevScoreOctaveRef.current
-    if (tierUp || octaveUp) {
+    if (sameRunScoring && (tierUp || octaveUp)) {
       setTierPulseToken((t) => t + 1)
       setTierPulseActive(true)
       // Octave crossings out-rank tier crossings — when both fire
@@ -4228,7 +4240,9 @@ function App() {
     }
     prevScoreTierRef.current = scoreTier
     prevScoreOctaveRef.current = scoreOctave
-  }, [scoreTier, scoreOctave])
+    prevPulseScoreRef.current = game.score
+    prevPulseModeRef.current = game.mode
+  }, [scoreTier, scoreOctave, game.score, game.mode])
   useEffect(() => {
     if (!tierPulseActive) return
     // Hold the HUD glow long enough to cover the longer of the two
