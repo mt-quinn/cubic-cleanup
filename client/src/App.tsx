@@ -1440,6 +1440,11 @@ const DEAL_IN_REDUCED_MOTION_MS = 320
 const CRITICAL_ENTER_MAX_PLACEMENTS = 5
 const CRITICAL_EXIT_MIN_PLACEMENTS = 8
 
+// Deal-in announce: the CUBEKILL wordmark slams in over the cascade
+// (CSS: .hexaclear-dealin-announce — in at 160ms, impact ~340ms, gone
+// by ~1.5s, well before the hand deals at 1.6s).
+const DEAL_IN_ANNOUNCE_IMPACT_MS = 340
+
 const buildDealDelays = (
   boardDef: BoardDefinition,
   layout: BoardLayout,
@@ -3491,6 +3496,17 @@ function App() {
         ),
       )
     }
+    // CUBEKILL title slam: the announce overlay (rendered while
+    // dealInActive) lands its impact frame ~340ms in — kick the screen
+    // a little on the same beat so the wordmark hits like an
+    // announcement, not a fade-in. This is also the slot for the
+    // "CUBEKILL" voice line when announcer audio exists.
+    dealInTimersRef.current.push(
+      window.setTimeout(() => {
+        setShakeRequest((prev) => ({ token: prev.token + 1, intensity: 2.5 }))
+      }, DEAL_IN_ANNOUNCE_IMPACT_MS),
+    )
+
     dealInTimersRef.current.push(
       window.setTimeout(() => finishDealIn(), DEAL_IN_TOTAL_MS),
     )
@@ -14912,6 +14928,17 @@ function App() {
                 </div>
                 </div>
               </div>
+            </div>
+          )}
+          {/* CUBEKILL announce: slams over the board cascade at the
+              start of every deal-in — the run is ANNOUNCED, Quake
+              style. Pure CSS lifecycle (in 160ms, impact 340ms with a
+              matching screen kick, gone ~1.5s); unmounts instantly on
+              skip because dealInActive drops. Hidden under reduced
+              motion. */}
+          {dealInActive && !reducedMotion && (
+            <div className="hexaclear-dealin-announce" aria-hidden="true">
+              Cubekill
             </div>
           )}
           {/* iOS Safari refuses to resume an AudioContext from a touch

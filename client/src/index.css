@@ -4627,6 +4627,59 @@ body {
   }
 }
 
+/* CUBEKILL announce: the wordmark, huge, slammed over the cascade like
+   a Quake match-start call. Big but fast — in at 160ms, impact frame
+   ~340ms (App.tsx kicks the screen on the same beat, and that's the
+   future "CUBEKILL" voice-line slot), holding briefly, gone by ~1.5s
+   so the stage is clear before the hand deals at 1.6s. */
+.hexaclear-dealin-announce {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 80;
+  font-family: 'Monoton', system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: clamp(2.8rem, 13vw, 6.5rem);
+  color: #ffe8a3;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.55),
+    0 0 30px rgba(255, 170, 60, 0.45),
+    0 10px 34px rgba(0, 0, 0, 0.5);
+  animation: hexaclear-dealin-announce 1350ms cubic-bezier(0.22, 1, 0.36, 1)
+    160ms both;
+}
+
+@keyframes hexaclear-dealin-announce {
+  0% {
+    opacity: 0;
+    transform: scale(2.6);
+    filter: blur(7px);
+  }
+  13% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  17% {
+    transform: scale(1.05);
+  }
+  22% {
+    transform: scale(1);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
 /* Wordmark shimmer as the cascade resolves (~2.4s), then the score
    readout pops awake (~3s). Generic selectors cover the wood theme;
    themed readouts (Win98 LCD, Audius) get their own pass later. */
