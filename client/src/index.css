@@ -4736,6 +4736,67 @@ body {
   visibility: hidden;
 }
 
+/* GAME-OVER COLLAPSE: when a run ends, every filled hex pops loose in
+   a wave radiating from the killing piece and tumbles down the board
+   into a debris pile along the bottom rim. The falling objects are
+   DOM clones of the real cells (theme-perfect by construction),
+   driven by one shared keyframe + per-cube CSS vars set inline by
+   App.tsx: --cc-delay/-dur/-drift/-dy/-bounce/-rot. The originals
+   wear `collapse-hidden`. The whole layer fades on `.swept` when the
+   player leaves the game-over state. Inside the board SVG, so the
+   wind-down desaturation grades the debris along with everything
+   else. */
+.hexaclear-cell.collapse-hidden {
+  visibility: hidden;
+}
+
+.hexaclear-collapse-layer {
+  pointer-events: none;
+  transition: opacity 260ms ease;
+}
+
+.hexaclear-collapse-layer.swept {
+  opacity: 0;
+}
+
+.hexaclear-collapse-cube {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hexaclear-cube-collapse var(--cc-dur, 800ms) linear
+    var(--cc-delay, 0ms) both;
+}
+
+/* Fake gravity in one timeline: a tiny pop-loose lift, an
+   accelerating fall to the rest position (impact at 72%), one bounce,
+   and a settle. Per-segment timing functions do the physics. */
+@keyframes hexaclear-cube-collapse {
+  0% {
+    transform: translate(0px, 0px) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.3, 0, 0.7, 0.4);
+  }
+  9% {
+    transform: translate(calc(var(--cc-drift) * 0.12), -7px)
+      rotate(calc(var(--cc-rot) * 0.12));
+    animation-timing-function: cubic-bezier(0.45, 0, 0.85, 0.5);
+  }
+  72% {
+    transform: translate(calc(var(--cc-drift) * 0.85), var(--cc-dy))
+      rotate(calc(var(--cc-rot) * 0.82));
+    animation-timing-function: cubic-bezier(0.1, 0.5, 0.4, 1);
+  }
+  86% {
+    transform: translate(
+        calc(var(--cc-drift) * 0.95),
+        calc(var(--cc-dy) - var(--cc-bounce))
+      )
+      rotate(calc(var(--cc-rot) * 0.94));
+    animation-timing-function: cubic-bezier(0.6, 0, 0.9, 0.5);
+  }
+  100% {
+    transform: translate(var(--cc-drift), var(--cc-dy)) rotate(var(--cc-rot));
+  }
+}
+
 /* ANNOUNCER TEXT POPS: the visual companion to the voice lines —
    "TRIPLE!", "GODLIKE!", "BOARD CLEAR!" punching in above the board
    on the same beat as the audio (140ms delay matches the voice's

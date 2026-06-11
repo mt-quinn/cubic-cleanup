@@ -61,6 +61,7 @@ import {
   playClearForStreakIndex,
   playClickDown,
   playClickUp,
+  playCollapseClatter,
   playCubekillAnnounce,
   playDealTick,
   playError,
@@ -3595,6 +3596,189 @@ function App() {
   // its wind-down phase (desaturating, hand pieces shaking).
   const [gameOverWindingDown, setGameOverWindingDown] = useState(false)
 
+  // ---- Game-over collapse ---------------------------------------------
+  //
+  // When a run ends (loss), the board structurally fails: every filled
+  // hex pops loose in a wave radiating from the killing piece, tumbles
+  // down the board face with a clatter, and settles into a debris pile
+  // along the bottom rim. The pile stays as the modal's backdrop and is
+  // swept (250ms fade) when the player leaves the game-over state.
+  //
+  // Mechanics: each filled cell's <g> is DOM-cloned into an overlay
+  // layer (theme-perfect for free — wood cubes, win98 tiles, glass
+  // panes all carry their own markup), the original is hidden via the
+  // `collapse-hidden` class, and the clone runs one shared keyframe
+  // animation driven by per-cube CSS vars (delay, duration, drift,
+  // drop, bounce, rotation). The "physics" is a staged settle: cubes
+  // are bucketed into columns and stacked in release order. Disabled
+  // in multiplayer and under reduced motion (desaturate carries it).
+  type CollapseCube = {
+    id: string
+    delayMs: number
+    durMs: number
+    driftX: number
+    dy: number
+    bounce: number
+    rot: number
+  }
+  const [collapse, setCollapse] = useState<{
+    token: number
+    cubes: CollapseCube[]
+  } | null>(null)
+  const [collapseSwept, setCollapseSwept] = useState(false)
+  const collapseLayerRef = useRef<SVGGElement | null>(null)
+  const collapseSweepTimerRef = useRef<number | null>(null)
+  // The last placement's cells — the wave origin. Updated on every
+  // single-player placement; if a game somehow ends without one (e.g.
+  // a dealt hand with no moves on a restored board), the board center
+  // is a fine stand-in.
+  const lastPlacementCellIdsRef = useRef<string[] | null>(null)
+  const collapseCellIdSet = useMemo(
+    () => new Set(collapse?.cubes.map((c) => c.id) ?? []),
+    [collapse],
+  )
+
+  const buildCollapse = useCallback(() => {
+    const layout = boardRender.layout
+    const filled = boardRender.boardDef.cells.filter(
+      (cell) => game.board[cell.id] === 'filled',
+    )
+    if (filled.length === 0) return
+
+    const centerOf = (id: string) => {
+      const pos = layout.positions[id]
+      return { x: pos.x + layout.offsetX, y: pos.y + layout.offsetY }
+    }
+
+    // Wave origin: centroid of the killing piece (fallback: board center).
+    const originCells = lastPlacementCellIdsRef.current
+    let ox = layout.width / 2
+    let oy = layout.height / 2
+    if (originCells && originCells.length > 0) {
+      ox = 0
+      oy = 0
+      for (const id of originCells) {
+        const c = centerOf(id)
+        ox += c.x / originCells.length
+        oy += c.y / originCells.length
+      }
+    }
+
+    const maxDist = Math.max(
+      1,
+      ...filled.map((cell) => {
+        const c = centerOf(cell.id)
+        return Math.hypot(c.x - ox, c.y - oy)
+      }),
+    )
+
+    // Staged settle: bucket cubes into columns along the bottom rim,
+    // stacked in release order so the first cubes loose land lowest.
+    const floorY = layout.height - HEX_SIZE * 0.85
+    const slotW = HEX_SIZE * 1.75
+    const slotCount = Math.max(1, Math.floor(layout.width / slotW))
+    const stackBySlot: number[] = new Array(slotCount).fill(0)
+
+    const cubes: CollapseCube[] = filled
+      .map((cell) => {
+        const c = centerOf(cell.id)
+        const dist = Math.hypot(c.x - ox, c.y - oy)
+        return { cell, c, delayMs: (dist / maxDist) * 650 + Math.random() * 70 }
+      })
+      .sort((a, b) => a.delayMs - b.delayMs)
+      .map(({ cell, c, delayMs }) => {
+        const driftX = (Math.random() - 0.5) * HEX_SIZE * 0.9
+        const slot = Math.min(
+          slotCount - 1,
+          Math.max(0, Math.round((c.x + driftX) / slotW)),
+        )
+        const stack = stackBySlot[slot]
+        stackBySlot[slot] += 1
+        const restY = floorY - stack * HEX_SIZE * 1.05
+        const dy = Math.max(HEX_SIZE * 0.4, restY - c.y)
+        return {
+          id: cell.id,
+          delayMs,
+          durMs: 600 + dy * 0.5,
+          driftX,
+          dy,
+          bounce: Math.min(26, 10 + dy * 0.04),
+          rot: (Math.random() < 0.5 ? -1 : 1) * (12 + Math.random() * 26),
+        }
+      })
+
+    // Clatter: sample ~1 in 3 impacts (capped) so the burst reads as
+    // debris, not a drumroll. Impact lands at ~72% of each fall.
+    const impacts = cubes
+      .map((cube) => cube.delayMs + cube.durMs * 0.72)
+      .sort((a, b) => a - b)
+    for (let i = 0; i < impacts.length && i / 3 < 16; i += 3) {
+      playCollapseClatter(impacts[i])
+    }
+
+    setCollapse((prev) => ({ token: (prev?.token ?? 0) + 1, cubes }))
+    setCollapseSwept(false)
+  }, [boardRender, game.board])
+
+  // Sweep: leaving the game-over state (retry, new game, mode switch)
+  // fades the debris out while the next board builds. The hidden-cell
+  // class is gated on game.gameOver, so the incoming board's cells are
+  // never affected even though cell ids repeat across runs.
+  useEffect(() => {
+    if (!collapse || game.gameOver) return
+    setCollapseSwept(true)
+    collapseSweepTimerRef.current = window.setTimeout(() => {
+      collapseSweepTimerRef.current = null
+      const layer = collapseLayerRef.current
+      if (layer) layer.replaceChildren()
+      setCollapse(null)
+      setCollapseSwept(false)
+    }, 280)
+    return () => {
+      if (collapseSweepTimerRef.current !== null) {
+        window.clearTimeout(collapseSweepTimerRef.current)
+        collapseSweepTimerRef.current = null
+      }
+    }
+  }, [collapse, game.gameOver])
+
+  // Build the debris clones once the collapse-hidden classes have
+  // committed: clone each doomed cell wholesale (hex, cube, jewels,
+  // labels — whatever the theme drew), strip interactivity, attach the
+  // per-cube animation vars, and let CSS drop them.
+  useLayoutEffect(() => {
+    if (!collapse) return
+    const layer = collapseLayerRef.current
+    const svg = svgRef.current
+    if (!layer || !svg) return
+    if (layer.childElementCount > 0) return // already built for this token
+    for (const cube of collapse.cubes) {
+      const cellEl = svg.querySelector(
+        `[data-cell-id="${CSS.escape(cube.id)}"]`,
+      )
+      if (!cellEl) continue
+      const clone = cellEl.cloneNode(true) as SVGGElement
+      clone.classList.remove('collapse-hidden')
+      clone.removeAttribute('data-cell-id')
+      clone
+        .querySelectorAll('[tabindex]')
+        .forEach((n) => n.removeAttribute('tabindex'))
+      const wrapper = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'g',
+      )
+      wrapper.setAttribute('class', 'hexaclear-collapse-cube')
+      wrapper.style.setProperty('--cc-delay', `${cube.delayMs}ms`)
+      wrapper.style.setProperty('--cc-dur', `${cube.durMs}ms`)
+      wrapper.style.setProperty('--cc-drift', `${cube.driftX}px`)
+      wrapper.style.setProperty('--cc-dy', `${cube.dy}px`)
+      wrapper.style.setProperty('--cc-bounce', `${cube.bounce}px`)
+      wrapper.style.setProperty('--cc-rot', `${cube.rot}deg`)
+      wrapper.appendChild(clone)
+      layer.appendChild(wrapper)
+    }
+  }, [collapse])
+
   // ---- Living Board (liveness + critical pressure) -------------------
   //
   // One derived snapshot per board/hand change: which empty cells are
@@ -6071,6 +6255,10 @@ function App() {
           setGlassCellColors((prev) => ({ ...prev, ...colorUpdates }))
         }
       }
+
+      // Remember this placement's cells — if it turns out to be the
+      // killing piece, the game-over collapse wave radiates from here.
+      lastPlacementCellIdsRef.current = result.placedCellIds
 
       // Identify rubies that respawned onto previously-empty cells in
       // this placement so we can hide each one until the clear animation
@@ -8993,14 +9181,22 @@ function App() {
       return
     }
 
-    // Endless loss / daily loss — existing wind-down with desaturate +
-    // game_over SFX before the modal appears.
+    // Endless loss / daily loss — wind-down: the board sheds its
+    // pieces in the collapse wave (skipped in multiplayer and under
+    // reduced motion, where the desaturate alone carries the beat),
+    // desaturates, then the modal appears over the wreckage.
     setGameOverWindingDown(true)
     playGameOver()
+    if (!isMultiplayer && !reducedMotionRef.current) {
+      buildCollapse()
+    }
     const tid = window.setTimeout(() => {
       setGameOverWindingDown(false)
     }, 2500)
     return () => window.clearTimeout(tid)
+    // buildCollapse changes identity with every board change; this
+    // effect must only re-fire on actual game-over transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.gameOver, game.dailyCompleted, game.mode])
 
   // We used to force the pause menu open on every visibilitychange so
@@ -11957,9 +12153,18 @@ function App() {
                 return (
                   <g
                     key={cell.id}
+                    data-cell-id={cell.id}
                     className={[
                       'hexaclear-cell',
                       isDeadCell ? 'cell-dead' : '',
+                      // Game-over collapse: this cell's visual has been
+                      // cloned into the debris layer; hide the original.
+                      // Gated on gameOver so a freshly-started run's
+                      // cells (same ids) are never hidden while the
+                      // debris is still being swept.
+                      game.gameOver && collapseCellIdSet.has(cell.id)
+                        ? 'collapse-hidden'
+                        : '',
                       isInvalidDrop ? 'invalid-drop' : '',
                       // Bubble PvP tint classes up to the cell wrapper
                       // so the SlotGeometry dimple (a sibling polygon
@@ -12820,6 +13025,22 @@ function App() {
                 </g>
               )
             })()}
+            {/* Game-over collapse debris layer: populated imperatively
+                with clones of the doomed cells (see the collapse
+                useLayoutEffect). React renders only this empty shell
+                and never touches its children, so the clones survive
+                modal-driven re-renders. Drawn last = debris tumbles
+                over the empty board. */}
+            <g
+              ref={collapseLayerRef}
+              className={[
+                'hexaclear-collapse-layer',
+                collapseSwept ? 'swept' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-hidden="true"
+            />
           </svg>
           {boardClearFlashToken > 0 && (
             <div

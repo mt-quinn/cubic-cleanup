@@ -769,6 +769,28 @@ export const setCriticalAudio = (active: boolean): void => {
   }
 }
 
+// Game-over collapse clatter: one tick per sampled cube impact as the
+// board sheds its pieces. clickDown pitched well below normal with
+// per-tick randomization so a burst of them reads as tumbling wooden
+// debris rather than UI input. Quiet — the game_over sting leads.
+export const playCollapseClatter = (delayMs = 0) => {
+  const ctx = readyContext()
+  if (!ctx) return
+  const buf = buffers.clickDown
+  if (!buf) return
+  try {
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.playbackRate.value = 0.5 + Math.random() * 0.45
+    const clipGain = ctx.createGain()
+    clipGain.gain.value = VOLUMES.clickDown * (0.25 + Math.random() * 0.15)
+    src.connect(clipGain).connect(masterGainNode!)
+    src.start(ctx.currentTime + delayMs / 1000)
+  } catch {
+    // Ignore — playback is best-effort.
+  }
+}
+
 // Deal-in tick: one per rosette as the board cascades in at the start
 // of a fresh run. Reuses the clickUp buffer pitch-stepped upward across
 // the rosettes (playbackRate 1.0 -> 2.0) so the board "builds" musically

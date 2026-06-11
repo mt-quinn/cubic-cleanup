@@ -29,8 +29,17 @@
       to mine-tile red + LCD digits dropping to the off-segment color, same 900ms clock.
 - [ ] Living Board: remaining theme passes (wood ember refinement / glass candle-gutter /
       mondrian red-tick / audius hue-clamp)
-- [ ] Living Board: death gutter-out (live cells extinguish one-by-one before wind-down) —
-      deferred; current behavior is the pre-existing desaturate wind-down
+- [x] Game-over collapse (supersedes the old "death gutter-out" idea): on a loss, every
+      filled hex pops loose in a wave radiating from the killing piece
+      (`lastPlacementCellIdsRef`), tumbles with clatter (pitch-dropped clickDown
+      samples), and settles into a staged debris pile along the bottom rim (column
+      bucketing, stacked in release order). Implementation: cells are DOM-cloned into
+      `.hexaclear-collapse-layer` (theme-perfect), originals wear `collapse-hidden`
+      (gated on game.gameOver since cell ids repeat across runs), one shared keyframe
+      (`hexaclear-cube-collapse`) + per-cube vars does the fake physics. Pile persists
+      under the modal (desaturated by the existing wind-down filter); leaving game-over
+      sweeps it with a 260ms fade while the deal-in rebuilds. Skipped in multiplayer
+      and under reduced motion (desaturate-only, as before).
 - [ ] Living Board: multiplayer support — deferred, system fully disabled when `isMultiplayer`
 - [x] Announcer, first line: "CUBEKILL" (client/public/cubekill.wav) fires on the deal-in
       title-slam impact via `playCubekillAnnounce`; plays under reduced motion too
