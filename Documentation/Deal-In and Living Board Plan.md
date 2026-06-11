@@ -38,7 +38,7 @@ Implementation deviations from spec (all minor, flag to Quinn if they read wrong
 - The live-cell breath lives on the dimple (`.hexaclear-slot-fill`), not the hex
   polygon — the polygon's animation slot is contended (octave-2 tint drift, glass
   preview glows) and CSS animations don't compose.
-- Exit-on-clear re-enters with a fresh onset if the board is still ≤4 after the clear
+- Exit-on-clear re-enters with a fresh onset if the board is still ≤5 after the clear
   settles (enter waits for `clearingCells` to drain).
 
 Unrelated pre-existing WIP: `client/src/theme-glass.css` has uncommitted stained-glass
@@ -115,7 +115,7 @@ counts** for the current hand (reuse `hasAnyValidMove` machinery in
 
 ### Phase B — Critical state ("under threat")
 
-- **Enter at ≤4 total valid placements; exit at ≥8 or on any clear** (hysteresis, no strobing).
+- **Enter at ≤5 total valid placements; exit at ≥8 or on any clear** (hysteresis, no strobing).
 - Onset beat: after the triggering placement resolves, 120ms full freeze, then ALL
   empty cells snap to alarm state **simultaneously**; a global 900ms pulse clock starts
   (cells + hand + score readout in sync).
@@ -140,14 +140,14 @@ counts** for the current hand (reuse `hasAnyValidMove` machinery in
 - Thresholds absolute on big board.
 - PvP territory tints render above dead-cell states at full strength; liveness uses
   the local player's hand on their own screen.
-- Game-over at 0 fits fires exactly as today; critical exists only in the 1–4 window.
+- Game-over at 0 fits fires exactly as today; critical exists only in the 1–5 window.
 - Death sequence upgrade (with Living Board): remaining live cells gutter out one by
   one (~60ms stagger) + brief held silence before the existing desaturate wind-down.
 
 ### Design rationale (for future sessions)
 
 Per-cell liveness is an approachability assist; the critical state deliberately
-**revokes** the map at ≤4 fits so the endgame hunt-for-the-last-fit stays a human
+**revokes** the map at ≤5 fits so the endgame hunt-for-the-last-fit stays a human
 skill. Uniformity of the alarm is load-bearing — any differentiation (cells OR hand)
 reintroduces the answer key. Quinn's call, agreed 2026-06-11.
 

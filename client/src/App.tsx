@@ -1437,7 +1437,7 @@ const DEAL_IN_REDUCED_MOTION_MS = 320
 // stand down until the player claws back real breathing room (or any
 // clear lands, which cuts it instantly). The gap prevents strobing
 // when fits hover around the line.
-const CRITICAL_ENTER_MAX_PLACEMENTS = 4
+const CRITICAL_ENTER_MAX_PLACEMENTS = 5
 const CRITICAL_EXIT_MIN_PLACEMENTS = 8
 
 const buildDealDelays = (
@@ -3527,10 +3527,10 @@ function App() {
   // One derived snapshot per board/hand change: which empty cells are
   // still reachable by the current hand (+hold), and how many total
   // placements remain. Phase A (liveness): unreachable cells dim via
-  // `cell-dead`. Phase B (critical): at <=4 total placements the map is
+  // `cell-dead`. Phase B (critical): at <=5 total placements the map is
   // REVOKED — every empty cell joins one uniform synchronized alarm and
   // hand differentiation suspends, so the endgame hunt stays a human
-  // skill. Hysteresis: enter <=4, exit >=8 or on any clear. Disabled in
+  // skill. Hysteresis: enter <=5, exit >=8 or on any clear. Disabled in
   // tutorial and multiplayer. See Documentation/Deal-In and Living
   // Board Plan.md.
   const liveness = useMemo(
@@ -3564,7 +3564,7 @@ function App() {
       // Exit instantly when a clear lands (the relight is the payoff —
       // the alarm must cut on the same frame the clear starts) or once
       // the player has breathing room again. If the board is still at
-      // <=4 after the clear settles, the enter branch below re-fires
+      // <=5 after the clear settles, the enter branch below re-fires
       // with a fresh onset beat. This is also where the "CLOSE CALL!"
       // announcer cue will hook in once voice lines exist.
       if (
