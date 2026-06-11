@@ -3389,3 +3389,78 @@
 [data-theme="win98"] .hexaclear-pvp-delta-sep {
   color: var(--w98-text, #000);
 }
+
+/* ====================================================================
+   LIVING BOARD — Win98 theme pass.
+   The shared defaults paint signals on the cell stroke (1px here) and
+   the slot-fill dimple (hidden here), so they barely read. Win98
+   speaks its own dialect: alerts BLINK discretely (steps(), not
+   eased breathing) and disabled things go engraved grey, exactly like
+   the OS. Same 900ms clock as every other theme, so the room still
+   pulses as one system.
+   ==================================================================== */
+
+/* Phase A — dead cells: the button face drops to the disabled-control
+   grey with an engraved (highlight-under-shadow) outline. No breath,
+   no transition — Win98 state changes are hard snaps. */
+[data-theme="win98"] .hexaclear-cell.cell-dead .hexaclear-hex.empty {
+  fill: var(--w98-surface-darker);
+  stroke: var(--w98-deep-shadow);
+  opacity: 1;
+}
+
+/* Phase B — critical: empty faces blink to the Minesweeper
+   mine-tile red on the back half of each pulse. A hard 50/50 blink
+   (steps) replaces the smooth ember pulse other themes use. */
+[data-theme="win98"] .cubic-viewport.is-critical .hexaclear-hex.empty {
+  animation: w98-alarm-face-blink 900ms step-end infinite;
+}
+
+@keyframes w98-alarm-face-blink {
+  0%,
+  49.9% {
+    fill: var(--w98-surface);
+    stroke: var(--w98-deep-shadow);
+  }
+  50%,
+  100% {
+    fill: #d04331;
+    stroke: #5d0c00;
+  }
+}
+
+/* The score LCD blinks like a VCR at 12:00: digits drop to the "off"
+   segment color on the same half-beat the board flashes red. */
+[data-theme="win98"]
+  .cubic-viewport.is-critical
+  .hexaclear-win98-lcd-score
+  .lcd-digits {
+  animation: w98-alarm-lcd-blink 900ms step-end infinite;
+}
+
+@keyframes w98-alarm-lcd-blink {
+  0%,
+  49.9% {
+    color: var(--w98-lcd-fg);
+  }
+  50%,
+  100% {
+    color: var(--w98-lcd-dim);
+  }
+}
+
+/* Reduced motion: no blinking — steady alert states instead. */
+[data-theme="win98"]
+  .cubic-viewport.reduced-motion.is-critical
+  .hexaclear-hex.empty {
+  animation: none;
+  fill: #d04331;
+  stroke: #5d0c00;
+}
+
+[data-theme="win98"]
+  .cubic-viewport.reduced-motion.is-critical
+  .hexaclear-win98-lcd-score
+  .lcd-digits {
+  animation: none;
+}

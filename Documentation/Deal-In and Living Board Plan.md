@@ -23,7 +23,12 @@
       Alarm keyframes define only the 50% stop so every theme pulses from its own base
       paint toward the shared ember. Known gap: glass hides stroke/dimple, so dead
       cells there only get the 0.8-opacity fallback until its theme pass.
-- [ ] Living Board: per-theme passes (ember/win98-LCD-blink/candle-gutter/mondrian-red/audius-clamp)
+- [x] Living Board: Win98 theme pass (end of theme-win98.css) — shared defaults were
+      invisible there (signals lived on the 1px stroke + hidden dimple). Win98 dialect:
+      dead = disabled-control grey face; critical = hard 50/50 step blink of the face
+      to mine-tile red + LCD digits dropping to the off-segment color, same 900ms clock.
+- [ ] Living Board: remaining theme passes (wood ember refinement / glass candle-gutter /
+      mondrian red-tick / audius hue-clamp)
 - [ ] Living Board: death gutter-out (live cells extinguish one-by-one before wind-down) —
       deferred; current behavior is the pre-existing desaturate wind-down
 - [ ] Living Board: multiplayer support — deferred, system fully disabled when `isMultiplayer`
