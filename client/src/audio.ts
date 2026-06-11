@@ -68,6 +68,17 @@ type SoundKey =
   | 'gameOver'
   | 'break'
   | 'cubekill'
+  | AnnouncerCueKey
+
+// Announcer cues fired by placement results (see App.tsx for the
+// priority rules: board clear > streak milestone > multi-clear).
+export type AnnouncerCueKey =
+  | 'announceBoardClear'
+  | 'announceMultiClear'
+  | 'announceStreak3'
+  | 'announceStreak4'
+  | 'announceStreak5'
+  | 'announceStreak6'
 
 const STREAKS: ClearStreakIndex[] = [1, 2, 3, 4, 5, 6, 7]
 const COMBOS: ClearComboIndex[] = [1, 2, 3]
@@ -104,6 +115,14 @@ const SOURCES: Record<SoundKey, string> = {
   // Announcer: the run-start "CUBEKILL" call, fired on the deal-in
   // title slam's impact frame.
   cubekill: '/cubekill.wav',
+  // Announcer: placement cues. Streak lines ride streaks 3/4/5/6
+  // (good → great → unbelievable → godlike).
+  announceBoardClear: '/boardclear.wav',
+  announceMultiClear: '/MultiClear.wav',
+  announceStreak3: '/goodstreak.wav',
+  announceStreak4: '/greatstreak.wav',
+  announceStreak5: '/unbelievablestreak.wav',
+  announceStreak6: '/godlikestreak.wav',
 }
 
 const VOLUMES: Record<SoundKey, number> = {
@@ -118,6 +137,12 @@ const VOLUMES: Record<SoundKey, number> = {
   // The announcer leads its moment, but stays shy of the clear-SFX
   // peaks so the musical layer keeps the crown overall.
   cubekill: 0.9,
+  announceBoardClear: 0.88,
+  announceMultiClear: 0.82,
+  announceStreak3: 0.82,
+  announceStreak4: 0.84,
+  announceStreak5: 0.86,
+  announceStreak6: 0.88,
 }
 
 const LS_VOLUME_KEY = 'cubic-master-volume'
@@ -760,6 +785,27 @@ export const playGameOver = () => playOneShot('gameOver')
 // its title-slam impact frame; no-ops while the context is locked
 // (cold loads stay silent, gesture-started runs get the full call).
 export const playCubekillAnnounce = () => playOneShot('cubekill')
+
+// Announcer placement cues: scheduled slightly after the clear SFX on
+// the audio clock (same pattern as playBreakAfterClear) so the musical
+// hit keeps its attack and the voice reads as the call on top of it,
+// not a collision with it.
+export const playAnnouncerCue = (key: AnnouncerCueKey, delayMs = 160) => {
+  const ctx = readyContext()
+  if (!ctx) return
+  const buf = buffers[key]
+  if (!buf) return
+  try {
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const clipGain = ctx.createGain()
+    clipGain.gain.value = VOLUMES[key]
+    src.connect(clipGain).connect(masterGainNode!)
+    src.start(ctx.currentTime + delayMs / 1000)
+  } catch {
+    // Ignore — playback is best-effort.
+  }
+}
 
 // Ruby capture: scheduled to fire ~80ms after the matching clear SFX
 // for a stacked "shatter follow-up" feel rather than overlapping the

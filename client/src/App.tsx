@@ -56,6 +56,7 @@ import {
   getAudioNeedsUnlock,
   getMasterVolume,
   getMuted,
+  playAnnouncerCue,
   playBreakAfterClear,
   playClearForStreakIndex,
   playClickDown,
@@ -6857,6 +6858,34 @@ function App() {
           // the game (game-over SFX owns the moment).
           if (result.rubiesCleared > 0) {
             playBreakAfterClear(80)
+          }
+
+          // Announcer: ONE primary cue per placement, reserved for
+          // impact moments. Priority per the design doc: board clear
+          // outranks streak milestones, which outrank the generic
+          // multi-clear call. Streak lines ride the streak hitting
+          // exactly 3/4/5/6 (streaks step by 1, so each fires once per
+          // climb); past 6 the announcer goes quiet and lets the
+          // escalating clear-sound matrix carry it. Suppressed during
+          // the tutorial — the first clear of a guided board is not a
+          // hype moment.
+          if (!inTutorial) {
+            const streakAfterClear = current.streak + 1
+            const streakCue = (
+              {
+                3: 'announceStreak3',
+                4: 'announceStreak4',
+                5: 'announceStreak5',
+                6: 'announceStreak6',
+              } as const
+            )[streakAfterClear]
+            if (result.boardCleared) {
+              playAnnouncerCue('announceBoardClear')
+            } else if (streakCue) {
+              playAnnouncerCue(streakCue)
+            } else if (clearCount >= 2) {
+              playAnnouncerCue('announceMultiClear')
+            }
           }
         }
 

@@ -34,8 +34,19 @@
 - [ ] Living Board: multiplayer support — deferred, system fully disabled when `isMultiplayer`
 - [x] Announcer, first line: "CUBEKILL" (client/public/cubekill.wav) fires on the deal-in
       title-slam impact via `playCubekillAnnounce`; plays under reduced motion too
-- [ ] Announcer, remaining lines ("CLOSE CALL!", combos, streaks): the critical-exit
-      branch in App.tsx is the hook point — Quinn will supply voice lines later
+- [x] Announcer, placement cues (`playAnnouncerCue`, voiced ~160ms after the clear hit;
+      one primary cue per placement; suppressed in tutorial and on game-ending placements;
+      single-player only for now): boardclear.wav = board clear (outranks all);
+      goodstreak/greatstreak/unbelievablestreak/godlikestreak.wav = streak exactly
+      3/4/5/6; MultiClear.wav = 2+ patterns in one placement (lowest priority)
+- [ ] Announcer, wishlist (recorded lines welcome): "CLOSE CALL!" (critical-exit hook in
+      App.tsx, softer/relief tone), "JACKPOT!" (2+ rubies in one placement, layered
+      +200ms under the primary per the design doc), per-count combo upgrades to replace
+      generic MultiClear (DOUBLE/TRIPLE/OVERKILL/MEGA CLEAR/ULTRA CLEAR for 2/3/4/5/6+),
+      streak extensions past 6 (8/10/12 — DOMINATING / UNSTOPPABLE / WICKED SICK), a
+      daily-win line (FLAWLESS), optional deadpan game-over line
+- [ ] Announcer settings toggle (design doc: separate `Announcer` checkbox, default on)
+- [ ] Announcer in multiplayer (placement path exists at the mp.lastPlacement effect)
 
 Implementation deviations from spec (all minor, flag to Quinn if they read wrong):
 - Onset freeze reuses the existing 90ms hitstop (spec said 120ms); alarm raises 120ms
