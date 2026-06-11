@@ -1409,3 +1409,31 @@
 [data-theme="mondrian"] .hexaclear-announcer-pop.kind-boardclear {
   color: var(--md-red);
 }
+
+/* ====================================================================
+   LIVING BOARD — Mondrian pass.
+   The shared dead-cell treatment (grey-charcoal interior) collides
+   with the neutral-grey PIECE plane — unreachable pockets and grey
+   cubes read as the same thing. De Stijl's own dead language instead:
+   the ink withdraws. Dead cells stay unpainted canvas; their black
+   grid line dilutes to a pale grey and the pocket dims only a step
+   toward the panel tone. No solid grey plane = no collision with
+   pieces. (.cubic-viewport in the selector outranks the octave
+   empty-cell stroke tints so the faded line survives high octaves.)
+   ==================================================================== */
+[data-theme="mondrian"]
+  .cubic-viewport
+  .hexaclear-cell.cell-dead
+  .hexaclear-hex.empty {
+  stroke: #c6c2b6;
+  fill: transparent;
+  opacity: 1;
+}
+
+[data-theme="mondrian"]
+  .cubic-viewport
+  .hexaclear-cell.cell-dead
+  .hexaclear-slot-fill {
+  fill: var(--md-ground-2);
+  opacity: 1;
+}
