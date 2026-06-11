@@ -4674,6 +4674,137 @@ body {
   }
 }
 
+/* LIVING BOARD — phase A (liveness). An empty cell that no current
+   hand piece (or held piece) can reach wears `cell-dead` on its <g>
+   and goes dark + still; live cells keep full brightness and a slow
+   shared breath. All default treatments are opacity-only so they
+   translate across every theme (and avoid CSS filters, which iOS
+   WebKit ignores on inner SVG elements). Theme-specific dead/alarm
+   materials come later via these same hooks. See Documentation/Deal-In
+   and Living Board Plan.md. */
+.hexaclear-cell .hexaclear-hex.empty,
+.hexaclear-cell .hexaclear-slot-fill {
+  transition: opacity 400ms ease;
+}
+
+.hexaclear-cell.cell-dead .hexaclear-hex.empty,
+.hexaclear-cell.cell-dead .hexaclear-slot-fill {
+  opacity: 0.42;
+}
+
+/* The breath lives on the dimple (slot-fill) rather than the hex
+   polygon: the polygon's animation slot is already contended (octave-2
+   grid-tint drift, glass preview glows), and animations don't compose —
+   the dimple is uncontested across all themes. Suppressed during the
+   deal-in so the cascade owns the stage. */
+.cubic-viewport.is-liveness:not(.is-dealing-in)
+  .hexaclear-cell:not(.cell-dead)
+  .hexaclear-slot-fill {
+  animation: hexaclear-board-breath 4s ease-in-out infinite;
+}
+
+@keyframes hexaclear-board-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.94;
+  }
+}
+
+/* Dead hand pieces sag (extends the existing .unplayable dim):
+   desaturated, drooped, still. */
+.hexaclear-piece-button {
+  transition: transform 400ms ease;
+}
+
+.hexaclear-piece-button.unplayable {
+  transform: rotate(2deg) translateY(3px);
+}
+
+/* LIVING BOARD — phase B (critical). At <=4 total placements the map
+   is revoked: EVERY empty cell joins one uniform 900ms alarm pulse
+   (information-free by design), and hand differentiation suspends so
+   the sag can't leak where the last fit lives. All pulses start when
+   `is-critical` lands on the viewport, so they're synchronized — the
+   one-clock simultaneity is what reads as systemwide alarm. */
+.cubic-viewport.is-critical .hexaclear-hex.empty,
+.cubic-viewport.is-critical .hexaclear-cell .hexaclear-slot-fill {
+  animation: hexaclear-alarm-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes hexaclear-alarm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Hand and score readout ride the same clock, gentler. */
+.cubic-viewport.is-critical .hexaclear-piece-button,
+.cubic-viewport.is-critical .hexaclear-live-stat .value {
+  animation: hexaclear-alarm-soft 900ms ease-in-out infinite;
+}
+
+@keyframes hexaclear-alarm-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+/* Suspend dead-piece differentiation while critical: uniform threat,
+   no answer key. (Players keep whatever they learned before the siren
+   started — that's memory, which is skill.) */
+.cubic-viewport.is-critical .hexaclear-piece-button.unplayable {
+  --hexaclear-piece-target-opacity: 1;
+  opacity: 1;
+  transform: none;
+}
+
+.cubic-viewport.is-critical
+  .hexaclear-piece-button.unplayable
+  .hexaclear-piece-svg {
+  filter: none;
+}
+
+/* Reduced motion: no breath, no pulsing — liveness keeps its static
+   brightness distinction (it's information), and critical becomes a
+   steady dimmed state instead of a pulse. The audio heartbeat stays.
+   Selectors deliberately mirror the exact rules above (rather than
+   blanket animation:none) so unrelated animations — failed-drop shake,
+   octave tint drift, glass preview glow — keep their own
+   reduced-motion policies. */
+.cubic-viewport.reduced-motion.is-liveness
+  .hexaclear-cell:not(.cell-dead)
+  .hexaclear-slot-fill {
+  animation: none;
+}
+
+.cubic-viewport.reduced-motion.is-critical .hexaclear-hex.empty,
+.cubic-viewport.reduced-motion.is-critical
+  .hexaclear-cell
+  .hexaclear-slot-fill {
+  animation: none;
+  opacity: 0.7;
+}
+
+.cubic-viewport.reduced-motion.is-critical .hexaclear-piece-button,
+.cubic-viewport.reduced-motion.is-critical .hexaclear-live-stat .value {
+  animation: none;
+}
+
+.cubic-viewport.reduced-motion .hexaclear-piece-button.unplayable {
+  transform: none;
+}
+
 .hexaclear-piece-button.selected {
   background: rgba(255, 213, 123, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255, 213, 123, 0.55);

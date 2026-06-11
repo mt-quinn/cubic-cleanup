@@ -16,6 +16,7 @@ import type { BoardGeometry } from './game/boardDefinition'
 import {
   applyPlacement,
   canPlacePiece,
+  computeBoardLiveness,
   createBigGameState,
   createInitialGameState,
   createDailyGameState,
@@ -63,6 +64,7 @@ import {
   playError,
   playGameOver,
   playUiClick,
+  setCriticalAudio,
   setMasterVolume,
   setMuted,
   subscribeAudioNeedsUnlock,
@@ -1429,6 +1431,14 @@ const DEAL_IN_HAND_BASE_DELAY_MS = 1600
 // delay variable never changes under a running animation.
 const DEAL_IN_TOTAL_MS = 3600
 const DEAL_IN_REDUCED_MOTION_MS = 320
+
+// Living Board critical-state hysteresis: the alarm raises when the
+// hand (+hold) has this few total valid placements left, and won't
+// stand down until the player claws back real breathing room (or any
+// clear lands, which cuts it instantly). The gap prevents strobing
+// when fits hover around the line.
+const CRITICAL_ENTER_MAX_PLACEMENTS = 4
+const CRITICAL_EXIT_MIN_PLACEMENTS = 8
 
 const buildDealDelays = (
   boardDef: BoardDefinition,
@@ -3511,6 +3521,89 @@ function App() {
   // While true, the game-over modal is suppressed and the board is in
   // its wind-down phase (desaturating, hand pieces shaking).
   const [gameOverWindingDown, setGameOverWindingDown] = useState(false)
+
+  // ---- Living Board (liveness + critical pressure) -------------------
+  //
+  // One derived snapshot per board/hand change: which empty cells are
+  // still reachable by the current hand (+hold), and how many total
+  // placements remain. Phase A (liveness): unreachable cells dim via
+  // `cell-dead`. Phase B (critical): at <=4 total placements the map is
+  // REVOKED — every empty cell joins one uniform synchronized alarm and
+  // hand differentiation suspends, so the endgame hunt stays a human
+  // skill. Hysteresis: enter <=4, exit >=8 or on any clear. Disabled in
+  // tutorial and multiplayer. See Documentation/Deal-In and Living
+  // Board Plan.md.
+  const liveness = useMemo(
+    () =>
+      computeBoardLiveness(game.board, game.hand, game.mode, game.hold),
+    [game.board, game.hand, game.mode, game.hold],
+  )
+  const livenessEnabled =
+    !isMultiplayer &&
+    tutorialStage === 0 &&
+    !game.gameOver &&
+    !gameOverWindingDown
+  const [criticalActive, setCriticalActive] = useState(false)
+  const criticalOnsetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const clearOnsetTimer = () => {
+      if (criticalOnsetTimerRef.current !== null) {
+        window.clearTimeout(criticalOnsetTimerRef.current)
+        criticalOnsetTimerRef.current = null
+      }
+    }
+
+    if (!livenessEnabled) {
+      clearOnsetTimer()
+      setCriticalActive(false)
+      return
+    }
+
+    if (criticalActive) {
+      // Exit instantly when a clear lands (the relight is the payoff —
+      // the alarm must cut on the same frame the clear starts) or once
+      // the player has breathing room again. If the board is still at
+      // <=4 after the clear settles, the enter branch below re-fires
+      // with a fresh onset beat. This is also where the "CLOSE CALL!"
+      // announcer cue will hook in once voice lines exist.
+      if (
+        clearingCells.length > 0 ||
+        liveness.totalPlacements >= CRITICAL_EXIT_MIN_PLACEMENTS
+      ) {
+        clearOnsetTimer()
+        setCriticalActive(false)
+      }
+      return
+    }
+
+    // Enter: wait for clear animations to settle so the onset beat
+    // never fights the clear juice, then freeze briefly (existing
+    // hitstop) and snap every empty cell to the alarm simultaneously.
+    if (
+      liveness.totalPlacements > 0 &&
+      liveness.totalPlacements <= CRITICAL_ENTER_MAX_PLACEMENTS &&
+      clearingCells.length === 0 &&
+      criticalOnsetTimerRef.current === null
+    ) {
+      setHitstop(true)
+      criticalOnsetTimerRef.current = window.setTimeout(() => {
+        criticalOnsetTimerRef.current = null
+        setCriticalActive(true)
+      }, 120)
+    }
+
+    return clearOnsetTimer
+  }, [livenessEnabled, criticalActive, liveness, clearingCells])
+
+  // Critical audio: 55Hz heartbeat thump + master lowpass while the
+  // alarm is up. audio.ts owns the clock; this just flips the switch
+  // (and guarantees it flips back off on unmount).
+  useEffect(() => {
+    setCriticalAudio(criticalActive)
+    return () => setCriticalAudio(false)
+  }, [criticalActive])
+
   // Bumped each time a placement clears the entire board (+25 bonus).
   // Drives a one-shot golden flash overlay on the board wrapper.
   const [boardClearFlashToken, setBoardClearFlashToken] = useState(0)
@@ -9763,6 +9856,8 @@ function App() {
         'cubic-viewport',
         hitstop ? 'hitstop' : '',
         dealInActive ? 'is-dealing-in' : '',
+        livenessEnabled ? 'is-liveness' : '',
+        criticalActive ? 'is-critical' : '',
         reducedMotion ? 'reduced-motion' : '',
         colorblindSupport ? 'is-colorblind' : '',
         tutorialStage > 0 ? 'is-tutorial-active' : '',
@@ -11581,6 +11676,18 @@ function App() {
 
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
+                // Living Board phase A: an empty cell no current piece
+                // can reach goes dark. Suppressed during critical (the
+                // alarm is uniform — no map), for daily numbered targets
+                // (their glow is gameplay-critical and the dimming flows
+                // around them), and while disabled (tutorial/MP/over).
+                const isDeadCell =
+                  livenessEnabled &&
+                  !criticalActive &&
+                  !isFilled &&
+                  !isDailyTarget &&
+                  !liveness.liveCellIds.has(cell.id)
+
                 // PvP territory tint: every cleared cell wears the
                 // last-clearer's hue as a translucent overlay so
                 // empty ground reads as "owned territory" without
@@ -11676,6 +11783,7 @@ function App() {
                     key={cell.id}
                     className={[
                       'hexaclear-cell',
+                      isDeadCell ? 'cell-dead' : '',
                       isInvalidDrop ? 'invalid-drop' : '',
                       // Bubble PvP tint classes up to the cell wrapper
                       // so the SlotGeometry dimple (a sibling polygon

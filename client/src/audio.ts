@@ -181,6 +181,18 @@ let masterGainNode: GainNode | null = null
 let buffers: Partial<Record<SoundKey, AudioBuffer>> = {}
 let sessionId = 0
 
+// Living Board critical state: a lowpass that sits permanently in the
+// master chain (transparent when open) plus a synthesized 55Hz
+// heartbeat thump on a 900ms clock. No audio assets involved.
+// See Documentation/Deal-In and Living Board Plan.md.
+let criticalFilterNode: BiquadFilterNode | null = null
+let criticalAudioActive = false
+let criticalThumpInterval: number | null = null
+const CRITICAL_LOWPASS_HZ = 2400
+const CRITICAL_LOWPASS_OPEN_HZ = 18000
+const CRITICAL_THUMP_PERIOD_MS = 900
+const CRITICAL_THUMP_GAIN = 0.13
+
 // Set on every visibility transition that could have lost the audio
 // session. Consumed by the next user-gesture unlock, which rebuilds the
 // context. Starts false so the very first gesture on a fresh page boots
@@ -299,6 +311,7 @@ const closeAudioContext = () => {
   const ctx = audioContext
   audioContext = null
   masterGainNode = null
+  criticalFilterNode = null
   buffers = {}
   if (!ctx) {
     notifyAudioState()
@@ -332,7 +345,19 @@ const buildAudioContext = (): AudioContext | null => {
   audioContext = ctx
   masterGainNode = ctx.createGain()
   masterGainNode.gain.value = computeMasterGainValue()
-  masterGainNode.connect(ctx.destination)
+  // Master chain: everything -> masterGain -> critical lowpass ->
+  // destination. The filter sits transparent (wide open) until the
+  // Living Board critical state closes it down; routing it permanently
+  // means iOS context rebuilds re-apply the current critical state via
+  // the initial frequency below, with no re-patching.
+  criticalFilterNode = ctx.createBiquadFilter()
+  criticalFilterNode.type = 'lowpass'
+  criticalFilterNode.frequency.value = criticalAudioActive
+    ? CRITICAL_LOWPASS_HZ
+    : CRITICAL_LOWPASS_OPEN_HZ
+  criticalFilterNode.Q.value = 0.0001
+  masterGainNode.connect(criticalFilterNode)
+  criticalFilterNode.connect(ctx.destination)
   buffers = {}
 
   // If the runtime emits a stalled statechange mid-session (iOS
@@ -639,6 +664,65 @@ const playOneShot = (key: SoundKey) => {
 
 export const playClickDown = () => playOneShot('clickDown')
 export const playClickUp = () => playOneShot('clickUp')
+
+// ---- Living Board critical audio ---------------------------------------
+
+// One synthesized heartbeat: a 55Hz sine with a fast attack and ~280ms
+// decay, mixed well under the SFX layer. Skips silently if the context
+// isn't running (the CSS alarm carries the moment; audio rejoins on the
+// next tick once the context wakes).
+const playCriticalThump = () => {
+  const ctx = readyContext()
+  if (!ctx) return
+  if (!criticalAudioActive) return
+  try {
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = 55
+    const env = ctx.createGain()
+    const now = ctx.currentTime
+    env.gain.setValueAtTime(0, now)
+    env.gain.linearRampToValueAtTime(CRITICAL_THUMP_GAIN, now + 0.012)
+    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.3)
+    osc.connect(env).connect(masterGainNode!)
+    osc.start(now)
+    osc.stop(now + 0.32)
+  } catch {
+    // Best-effort.
+  }
+}
+
+// Raise/lower the critical soundscape: closes the master lowpass (the
+// air goes out of the room) and starts the heartbeat clock. Idempotent;
+// safe to call with no audio context (state is remembered and applied
+// when a context is built). The thump clock deliberately uses
+// setInterval rather than the audio clock — critical states are short,
+// and drift against the CSS pulse is imperceptible at this scale.
+export const setCriticalAudio = (active: boolean): void => {
+  if (criticalAudioActive === active) return
+  criticalAudioActive = active
+
+  if (criticalFilterNode && audioContext) {
+    criticalFilterNode.frequency.setTargetAtTime(
+      active ? CRITICAL_LOWPASS_HZ : CRITICAL_LOWPASS_OPEN_HZ,
+      audioContext.currentTime,
+      active ? 0.18 : 0.05,
+    )
+  }
+
+  if (active) {
+    if (typeof window !== 'undefined' && criticalThumpInterval === null) {
+      playCriticalThump()
+      criticalThumpInterval = window.setInterval(
+        playCriticalThump,
+        CRITICAL_THUMP_PERIOD_MS,
+      )
+    }
+  } else if (criticalThumpInterval !== null) {
+    window.clearInterval(criticalThumpInterval)
+    criticalThumpInterval = null
+  }
+}
 
 // Deal-in tick: one per rosette as the board cascades in at the start
 // of a fresh run. Reuses the clickUp buffer pitch-stepped upward across

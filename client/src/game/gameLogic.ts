@@ -580,6 +580,54 @@ export const applyPlacement = (
   }
 }
 
+// ---- Living Board liveness ---------------------------------------------
+//
+// Snapshot of "how alive is this board" for the current hand (+hold):
+// which empty cells are still reachable by at least one valid placement,
+// how many distinct placements each piece has, and the total. Drives the
+// liveness display (dead cells dim) and the critical-state pressure
+// system (alarm at <=4 total placements). Cheap by construction: <=4
+// candidate pieces x <=133 anchors x <=4 cells per shape.
+// See Documentation/Deal-In and Living Board Plan.md.
+export type BoardLiveness = {
+  totalPlacements: number
+  liveCellIds: Set<CellId>
+  placementsByPieceId: Record<string, number>
+}
+
+export const computeBoardLiveness = (
+  board: BoardState,
+  hand: Hand,
+  mode: GameMode = 'endless',
+  hold: ActivePiece | null = null,
+): BoardLiveness => {
+  const boardDef = getBoardDefinitionForMode(mode)
+  const liveCellIds = new Set<CellId>()
+  const placementsByPieceId: Record<string, number> = {}
+  let totalPlacements = 0
+
+  // Held piece counts toward liveness exactly as it does toward
+  // hasAnyValidMove: the player can always swap it in.
+  const candidates: Hand = hold ? [...hand, hold] : hand
+  for (const piece of candidates) {
+    let count = 0
+    // NOTE: anchors are not skipped by emptiness — shape normalization
+    // pins shapes to minQ/minR, which doesn't guarantee (0,0) is a
+    // member cell, so the anchor cell itself may legitimately be
+    // filled. canPlacePiece validates the actual covered cells.
+    for (const cell of boardDef.cells) {
+      const fit = canPlacePiece(board, piece.shape, cell.id, mode)
+      if (!fit) continue
+      count++
+      for (const id of fit.targetCellIds) liveCellIds.add(id)
+    }
+    placementsByPieceId[piece.id] = count
+    totalPlacements += count
+  }
+
+  return { totalPlacements, liveCellIds, placementsByPieceId }
+}
+
 export const hasAnyValidMove = (
   board: BoardState,
   hand: Hand,

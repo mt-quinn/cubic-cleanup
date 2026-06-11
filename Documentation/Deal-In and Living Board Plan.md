@@ -11,10 +11,27 @@
 - [x] Deal-in: implemented (single-player triggers) — commit pending review, **do not push without approval**
 - [ ] Deal-in: multiplayer room-join trigger (deferred — server state arrives async; needs "board empty + moves 0" gate)
 - [ ] Deal-in: per-theme polish pass (win98 LCD readout beat, audius/glass/mondrian wordmarks)
-- [ ] Living Board: liveness computation + two-phase state machine
-- [ ] Living Board: default visual treatments
-- [ ] Living Board: per-theme passes
-- [ ] Announcer ("CLOSE CALL!" etc.): trigger slots wired, **no audio assets yet** — Quinn will supply voice lines later
+- [x] Living Board: liveness computation + two-phase state machine (`computeBoardLiveness`
+      in gameLogic.ts; critical enter/exit effect in App.tsx near `gameOverWindingDown`)
+- [x] Living Board: default visual treatments (opacity-only, theme-safe) + critical audio
+      (55Hz thump + master lowpass in audio.ts via `setCriticalAudio`)
+- [ ] Living Board: per-theme passes (ember/win98-LCD-blink/candle-gutter/mondrian-red/audius-clamp)
+- [ ] Living Board: death gutter-out (live cells extinguish one-by-one before wind-down) —
+      deferred; current behavior is the pre-existing desaturate wind-down
+- [ ] Living Board: multiplayer support — deferred, system fully disabled when `isMultiplayer`
+- [ ] Announcer ("CLOSE CALL!" etc.): the critical-exit branch in App.tsx is the hook point,
+      **no audio assets yet** — Quinn will supply voice lines later
+
+Implementation deviations from spec (all minor, flag to Quinn if they read wrong):
+- Onset freeze reuses the existing 90ms hitstop (spec said 120ms); alarm raises 120ms
+  after the freeze starts.
+- Dead-cell dimming stays during drag; the ghost preview classes visually dominate
+  rather than the map being suppressed wholesale.
+- The live-cell breath lives on the dimple (`.hexaclear-slot-fill`), not the hex
+  polygon — the polygon's animation slot is contended (octave-2 tint drift, glass
+  preview glows) and CSS animations don't compose.
+- Exit-on-clear re-enters with a fresh onset if the board is still ≤4 after the clear
+  settles (enter waits for `clearingCells` to drain).
 
 Unrelated pre-existing WIP: `client/src/theme-glass.css` has uncommitted stained-glass
 masonry tuning from an earlier session (see root `task_plan.md`/`findings.md`). Keep it
