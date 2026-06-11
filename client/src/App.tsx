@@ -3458,14 +3458,26 @@ function App() {
       return
     }
 
+    // Nearly every call site is a click handler ("New game", retry,
+    // mode switch), which is a valid user activation — prime the audio
+    // context from it so the ticks below actually sound on a fresh
+    // page load whose first gesture is starting a run. Without this
+    // the context is still suspended and readyContext() swallows every
+    // tick silently. From the mount path (no activation) this is a
+    // harmless no-op and the deal-in stays visual-only, as designed.
+    unlockAudioOnGesture()
+
     // One pitch-stepped tick per rosette, on the rosette stagger clock.
     // playDealTick no-ops while audio is locked/muted, so cold loads
-    // (no gesture yet) stay silent without special-casing here.
+    // (no gesture yet) stay silent without special-casing here. The
+    // first tick is nudged off t=0 to give the just-resumed context a
+    // beat to reach 'running' (resume() is async even inside a
+    // gesture).
     for (let i = 0; i < 7; i++) {
       dealInTimersRef.current.push(
         window.setTimeout(
           () => playDealTick(i, 7),
-          i * DEAL_IN_ROSETTE_STAGGER_MS,
+          Math.max(40, i * DEAL_IN_ROSETTE_STAGGER_MS),
         ),
       )
     }
