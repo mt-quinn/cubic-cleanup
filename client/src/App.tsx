@@ -1443,8 +1443,12 @@ const CRITICAL_EXIT_MIN_PLACEMENTS = 8
 
 // Deal-in announce: the CUBEKILL wordmark slams in over the cascade
 // (CSS: .hexaclear-dealin-announce — in at 160ms, impact ~340ms, gone
-// by ~1.5s, well before the hand deals at 1.6s).
+// by ~1.5s, well before the hand deals at 1.6s). The voice line leads
+// the visual impact by ~140ms: between Web Audio start latency and how
+// the eye registers the fast blur-in, firing both on the same frame
+// reads as the voice arriving late.
 const DEAL_IN_ANNOUNCE_IMPACT_MS = 340
+const DEAL_IN_ANNOUNCE_VOICE_MS = 200
 
 const buildDealDelays = (
   boardDef: BoardDefinition,
@@ -3511,13 +3515,15 @@ function App() {
       )
     }
     // CUBEKILL title slam: the announce overlay (rendered while
-    // dealInActive) lands its impact frame ~340ms in — kick the screen
-    // and fire the announcer's "CUBEKILL" call on the same beat so the
-    // wordmark hits like an announcement, not a fade-in.
+    // dealInActive) lands its impact frame ~340ms in. The voice leads
+    // slightly so it lands ON the hit instead of trailing it; the
+    // screen kick stays glued to the visual impact frame.
+    dealInTimersRef.current.push(
+      window.setTimeout(() => playCubekillAnnounce(), DEAL_IN_ANNOUNCE_VOICE_MS),
+    )
     dealInTimersRef.current.push(
       window.setTimeout(() => {
         setShakeRequest((prev) => ({ token: prev.token + 1, intensity: 2.5 }))
-        playCubekillAnnounce()
       }, DEAL_IN_ANNOUNCE_IMPACT_MS),
     )
 
