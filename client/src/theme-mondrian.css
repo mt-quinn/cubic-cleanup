@@ -1437,3 +1437,136 @@
   fill: var(--md-ground-2);
   opacity: 1;
 }
+
+/* ====================================================================
+   PAUSE MENU — Mondrian pass. The sheet is a composition: paper
+   ground, heavy black structure, and the tier system spoken in
+   primaries — the hero action is the RED plane, place tiles are
+   white blocks that flood YELLOW on hover with their data in BLUE,
+   everything hard-edged, no glow, no rounding.
+   ==================================================================== */
+[data-theme="mondrian"] .hexaclear-pmenu {
+  background: var(--md-ground);
+  border-radius: 0;
+  border: 4px solid var(--md-line);
+  box-shadow: none;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-masthead {
+  background: var(--md-line);
+  margin: -1.05rem -1.4rem 0;
+  padding: 0.6rem 1.4rem 0.55rem;
+  border-bottom: none;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-kicker {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  letter-spacing: 0.26em;
+  color: #ffffff;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-hero,
+[data-theme="mondrian"] .hexaclear-pmenu-back {
+  border-radius: 0;
+  background: var(--md-red);
+  border: 3px solid var(--md-line);
+  box-shadow: 0 5px 0 var(--md-line);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-hero:hover,
+[data-theme="mondrian"] .hexaclear-pmenu-back:hover {
+  background: #d93a32;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-hero:active,
+[data-theme="mondrian"] .hexaclear-pmenu-back:active {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 var(--md-line);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-back:active {
+  transform: translateY(4px);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-hero-label,
+[data-theme="mondrian"] .hexaclear-pmenu-back {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: #ffffff;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-hero-sub {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 700;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-tile,
+[data-theme="mondrian"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group {
+  border-radius: 0;
+  border: 3px solid var(--md-line);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-tile:hover,
+[data-theme="mondrian"] .hexaclear-pmenu-tile:focus-visible {
+  background: var(--md-yellow);
+  border-color: var(--md-line);
+  transform: none;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-tile-title {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-tile-stat {
+  color: var(--md-blue);
+  font-weight: 800;
+}
+
+[data-theme="mondrian"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group-label {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  color: var(--md-line-hi);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-settings-title {
+  font-family: var(--md-font-black);
+  color: var(--md-line-hi);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-runlink {
+  color: var(--md-line-hi);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-runlink.is-warn,
+[data-theme="mondrian"] .hexaclear-pmenu-runlink.is-danger {
+  color: var(--md-red);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-settings-chip {
+  border-radius: 0;
+  border: 3px solid var(--md-line);
+  background: #ffffff;
+  color: var(--md-line-hi);
+  font-weight: 800;
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-settings-chip:hover {
+  background: var(--md-yellow);
+  border-color: var(--md-line);
+  color: var(--md-line-hi);
+}
+
+[data-theme="mondrian"] .hexaclear-pmenu-utility {
+  border-top: 3px solid var(--md-line);
+}

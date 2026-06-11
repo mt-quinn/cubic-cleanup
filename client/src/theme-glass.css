@@ -1783,3 +1783,134 @@
   -webkit-background-clip: text;
   background-clip: text;
 }
+
+/* ====================================================================
+   PAUSE MENU — Glass pass. The sheet is a carved limestone tablet set
+   into the cathedral: stone-faced panel, gilt inscription type
+   (Cinzel), the hero as a slab of poured gold, place tiles as
+   recessed stone niches with gilt captions, and the settings groups
+   as the same niches. Same three-tier physics, cathedral materials.
+   ==================================================================== */
+[data-theme="glass"] .hexaclear-pmenu {
+  background: linear-gradient(
+    180deg,
+    var(--glass-stone-face, #4a3d28) 0%,
+    var(--glass-stone-deep, #20170c) 100%
+  );
+  border-radius: 14px;
+  border: 1px solid rgba(232, 200, 104, 0.18);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 244, 214, 0.18),
+    inset 0 -2px 8px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-masthead {
+  border-bottom: 1px solid rgba(232, 200, 104, 0.28);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-kicker {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: #e8d9b0;
+}
+
+[data-theme="glass"] .hexaclear-pmenu-hero,
+[data-theme="glass"] .hexaclear-pmenu-back {
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f7e3a8 0%, #c8941f 100%);
+  box-shadow:
+    0 5px 0 #5d3f0a,
+    0 6px 0 1px rgba(0, 0, 0, 0.5),
+    0 16px 28px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 250, 230, 0.6);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-hero:hover,
+[data-theme="glass"] .hexaclear-pmenu-back:hover {
+  background: linear-gradient(180deg, #fbedc2 0%, #d6a52f 100%);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-hero:active,
+[data-theme="glass"] .hexaclear-pmenu-back:active {
+  box-shadow:
+    0 1px 0 #5d3f0a,
+    0 2px 0 1px rgba(0, 0, 0, 0.5),
+    0 8px 16px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 250, 230, 0.6);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-hero-label {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  color: #3b2606;
+}
+
+[data-theme="glass"] .hexaclear-pmenu-hero-sub {
+  font-family: 'Cinzel', Georgia, serif;
+  color: rgba(59, 38, 6, 0.65);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-back {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  color: #3b2606;
+}
+
+[data-theme="glass"] .hexaclear-pmenu-tile,
+[data-theme="glass"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group {
+  border-radius: 9px;
+  border: 1px solid rgba(232, 200, 104, 0.2);
+  background: rgba(10, 6, 2, 0.42);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(232, 200, 104, 0.1);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-tile:hover,
+[data-theme="glass"] .hexaclear-pmenu-tile:focus-visible {
+  border-color: rgba(232, 200, 104, 0.5);
+  background: rgba(10, 6, 2, 0.3);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-tile-title {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  color: #ead9ac;
+}
+
+[data-theme="glass"] .hexaclear-pmenu-tile-stat,
+[data-theme="glass"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group-label {
+  font-family: 'Cinzel', Georgia, serif;
+  color: #d8b35c;
+}
+
+[data-theme="glass"] .hexaclear-pmenu-settings-title {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  color: #ead9ac;
+}
+
+[data-theme="glass"] .hexaclear-pmenu-runlink {
+  font-family: 'Cinzel', Georgia, serif;
+  color: rgba(234, 217, 172, 0.6);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-runlink.is-warn {
+  color: rgba(232, 168, 78, 0.85);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-runlink.is-danger {
+  color: rgba(200, 56, 90, 0.9);
+}
+
+[data-theme="glass"] .hexaclear-pmenu-settings-chip {
+  border: 1px solid rgba(232, 200, 104, 0.35);
+  background: rgba(10, 6, 2, 0.3);
+  font-family: 'Cinzel', Georgia, serif;
+  color: #ead9ac;
+}

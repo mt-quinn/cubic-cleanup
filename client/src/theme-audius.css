@@ -2218,3 +2218,125 @@
     height: 100%;
   }
 }
+
+/* ====================================================================
+   PAUSE MENU — Audius pass. The sheet is deck hardware: near-black
+   glass panel with a teal rail glow, the hero as the lit transport
+   button (teal gradient, dark text), place tiles as inset modules
+   with teal readouts, and the settings groups as the same modules.
+   ==================================================================== */
+[data-theme="audius"] .hexaclear-pmenu {
+  background: linear-gradient(
+    180deg,
+    var(--audius-glass, #080b12) 0%,
+    var(--audius-glass-deep, #030107) 100%
+  );
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-left, #42d6bd) 28%, transparent);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.7),
+    0 0 26px color-mix(in srgb, var(--audius-cube-left, #42d6bd) 14%, transparent),
+    inset 0 1px 0 rgba(207, 255, 242, 0.12);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-masthead {
+  border-bottom: 1px solid color-mix(in srgb, var(--audius-cube-left, #42d6bd) 24%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-kicker {
+  color: var(--audius-ink, #d7fff7);
+  letter-spacing: 0.32em;
+}
+
+[data-theme="audius"] .hexaclear-pmenu-hero,
+[data-theme="audius"] .hexaclear-pmenu-back {
+  background: linear-gradient(
+    180deg,
+    var(--audius-cube-top, #cffff2) 0%,
+    var(--audius-cube-left, #42d6bd) 100%
+  );
+  box-shadow:
+    0 5px 0 var(--audius-cube-right, #115a67),
+    0 6px 0 1px rgba(0, 0, 0, 0.5),
+    0 16px 28px rgba(0, 0, 0, 0.55),
+    0 0 22px color-mix(in srgb, var(--audius-cube-left, #42d6bd) 30%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-hero:hover,
+[data-theme="audius"] .hexaclear-pmenu-back:hover {
+  background: linear-gradient(180deg, #e2fff7 0%, #5fe3cd 100%);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-hero:active,
+[data-theme="audius"] .hexaclear-pmenu-back:active {
+  box-shadow:
+    0 1px 0 var(--audius-cube-right, #115a67),
+    0 2px 0 1px rgba(0, 0, 0, 0.5),
+    0 8px 16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-hero-label,
+[data-theme="audius"] .hexaclear-pmenu-back {
+  color: #04211c;
+}
+
+[data-theme="audius"] .hexaclear-pmenu-hero-sub {
+  color: rgba(4, 33, 28, 0.65);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-tile,
+[data-theme="audius"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--audius-cube-left, #42d6bd) 22%, transparent);
+  background: rgba(2, 4, 8, 0.55);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 color-mix(in srgb, var(--audius-cube-left, #42d6bd) 10%, transparent);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-tile:hover,
+[data-theme="audius"] .hexaclear-pmenu-tile:focus-visible {
+  border-color: color-mix(in srgb, var(--audius-cube-left, #42d6bd) 55%, transparent);
+  background: rgba(2, 4, 8, 0.4);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-tile-title {
+  color: var(--audius-ink, #d7fff7);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-tile-stat,
+[data-theme="audius"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group-label {
+  color: var(--audius-cube-left, #42d6bd);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-settings-title {
+  color: var(--audius-ink, #d7fff7);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-runlink {
+  color: var(--audius-muted, #7ea8a2);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-runlink.is-warn {
+  color: var(--audius-amber, #c8732c);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-runlink.is-danger {
+  color: #ff6a8a;
+}
+
+[data-theme="audius"] .hexaclear-pmenu-settings-chip {
+  border: 1px solid color-mix(in srgb, var(--audius-cube-left, #42d6bd) 35%, transparent);
+  background: rgba(2, 4, 8, 0.45);
+  color: var(--audius-ink, #d7fff7);
+}
+
+[data-theme="audius"] .hexaclear-pmenu-utility {
+  border-top: 1px solid color-mix(in srgb, var(--audius-cube-left, #42d6bd) 18%, transparent);
+}
