@@ -67,6 +67,7 @@ type SoundKey =
   | 'error'
   | 'gameOver'
   | 'break'
+  | 'cubekill'
 
 const STREAKS: ClearStreakIndex[] = [1, 2, 3, 4, 5, 6, 7]
 const COMBOS: ClearComboIndex[] = [1, 2, 3]
@@ -100,6 +101,9 @@ const SOURCES: Record<SoundKey, string> = {
   error: '/error.wav',
   gameOver: '/game_over.wav',
   break: '/break.wav',
+  // Announcer: the run-start "CUBEKILL" call, fired on the deal-in
+  // title slam's impact frame.
+  cubekill: '/cubekill.wav',
 }
 
 const VOLUMES: Record<SoundKey, number> = {
@@ -111,6 +115,9 @@ const VOLUMES: Record<SoundKey, number> = {
   error: 0.64,
   gameOver: 0.85,
   break: 0.85,
+  // The announcer leads its moment, but stays shy of the clear-SFX
+  // peaks so the musical layer keeps the crown overall.
+  cubekill: 0.9,
 }
 
 const LS_VOLUME_KEY = 'cubic-master-volume'
@@ -748,6 +755,11 @@ export const playDealTick = (step: number, steps: number) => {
 }
 export const playError = () => playOneShot('error')
 export const playGameOver = () => playOneShot('gameOver')
+
+// Announcer: the run-start "CUBEKILL" call. Fired by the deal-in on
+// its title-slam impact frame; no-ops while the context is locked
+// (cold loads stay silent, gesture-started runs get the full call).
+export const playCubekillAnnounce = () => playOneShot('cubekill')
 
 // Ruby capture: scheduled to fire ~80ms after the matching clear SFX
 // for a stacked "shatter follow-up" feel rather than overlapping the

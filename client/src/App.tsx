@@ -60,6 +60,7 @@ import {
   playClearForStreakIndex,
   playClickDown,
   playClickUp,
+  playCubekillAnnounce,
   playDealTick,
   playError,
   playGameOver,
@@ -3474,7 +3475,12 @@ function App() {
 
     if (reducedMotionRef.current) {
       // Reduced motion: CSS collapses the cascade to a single short
-      // board fade; no audio ticks, short active window.
+      // board fade; no audio ticks, short active window. The announcer
+      // still calls the run — reduced motion gates motion, not sound
+      // (same policy as the critical heartbeat).
+      dealInTimersRef.current.push(
+        window.setTimeout(() => playCubekillAnnounce(), 80),
+      )
       dealInTimersRef.current.push(
         window.setTimeout(() => finishDealIn(), DEAL_IN_REDUCED_MOTION_MS),
       )
@@ -3506,12 +3512,12 @@ function App() {
     }
     // CUBEKILL title slam: the announce overlay (rendered while
     // dealInActive) lands its impact frame ~340ms in — kick the screen
-    // a little on the same beat so the wordmark hits like an
-    // announcement, not a fade-in. This is also the slot for the
-    // "CUBEKILL" voice line when announcer audio exists.
+    // and fire the announcer's "CUBEKILL" call on the same beat so the
+    // wordmark hits like an announcement, not a fade-in.
     dealInTimersRef.current.push(
       window.setTimeout(() => {
         setShakeRequest((prev) => ({ token: prev.token + 1, intensity: 2.5 }))
+        playCubekillAnnounce()
       }, DEAL_IN_ANNOUNCE_IMPACT_MS),
     )
 
