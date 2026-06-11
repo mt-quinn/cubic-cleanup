@@ -3510,11 +3510,11 @@
 }
 
 /* ====================================================================
-   PAUSE MENU — Win98 pass. The editorial bottom sheet becomes a
-   system object: a raised grey window with a navy titlebar masthead,
-   menu rows as Start-menu items (full-row navy hover, system font,
-   no display type), etched separators, and the settings page as a
-   classic property sheet. Same structure, native dialect.
+   PAUSE MENU — Win98 pass. The three-tier sheet becomes a system
+   object: navy titlebar masthead, the hero as the classic dominant
+   default-button (raised bevel, presses to inset), the place tiles
+   as raised button-boxes with grey caption stats, and the utility
+   strip as underlined system links + a small Settings button.
    ==================================================================== */
 [data-theme="win98"] .hexaclear-pmenu {
   background: var(--w98-surface);
@@ -3523,14 +3523,14 @@
   border-color: var(--w98-highlight) var(--w98-deep-shadow)
     var(--w98-deep-shadow) var(--w98-highlight);
   box-shadow: 1px 1px 0 var(--w98-deep-shadow);
-  padding: 3px 3px 8px;
+  padding: 3px 8px 10px;
 }
 
 [data-theme="win98"] .hexaclear-pmenu-masthead {
   background: var(--w98-titlebar);
   border-bottom: none;
   padding: 5px 8px;
-  margin-bottom: 4px;
+  margin: 0 -5px;
 }
 
 [data-theme="win98"] .hexaclear-pmenu-kicker {
@@ -3552,62 +3552,93 @@
   opacity: 0.85;
 }
 
-[data-theme="win98"] .hexaclear-pmenu-row {
-  border-bottom: 1px solid var(--w98-shadow);
-  box-shadow: 0 1px 0 var(--w98-highlight);
-  padding: 9px 10px;
+/* Hero: the dominant default button. Raised 3D bevel; :active flips
+   it to the pressed inset, exactly like every OK button since 1995. */
+[data-theme="win98"] .hexaclear-pmenu-hero {
+  border-radius: 0;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  box-shadow: 1px 1px 0 var(--w98-deep-shadow);
+  outline: 1px solid var(--w98-deep-shadow);
+  outline-offset: -5px;
+  padding: 12px 10px 10px;
 }
 
-[data-theme="win98"] .hexaclear-pmenu-row-title,
-[data-theme="win98"] .hexaclear-pmenu-row.is-hero .hexaclear-pmenu-row-title {
+[data-theme="win98"] .hexaclear-pmenu-hero:hover {
+  background: var(--w98-surface);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-hero:active {
+  transform: none;
+  border-color: var(--w98-deep-shadow) var(--w98-highlight)
+    var(--w98-highlight) var(--w98-deep-shadow);
+  box-shadow: none;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-hero-label {
   font-family: inherit;
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
-  background: none;
   color: var(--w98-text);
-  -webkit-text-fill-color: var(--w98-text);
 }
 
-[data-theme="win98"] .hexaclear-pmenu-row.is-hero .hexaclear-pmenu-row-title {
-  font-size: 18px;
-}
-
-[data-theme="win98"] .hexaclear-pmenu-row-note {
+[data-theme="win98"] .hexaclear-pmenu-hero-sub {
   font-size: 11px;
+  font-weight: 400;
   letter-spacing: 0.02em;
   text-transform: none;
   color: var(--w98-surface-darker);
 }
 
-/* Start-menu hover: the whole row floods navy, text inverts, and the
-   title does NOT slide — Win98 doesn't do whimsy. */
-[data-theme="win98"] .hexaclear-pmenu-row:hover,
-[data-theme="win98"] .hexaclear-pmenu-row:focus-visible {
-  background: var(--w98-selected);
+/* Place tiles: smaller raised buttons; stat is the greyed caption. */
+[data-theme="win98"] .hexaclear-pmenu-tile {
+  border-radius: 0;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  box-shadow: none;
+  transition: none;
 }
 
-[data-theme="win98"] .hexaclear-pmenu-row:hover .hexaclear-pmenu-row-title,
-[data-theme="win98"]
-  .hexaclear-pmenu-row:focus-visible
-  .hexaclear-pmenu-row-title,
-[data-theme="win98"]
-  .hexaclear-pmenu-row.is-hero:hover
-  .hexaclear-pmenu-row-title {
-  color: var(--w98-selected-text);
-  -webkit-text-fill-color: var(--w98-selected-text);
-  background: none;
+[data-theme="win98"] .hexaclear-pmenu-tile:hover,
+[data-theme="win98"] .hexaclear-pmenu-tile:focus-visible {
+  background: var(--w98-surface);
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
   transform: none;
 }
 
-[data-theme="win98"] .hexaclear-pmenu-row:hover .hexaclear-pmenu-row-note {
-  color: var(--w98-selected-text);
+[data-theme="win98"] .hexaclear-pmenu-tile:active {
+  border-color: var(--w98-deep-shadow) var(--w98-highlight)
+    var(--w98-highlight) var(--w98-deep-shadow);
 }
 
-[data-theme="win98"] .hexaclear-pmenu-runrow {
-  padding: 8px 10px 2px;
-  gap: 14px;
+[data-theme="win98"] .hexaclear-pmenu-tile-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--w98-text);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-tile-stat {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--w98-surface-darker);
+}
+
+/* Utility strip: underlined system links; Settings as a small
+   raised button. */
+[data-theme="win98"] .hexaclear-pmenu-utility {
+  border-top: 1px solid var(--w98-shadow);
+  box-shadow: 0 -1px 0 var(--w98-highlight) inset;
+  padding-top: 9px;
 }
 
 [data-theme="win98"] .hexaclear-pmenu-runlink {
@@ -3622,6 +3653,24 @@
 [data-theme="win98"] .hexaclear-pmenu-runlink.is-warn,
 [data-theme="win98"] .hexaclear-pmenu-runlink.is-danger {
   color: #d40000;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-settings-chip {
+  border-radius: 0;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--w98-text);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-settings-chip:active {
+  border-color: var(--w98-deep-shadow) var(--w98-highlight)
+    var(--w98-highlight) var(--w98-deep-shadow);
 }
 
 [data-theme="win98"] .hexaclear-pmenu-settings-head {

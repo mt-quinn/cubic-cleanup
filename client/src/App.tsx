@@ -15423,34 +15423,9 @@ function App() {
                   },
                   0,
                 )
-                // Collapsed settings strip summary: shows the three
-                // pieces of state players actually tweak — audio
-                // level, theme, and account/sync status. Short
-                // labels only; full controls live in the expanded
-                // body below.
-                const menuVolumeSummary = audioMuted
-                  ? 'Muted'
-                  : `${Math.round(volume * 100)}%`
-                const menuThemeSummary =
-                  theme === 'win98'
-                    ? 'Win98'
-                    : theme === 'audius'
-                      ? 'Audius'
-                      : theme === 'glass'
-                        ? 'Glass'
-                        : theme === 'mondrian'
-                          ? 'Abstract'
-                          : 'Cubekill'
                 const selectedAudiusTrack = audiusTrackOptions.find(
                   (track) => track.id === audiusSelectedTrackId,
                 )
-                const menuAccountSummary = authLoading
-                  ? 'Checking…'
-                  : isAuthenticated
-                  ? accountSyncState === 'syncing'
-                    ? 'Syncing…'
-                    : 'Synced'
-                  : 'Local'
                 // "Save GIF" chip only renders when there is at
                 // least one recorded move; no orphaned disabled
                 // state in the menu (the player just doesn't see
@@ -15493,10 +15468,14 @@ function App() {
                     </header>
                     {menuPage === 'index' ? (
                     <nav className="hexaclear-pmenu-index" aria-label="Menu">
+                      {/* TIER 1 — the action. One raised, pressable
+                          slab; the only bright object in the menu.
+                          Dark-on-gold inverts the palette so nothing
+                          else can compete with it. */}
                       {hasStartedSession || isMultiplayer ? (
                         <button
                           type="button"
-                          className="hexaclear-pmenu-row is-hero"
+                          className="hexaclear-pmenu-hero"
                           style={{ ['--pmenu-i' as string]: 0 }}
                           onClick={() => {
                             unlockAudioOnGesture()
@@ -15504,17 +15483,17 @@ function App() {
                             setShowMenu(false)
                           }}
                         >
-                          <span className="hexaclear-pmenu-row-title">
+                          <span className="hexaclear-pmenu-hero-label">
                             Resume
                           </span>
-                          <span className="hexaclear-pmenu-row-note">
+                          <span className="hexaclear-pmenu-hero-sub">
                             {menuContextLine}
                           </span>
                         </button>
                       ) : (
                         <button
                           type="button"
-                          className="hexaclear-pmenu-row is-hero"
+                          className="hexaclear-pmenu-hero"
                           style={{ ['--pmenu-i' as string]: 0 }}
                           onClick={() => {
                             unlockAudioOnGesture()
@@ -15531,130 +15510,118 @@ function App() {
                             startDealIn()
                           }}
                         >
-                          <span className="hexaclear-pmenu-row-title">
+                          <span className="hexaclear-pmenu-hero-label">
                             New Game
                           </span>
-                          <span className="hexaclear-pmenu-row-note">
+                          <span className="hexaclear-pmenu-hero-sub">
                             Fresh board
                           </span>
                         </button>
                       )}
 
-                      <button
-                        type="button"
-                        className="hexaclear-pmenu-row"
+                      {/* TIER 2 — the places. Engraved inlay tiles;
+                          each stat is locked up directly beneath its
+                          title so the data belongs to the object. */}
+                      <div
+                        className="hexaclear-pmenu-tiles"
                         style={{ ['--pmenu-i' as string]: 1 }}
-                        onClick={() => {
-                          unlockAudioOnGesture()
-                          playUiClick()
-                          setShowMenu(false)
-                          setShowHighScores(true)
-                        }}
                       >
-                        <span className="hexaclear-pmenu-row-title">
-                          Scores
-                        </span>
-                        <span className="hexaclear-pmenu-row-note">
-                          {bestScore != null && bestScore > 0
-                            ? `Best ${bestScore.toLocaleString()}`
-                            : 'No runs yet'}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="hexaclear-pmenu-row"
-                        style={{ ['--pmenu-i' as string]: 2 }}
-                        onClick={() => {
-                          unlockAudioOnGesture()
-                          playUiClick()
-                          setShowMenu(false)
-                          setShowStats(true)
-                        }}
-                      >
-                        <span className="hexaclear-pmenu-row-title">
-                          Stats
-                        </span>
-                        <span className="hexaclear-pmenu-row-note">
-                          {menuTotalGames > 0
-                            ? `${menuTotalGames.toLocaleString()} game${
-                                menuTotalGames === 1 ? '' : 's'
-                              }`
-                            : 'Local profile'}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="hexaclear-pmenu-row"
-                        style={{ ['--pmenu-i' as string]: 3 }}
-                        onClick={() => {
-                          unlockAudioOnGesture()
-                          playUiClick()
-                          setShowMenu(false)
-                          setShowScoring(true)
-                        }}
-                      >
-                        <span className="hexaclear-pmenu-row-title">
-                          How to play
-                        </span>
-                        <span className="hexaclear-pmenu-row-note">
-                          Piecetiary {menuUnlockedPieces}/
-                          {ALL_PIECE_VARIANTS.length}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="hexaclear-pmenu-row"
-                        style={{ ['--pmenu-i' as string]: 4 }}
-                        onClick={() => {
-                          playUiClick()
-                          setMenuPage('settings')
-                        }}
-                      >
-                        <span className="hexaclear-pmenu-row-title">
-                          Settings
-                        </span>
-                        <span className="hexaclear-pmenu-row-note">
-                          {menuVolumeSummary} · {menuThemeSummary} ·{' '}
-                          {menuAccountSummary}
-                        </span>
-                      </button>
-
-                      {/* Run-scoped actions: quiet, tracked-out small
-                          caps under the index — present but never
-                          confusable with the primary rows. Leave is
-                          the danger read; Restart the warm warning. */}
-                      {(hasStartedSession || isMultiplayer) && (
-                        <div
-                          className="hexaclear-pmenu-runrow"
-                          style={{ ['--pmenu-i' as string]: 5 }}
+                        <button
+                          type="button"
+                          className="hexaclear-pmenu-tile"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            setShowHighScores(true)
+                          }}
                         >
-                          {isMultiplayer ? (
-                            <button
-                              type="button"
-                              className="hexaclear-pmenu-runlink is-danger"
-                              onClick={() => {
-                                unlockAudioOnGesture()
-                                playUiClick()
-                                setShowMenu(false)
-                                handleLeaveRoom()
-                              }}
-                            >
-                              Leave game
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="hexaclear-pmenu-runlink is-warn"
-                              onClick={() => {
-                                unlockAudioOnGesture()
-                                playUiClick()
-                                setShowMenu(false)
-                                resetGame()
-                              }}
-                            >
-                              Restart run
-                            </button>
-                          )}
+                          <span className="hexaclear-pmenu-tile-title">
+                            Scores
+                          </span>
+                          <span className="hexaclear-pmenu-tile-stat">
+                            {bestScore != null && bestScore > 0
+                              ? `Best ${bestScore.toLocaleString()}`
+                              : 'No runs yet'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="hexaclear-pmenu-tile"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            setShowStats(true)
+                          }}
+                        >
+                          <span className="hexaclear-pmenu-tile-title">
+                            Stats
+                          </span>
+                          <span className="hexaclear-pmenu-tile-stat">
+                            {menuTotalGames > 0
+                              ? `${menuTotalGames.toLocaleString()} game${
+                                  menuTotalGames === 1 ? '' : 's'
+                                }`
+                              : 'Local profile'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="hexaclear-pmenu-tile"
+                          onClick={() => {
+                            unlockAudioOnGesture()
+                            playUiClick()
+                            setShowMenu(false)
+                            setShowScoring(true)
+                          }}
+                        >
+                          <span className="hexaclear-pmenu-tile-title">
+                            How to play
+                          </span>
+                          <span className="hexaclear-pmenu-tile-stat">
+                            Pieces {menuUnlockedPieces}/
+                            {ALL_PIECE_VARIANTS.length}
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* TIER 3 — utility. Quiet strip: run-scoped
+                          actions left (warn/danger reads), Settings
+                          chip right. */}
+                      <div
+                        className="hexaclear-pmenu-utility"
+                        style={{ ['--pmenu-i' as string]: 2 }}
+                      >
+                        <div className="hexaclear-pmenu-utility-links">
+                          {(hasStartedSession || isMultiplayer) &&
+                            (isMultiplayer ? (
+                              <button
+                                type="button"
+                                className="hexaclear-pmenu-runlink is-danger"
+                                onClick={() => {
+                                  unlockAudioOnGesture()
+                                  playUiClick()
+                                  setShowMenu(false)
+                                  handleLeaveRoom()
+                                }}
+                              >
+                                Leave game
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="hexaclear-pmenu-runlink is-warn"
+                                onClick={() => {
+                                  unlockAudioOnGesture()
+                                  playUiClick()
+                                  setShowMenu(false)
+                                  resetGame()
+                                }}
+                              >
+                                Restart run
+                              </button>
+                            ))}
                           {menuCanExportGif && (
                             <button
                               type="button"
@@ -15680,7 +15647,17 @@ function App() {
                             </button>
                           )}
                         </div>
-                      )}
+                        <button
+                          type="button"
+                          className="hexaclear-pmenu-settings-chip"
+                          onClick={() => {
+                            playUiClick()
+                            setMenuPage('settings')
+                          }}
+                        >
+                          <span aria-hidden="true">⚙</span> Settings
+                        </button>
+                      </div>
                     </nav>
                     ) : (
                     <div className="hexaclear-pmenu-settings">

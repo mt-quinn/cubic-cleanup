@@ -4803,22 +4803,6 @@ body {
   flex-direction: column;
 }
 
-.hexaclear-pmenu-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  width: 100%;
-  background: none;
-  border: none;
-  border-bottom: 1px solid rgba(255, 205, 150, 0.14);
-  padding: 0.82rem 0.1rem 0.74rem;
-  cursor: pointer;
-  text-align: left;
-  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
-    calc(40ms + var(--pmenu-i, 0) * 45ms) both;
-}
-
 @keyframes hexaclear-pmenu-row-in {
   0% {
     opacity: 0;
@@ -4830,62 +4814,156 @@ body {
   }
 }
 
-.hexaclear-pmenu-row-title {
+/* TIER 1 — the action. A raised gold slab with a real extruded edge,
+   pressed down by :active like placing a piece. Dark-on-gold inverts
+   the menu's palette: the one bright object in the room. */
+.hexaclear-pmenu-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  width: 100%;
+  margin-top: 0.95rem;
+  padding: 0.95rem 1rem 0.85rem;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  background: linear-gradient(180deg, #ffd98c 0%, #eaa44a 100%);
+  box-shadow:
+    0 5px 0 #7e4a14,
+    0 6px 0 1px rgba(0, 0, 0, 0.4),
+    0 16px 28px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: transform 90ms ease, box-shadow 90ms ease;
+  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
+    calc(40ms + var(--pmenu-i, 0) * 55ms) both;
+}
+
+.hexaclear-pmenu-hero:hover {
+  background: linear-gradient(180deg, #ffe3a4 0%, #f2b15c 100%);
+}
+
+.hexaclear-pmenu-hero:active {
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #7e4a14,
+    0 2px 0 1px rgba(0, 0, 0, 0.4),
+    0 8px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.hexaclear-pmenu-hero-label {
   font-family: 'Archivo Black', 'Archivo', Arial, sans-serif;
-  font-size: 1.55rem;
+  font-size: 1.85rem;
   line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.015em;
-  color: #ecc88f;
-  transition: transform 140ms ease, color 140ms ease;
+  letter-spacing: 0.02em;
+  color: #3a1d08;
 }
 
-.hexaclear-pmenu-row:hover .hexaclear-pmenu-row-title,
-.hexaclear-pmenu-row:focus-visible .hexaclear-pmenu-row-title {
-  color: #ffe8b0;
-  transform: translateX(6px);
+.hexaclear-pmenu-hero-sub {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(58, 29, 8, 0.6);
 }
 
-.hexaclear-pmenu-row:active .hexaclear-pmenu-row-title {
-  transform: translateX(6px) scale(0.985);
+/* TIER 2 — the places. Engraved inlay tiles: recessed, dim, each
+   stat locked directly beneath its title in the warm accent so the
+   data reads as part of the object. */
+.hexaclear-pmenu-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
+    calc(40ms + var(--pmenu-i, 0) * 55ms) both;
 }
 
-.hexaclear-pmenu-row.is-hero .hexaclear-pmenu-row-title {
-  font-size: 2.35rem;
-  background: linear-gradient(180deg, #ffedb8 12%, #eaa94f 88%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
+.hexaclear-pmenu-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.32rem;
+  padding: 0.72rem 0.62rem 0.62rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 205, 150, 0.16);
+  background: rgba(0, 0, 0, 0.26);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.45),
+    inset 0 -1px 0 rgba(255, 210, 150, 0.07);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, transform 120ms ease,
+    background 120ms ease;
 }
 
-.hexaclear-pmenu-row.is-hero:hover .hexaclear-pmenu-row-title,
-.hexaclear-pmenu-row.is-hero:focus-visible .hexaclear-pmenu-row-title {
-  background: linear-gradient(180deg, #fff5d2 12%, #f4b964 88%);
-  -webkit-background-clip: text;
-  background-clip: text;
+.hexaclear-pmenu-tile:hover,
+.hexaclear-pmenu-tile:focus-visible {
+  border-color: rgba(255, 210, 150, 0.42);
+  background: rgba(0, 0, 0, 0.18);
+  transform: translateY(-2px);
 }
 
-.hexaclear-pmenu-row-note {
-  font-size: 0.66rem;
+.hexaclear-pmenu-tile:active {
+  transform: translateY(0);
+}
+
+.hexaclear-pmenu-tile-title {
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #f3d8a8;
+}
+
+.hexaclear-pmenu-tile-stat {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #e8a84e;
+}
+
+/* TIER 3 — utility. A quiet strip under a hairline: run actions left
+   (warn/danger reads), the Settings chip right. */
+.hexaclear-pmenu-utility {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 205, 150, 0.13);
+  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
+    calc(40ms + var(--pmenu-i, 0) * 55ms) both;
+}
+
+.hexaclear-pmenu-utility-links {
+  display: flex;
+  gap: 1.3rem;
+}
+
+.hexaclear-pmenu-settings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 205, 150, 0.3);
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  white-space: nowrap;
-  color: rgba(255, 214, 165, 0.42);
-  transition: color 140ms ease;
+  color: #f3d8a8;
+  transition: border-color 120ms ease, color 120ms ease;
 }
 
-.hexaclear-pmenu-row:hover .hexaclear-pmenu-row-note {
-  color: rgba(255, 224, 180, 0.7);
-}
-
-/* Run-scoped quiet links: small caps strip under the index. */
-.hexaclear-pmenu-runrow {
-  display: flex;
-  gap: 1.6rem;
-  padding: 0.95rem 0.1rem 0.1rem;
-  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
-    calc(40ms + var(--pmenu-i, 0) * 45ms) both;
+.hexaclear-pmenu-settings-chip:hover {
+  border-color: rgba(255, 210, 150, 0.55);
+  color: #ffe8b0;
 }
 
 .hexaclear-pmenu-runlink {
@@ -4981,10 +5059,11 @@ body {
   gap: 0.85rem;
 }
 
-/* Reduced motion: sheet and rows appear in place. */
+/* Reduced motion: sheet and tiers appear in place. */
 .cubic-viewport.reduced-motion .hexaclear-pmenu,
-.cubic-viewport.reduced-motion .hexaclear-pmenu-row,
-.cubic-viewport.reduced-motion .hexaclear-pmenu-runrow,
+.cubic-viewport.reduced-motion .hexaclear-pmenu-hero,
+.cubic-viewport.reduced-motion .hexaclear-pmenu-tiles,
+.cubic-viewport.reduced-motion .hexaclear-pmenu-utility,
 .cubic-viewport.reduced-motion .hexaclear-pmenu-settings {
   animation: none;
 }
