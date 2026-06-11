@@ -9186,6 +9186,10 @@ function App() {
     // desaturates, then the modal appears over the wreckage.
     setGameOverWindingDown(true)
     playGameOver()
+    // The announcer calls it ~450ms after the sting's attack, riding
+    // over the collapse clatter rather than colliding with the
+    // game_over.wav transient.
+    playAnnouncerCue('announceGameOver', 450)
     if (!isMultiplayer && !reducedMotionRef.current) {
       buildCollapse()
     }

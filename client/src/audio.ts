@@ -74,6 +74,7 @@ type SoundKey =
 // priority rules: board clear > streak milestone > combo count).
 export type AnnouncerCueKey =
   | 'announceBoardClear'
+  | 'announceGameOver'
   | 'announceCombo2'
   | 'announceCombo3'
   | 'announceCombo4'
@@ -123,6 +124,9 @@ const SOURCES: Record<SoundKey, string> = {
   // in one placement; streak lines are keyed by name (the streak
   // numbers they attach to live in App.tsx, currently 2/3/4/5).
   announceBoardClear: '/boardclear.wav',
+  // The announcer calls the death too — layered over (after) the
+  // game_over.wav sting, not replacing it.
+  announceGameOver: '/gameover.wav',
   announceCombo2: '/double.wav',
   announceCombo3: '/triple.wav',
   announceCombo4: '/quad.wav',
@@ -148,6 +152,7 @@ const VOLUMES: Record<SoundKey, number> = {
   // originally-authored levels per mix review).
   cubekill: 0.45,
   announceBoardClear: 0.44,
+  announceGameOver: 0.44,
   announceCombo2: 0.4,
   announceCombo3: 0.41,
   announceCombo4: 0.42,
