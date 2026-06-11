@@ -15462,9 +15462,6 @@ function App() {
                       aria-hidden="true"
                     >
                       <span className="hexaclear-pmenu-kicker">Paused</span>
-                      <span className="hexaclear-pmenu-context">
-                        {menuContextLine}
-                      </span>
                     </header>
                     {menuPage === 'index' ? (
                     <nav className="hexaclear-pmenu-index" aria-label="Menu">

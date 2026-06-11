@@ -3544,14 +3544,6 @@
   content: ' — CUBEKILL.EXE';
 }
 
-[data-theme="win98"] .hexaclear-pmenu-context {
-  color: var(--w98-text-on-navy);
-  letter-spacing: 0.02em;
-  font-size: 12px;
-  text-transform: none;
-  opacity: 0.85;
-}
-
 /* Hero: the dominant default button. Raised 3D bevel; :active flips
    it to the pressed inset, exactly like every OK button since 1995. */
 [data-theme="win98"] .hexaclear-pmenu-hero {
@@ -3687,13 +3679,51 @@
   color: var(--w98-text);
 }
 
+/* Back is the page's action: a bold raised system button that
+   presses to inset, same dialect as the hero. */
 [data-theme="win98"] .hexaclear-pmenu-back {
-  font-size: 12px;
-  font-weight: 400;
+  border-radius: 0;
+  background: var(--w98-surface);
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  box-shadow: 1px 1px 0 var(--w98-deep-shadow);
+  outline: 1px solid var(--w98-deep-shadow);
+  outline-offset: -5px;
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--w98-titlebar);
-  text-decoration: underline;
+  color: var(--w98-text);
+  text-decoration: none;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-back:active {
+  transform: none;
+  border-color: var(--w98-deep-shadow) var(--w98-highlight)
+    var(--w98-highlight) var(--w98-deep-shadow);
+  box-shadow: none;
+}
+
+/* Settings groups read as classic group boxes. */
+[data-theme="win98"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group {
+  border-radius: 0;
+  background: var(--w98-surface);
+  border: 2px groove var(--w98-highlight);
+  box-shadow: none;
+}
+
+[data-theme="win98"]
+  .hexaclear-pmenu-settings-body
+  .hexaclear-menu-settings-group-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--w98-text);
 }
 
 [data-theme="win98"] .hexaclear-pmenu-settings-body {
