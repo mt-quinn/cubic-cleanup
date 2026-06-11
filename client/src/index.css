@@ -5,6 +5,15 @@
 @import url('./theme-mondrian.css');
 
 :root {
+  /* Living Board design language: warm = alive, ash-grey = dead,
+     ember-red = alarm. Themes restate these semantics in their own
+     materials by overriding the variables on :root[data-theme='...'].
+     See Documentation/Deal-In and Living Board Plan.md. */
+  --hexaclear-dead-stroke: #6a6770;
+  --hexaclear-dead-fill: #38363b;
+  --hexaclear-alarm-stroke: #ff5a3a;
+  --hexaclear-alarm-fill: #6b1c0a;
+
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont,
     'SF Pro Text', system-ui, sans-serif;
   line-height: 1.4;
@@ -4675,21 +4684,34 @@ body {
 }
 
 /* LIVING BOARD — phase A (liveness). An empty cell that no current
-   hand piece (or held piece) can reach wears `cell-dead` on its <g>
-   and goes dark + still; live cells keep full brightness and a slow
-   shared breath. All default treatments are opacity-only so they
-   translate across every theme (and avoid CSS filters, which iOS
-   WebKit ignores on inner SVG elements). Theme-specific dead/alarm
-   materials come later via these same hooks. See Documentation/Deal-In
-   and Living Board Plan.md. */
-.hexaclear-cell .hexaclear-hex.empty,
-.hexaclear-cell .hexaclear-slot-fill {
-  transition: opacity 400ms ease;
+   hand piece (or held piece) can reach wears `cell-dead` on its <g>.
+   Design language: warm = alive, ash-grey = dead, ember-red = alarm.
+   The signal is carried by PAINT (stroke + interior fill), not
+   opacity — empty cells are near-black pockets on dark panels in most
+   themes, so opacity changes vanish. SVG paints are animatable,
+   iOS-safe (no CSS filters on inner SVG elements), and themeable via
+   the :root variables. */
+.hexaclear-cell .hexaclear-hex.empty {
+  transition: stroke 400ms ease, opacity 400ms ease;
 }
 
-.hexaclear-cell.cell-dead .hexaclear-hex.empty,
+.hexaclear-cell .hexaclear-slot-fill {
+  transition: fill 400ms ease, opacity 400ms ease;
+}
+
+/* Dead cells: the warm pocket cools to ash. Grey stroke, grey-charcoal
+   interior, stilled (no breath via the :not() in the breath rule). The
+   mild opacity dip is insurance for themes whose empty cells hide the
+   stroke or dimple (glass panes) so SOME change always reads until
+   each theme gets its own dead material. */
+.hexaclear-cell.cell-dead .hexaclear-hex.empty {
+  stroke: var(--hexaclear-dead-stroke);
+  opacity: 0.8;
+}
+
 .hexaclear-cell.cell-dead .hexaclear-slot-fill {
-  opacity: 0.42;
+  fill: var(--hexaclear-dead-fill);
+  opacity: 0.8;
 }
 
 /* The breath lives on the dimple (slot-fill) rather than the hex
@@ -4709,7 +4731,7 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0.94;
+    opacity: 0.88;
   }
 }
 
@@ -4728,35 +4750,52 @@ body {
    (information-free by design), and hand differentiation suspends so
    the sag can't leak where the last fit lives. All pulses start when
    `is-critical` lands on the viewport, so they're synchronized — the
-   one-clock simultaneity is what reads as systemwide alarm. */
-.cubic-viewport.is-critical .hexaclear-hex.empty,
+   one-clock simultaneity is what reads as systemwide alarm.
+
+   The keyframes only define the 50% stop on purpose: the browser
+   interpolates from each element's OWN base paint, so every theme
+   pulses from its native empty-cell color toward the shared ember
+   without us hardcoding rest states. */
+.cubic-viewport.is-critical .hexaclear-hex.empty {
+  animation: hexaclear-alarm-stroke-pulse 900ms ease-in-out infinite;
+}
+
 .cubic-viewport.is-critical .hexaclear-cell .hexaclear-slot-fill {
-  animation: hexaclear-alarm-pulse 900ms ease-in-out infinite;
+  animation: hexaclear-alarm-fill-pulse 900ms ease-in-out infinite;
 }
 
-@keyframes hexaclear-alarm-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
+@keyframes hexaclear-alarm-stroke-pulse {
   50% {
-    opacity: 0.5;
+    stroke: var(--hexaclear-alarm-stroke);
   }
 }
 
-/* Hand and score readout ride the same clock, gentler. */
-.cubic-viewport.is-critical .hexaclear-piece-button,
+@keyframes hexaclear-alarm-fill-pulse {
+  50% {
+    fill: var(--hexaclear-alarm-fill);
+  }
+}
+
+/* Hand and score readout ride the same clock: the pieces catch a soft
+   ember glow (HTML context, so drop-shadow is safe) and the score
+   value flushes toward the alarm color at the pulse peak. */
+.cubic-viewport.is-critical .hexaclear-piece-button .hexaclear-piece-svg {
+  animation: hexaclear-alarm-glow 900ms ease-in-out infinite;
+}
+
+@keyframes hexaclear-alarm-glow {
+  50% {
+    filter: drop-shadow(0 0 7px rgba(255, 90, 58, 0.6));
+  }
+}
+
 .cubic-viewport.is-critical .hexaclear-live-stat .value {
-  animation: hexaclear-alarm-soft 900ms ease-in-out infinite;
+  animation: hexaclear-alarm-text 900ms ease-in-out infinite;
 }
 
-@keyframes hexaclear-alarm-soft {
-  0%,
-  100% {
-    opacity: 1;
-  }
+@keyframes hexaclear-alarm-text {
   50% {
-    opacity: 0.78;
+    color: var(--hexaclear-alarm-stroke);
   }
 }
 
@@ -4788,15 +4827,21 @@ body {
   animation: none;
 }
 
-.cubic-viewport.reduced-motion.is-critical .hexaclear-hex.empty,
+.cubic-viewport.reduced-motion.is-critical .hexaclear-hex.empty {
+  animation: none;
+  stroke: var(--hexaclear-alarm-stroke);
+}
+
 .cubic-viewport.reduced-motion.is-critical
   .hexaclear-cell
   .hexaclear-slot-fill {
   animation: none;
-  opacity: 0.7;
+  fill: var(--hexaclear-alarm-fill);
 }
 
-.cubic-viewport.reduced-motion.is-critical .hexaclear-piece-button,
+.cubic-viewport.reduced-motion.is-critical
+  .hexaclear-piece-button
+  .hexaclear-piece-svg,
 .cubic-viewport.reduced-motion.is-critical .hexaclear-live-stat .value {
   animation: none;
 }

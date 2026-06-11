@@ -13,8 +13,16 @@
 - [ ] Deal-in: per-theme polish pass (win98 LCD readout beat, audius/glass/mondrian wordmarks)
 - [x] Living Board: liveness computation + two-phase state machine (`computeBoardLiveness`
       in gameLogic.ts; critical enter/exit effect in App.tsx near `gameOverWindingDown`)
-- [x] Living Board: default visual treatments (opacity-only, theme-safe) + critical audio
-      (55Hz thump + master lowpass in audio.ts via `setCriticalAudio`)
+- [x] Living Board: default visual treatments + critical audio (55Hz thump + master
+      lowpass in audio.ts via `setCriticalAudio`)
+- [x] Living Board: paint-based design language (Quinn review round 1: opacity-only
+      treatments were invisible — empty cells are near-black pockets on dark panels).
+      Language: **warm = alive, ash-grey = dead, ember-red = alarm**, carried by
+      stroke + interior fill. `:root` vars in index.css: `--hexaclear-dead-stroke/fill`,
+      `--hexaclear-alarm-stroke/fill` — themes override on `:root[data-theme=...]`.
+      Alarm keyframes define only the 50% stop so every theme pulses from its own base
+      paint toward the shared ember. Known gap: glass hides stroke/dimple, so dead
+      cells there only get the 0.8-opacity fallback until its theme pass.
 - [ ] Living Board: per-theme passes (ember/win98-LCD-blink/candle-gutter/mondrian-red/audius-clamp)
 - [ ] Living Board: death gutter-out (live cells extinguish one-by-one before wind-down) —
       deferred; current behavior is the pre-existing desaturate wind-down
