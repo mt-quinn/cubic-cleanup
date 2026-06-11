@@ -1764,3 +1764,22 @@
   -webkit-text-fill-color: transparent;
   text-shadow: none;
 }
+
+/* Announcer text pops: same gilt inscription voice as the wordmark.
+   Streaks warm toward ruby-lit gold; board clears blaze. */
+[data-theme="glass"] .hexaclear-announcer-pop {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: linear-gradient(180deg, #fff2cf 0%, #ecc868 42%, #c8941f 72%, #7c540d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+[data-theme="glass"] .hexaclear-announcer-pop.kind-streak {
+  background: linear-gradient(180deg, #ffd9b0 0%, #f0a050 45%, #c05a18 78%, #6b2c08 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}

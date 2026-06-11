@@ -3486,3 +3486,25 @@
     var(--w98-deep-shadow) var(--w98-highlight);
   text-shadow: none;
 }
+
+/* Announcer text pops: system-font message chips on the surface grey,
+   raised bevel — like a tiny dialog shouting at you. Streaks and
+   board clears get the LCD red. */
+[data-theme="win98"] .hexaclear-announcer-pop {
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--w98-text);
+  background: var(--w98-surface);
+  width: fit-content;
+  margin: 0 auto;
+  padding: 0.06em 0.45em;
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  text-shadow: none;
+}
+[data-theme="win98"] .hexaclear-announcer-pop.kind-streak,
+[data-theme="win98"] .hexaclear-announcer-pop.kind-boardclear {
+  color: #d40000;
+}

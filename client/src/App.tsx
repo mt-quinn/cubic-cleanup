@@ -3457,6 +3457,42 @@ function App() {
   const [announceLanded, setAnnounceLanded] = useState(false)
   const announceTextRef = useRef<HTMLSpanElement | null>(null)
 
+  // Announcer text pop: the visual companion to the voice lines — a
+  // celebratory call ("TRIPLE!", "GODLIKE!", "BOARD CLEAR!") that
+  // punches in above the board on the same beat as the audio. Token
+  // keys the element so back-to-back cues retrigger cleanly; `scale`
+  // sizes the type to the magnitude of the moment; `kind` lets CSS
+  // (and each theme) color combos / streaks / board clears
+  // differently. Skipped wholesale under reduced motion (voice still
+  // plays, matching the design doc).
+  const [announcerPop, setAnnouncerPop] = useState<{
+    token: number
+    text: string
+    kind: 'combo' | 'streak' | 'boardclear'
+    scale: number
+  } | null>(null)
+  const announcerPopTimerRef = useRef<number | null>(null)
+  const showAnnouncerPop = useCallback(
+    (text: string, kind: 'combo' | 'streak' | 'boardclear', scale: number) => {
+      if (reducedMotionRef.current) return
+      if (announcerPopTimerRef.current !== null) {
+        window.clearTimeout(announcerPopTimerRef.current)
+      }
+      setAnnouncerPop((prev) => ({
+        token: (prev?.token ?? 0) + 1,
+        text,
+        kind,
+        scale,
+      }))
+      // Life: 140ms sync delay + ~620ms animation + slack.
+      announcerPopTimerRef.current = window.setTimeout(() => {
+        announcerPopTimerRef.current = null
+        setAnnouncerPop(null)
+      }, 1000)
+    },
+    [],
+  )
+
   const finishDealIn = useCallback(() => {
     for (const t of dealInTimersRef.current) window.clearTimeout(t)
     dealInTimersRef.current = []
@@ -6860,31 +6896,51 @@ function App() {
             playBreakAfterClear(80)
           }
 
-          // Announcer: ONE primary cue per placement, reserved for
-          // impact moments. Priority per the design doc: board clear
-          // outranks streak milestones, which outrank the generic
-          // multi-clear call. Streak lines ride the streak hitting
-          // exactly 3/4/5/6 (streaks step by 1, so each fires once per
-          // climb); past 6 the announcer goes quiet and lets the
-          // escalating clear-sound matrix carry it. Suppressed during
+          // Announcer: ONE primary cue per placement (voice + matching
+          // text pop), reserved for impact moments. Priority per the
+          // design doc: board clear outranks streak milestones, which
+          // outrank the per-count combo call. Streak lines ride the
+          // streak hitting exactly 3/4/5/6 (streaks step by 1, so each
+          // fires once per climb). Combo lines cover 2-6 patterns in
+          // one placement; 7+ clamps to SEXTUPLE. Suppressed during
           // the tutorial — the first clear of a guided board is not a
           // hype moment.
           if (!inTutorial) {
             const streakAfterClear = current.streak + 1
-            const streakCue = (
+            const streak = (
               {
-                3: 'announceStreak3',
-                4: 'announceStreak4',
-                5: 'announceStreak5',
-                6: 'announceStreak6',
+                3: { cue: 'announceStreak3', text: 'Good Streak!' },
+                4: { cue: 'announceStreak4', text: 'Great Streak!' },
+                5: { cue: 'announceStreak5', text: 'Unbelievable!' },
+                6: { cue: 'announceStreak6', text: 'Godlike!' },
               } as const
             )[streakAfterClear]
+            const combo = (
+              {
+                2: { cue: 'announceCombo2', text: 'Double!' },
+                3: { cue: 'announceCombo3', text: 'Triple!' },
+                4: { cue: 'announceCombo4', text: 'Quad!' },
+                5: { cue: 'announceCombo5', text: 'Quintuple!' },
+                6: { cue: 'announceCombo6', text: 'Sextuple!' },
+              } as const
+            )[Math.min(clearCount, 6)]
             if (result.boardCleared) {
               playAnnouncerCue('announceBoardClear')
-            } else if (streakCue) {
-              playAnnouncerCue(streakCue)
-            } else if (clearCount >= 2) {
-              playAnnouncerCue('announceMultiClear')
+              showAnnouncerPop('Board Clear!', 'boardclear', 1.45)
+            } else if (streak) {
+              playAnnouncerCue(streak.cue)
+              showAnnouncerPop(
+                streak.text,
+                'streak',
+                1.05 + (streakAfterClear - 3) * 0.1,
+              )
+            } else if (clearCount >= 2 && combo) {
+              playAnnouncerCue(combo.cue)
+              showAnnouncerPop(
+                combo.text,
+                'combo',
+                1 + (Math.min(clearCount, 6) - 2) * 0.09,
+              )
             }
           }
         }
@@ -12768,6 +12824,20 @@ function App() {
               className="hexaclear-board-clear-flash"
               aria-hidden="true"
             />
+          )}
+          {announcerPop && (
+            <div
+              key={announcerPop.token}
+              className={`hexaclear-announcer-pop kind-${announcerPop.kind}`}
+              style={
+                {
+                  '--announcer-pop-scale': announcerPop.scale,
+                } as React.CSSProperties
+              }
+              aria-hidden="true"
+            >
+              {announcerPop.text}
+            </div>
           )}
           {tutorialStage > 0 && (
             <div

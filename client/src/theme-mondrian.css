@@ -1395,3 +1395,17 @@
   color: var(--md-line-hi);
   text-shadow: none;
 }
+
+/* Announcer text pops: heavy grotesque, flat De Stijl inks — black
+   for combos, primary red for streaks and board clears. No glow. */
+[data-theme="mondrian"] .hexaclear-announcer-pop {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
+[data-theme="mondrian"] .hexaclear-announcer-pop.kind-streak,
+[data-theme="mondrian"] .hexaclear-announcer-pop.kind-boardclear {
+  color: var(--md-red);
+}

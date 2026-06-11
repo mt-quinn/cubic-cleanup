@@ -4736,6 +4736,78 @@ body {
   visibility: hidden;
 }
 
+/* ANNOUNCER TEXT POPS: the visual companion to the voice lines —
+   "TRIPLE!", "GODLIKE!", "BOARD CLEAR!" punching in above the board
+   on the same beat as the audio (140ms delay matches the voice's
+   ~160ms post-clear scheduling). Sized to the moment via
+   --announcer-pop-scale; colored by kind: golden for combos, ember
+   for streaks, bright gold for board clears. Lives inside the board
+   wrapper so it rides the screenshake. Reduced motion never mounts
+   these (the voice still plays). Themes redress the type to match
+   their own wordmark voice. */
+.hexaclear-announcer-pop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12%;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 30;
+  font-family: 'Monoton', system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: calc(clamp(1.5rem, 6.5vw, 2.9rem) * var(--announcer-pop-scale, 1));
+  color: #ffd98a;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(255, 170, 60, 0.5),
+    0 6px 22px rgba(0, 0, 0, 0.55);
+  animation: hexaclear-announcer-pop 640ms cubic-bezier(0.2, 1, 0.35, 1)
+    140ms both;
+}
+
+.hexaclear-announcer-pop.kind-streak {
+  color: #ff9d4d;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(255, 110, 40, 0.55),
+    0 6px 22px rgba(0, 0, 0, 0.55);
+}
+
+.hexaclear-announcer-pop.kind-boardclear {
+  color: #ffe27a;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 0 26px rgba(255, 205, 90, 0.7),
+    0 6px 26px rgba(0, 0, 0, 0.55);
+}
+
+@keyframes hexaclear-announcer-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.04);
+  }
+  24% {
+    transform: scale(1);
+  }
+  78% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06) translateY(-8px);
+  }
+}
+
 /* Wordmark shimmer as the cascade resolves (~2.4s), then the score
    readout pops awake (~3s). Generic selectors cover the wood theme;
    themed readouts (Win98 LCD, Audius) get their own pass later. */

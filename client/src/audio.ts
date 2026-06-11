@@ -71,10 +71,14 @@ type SoundKey =
   | AnnouncerCueKey
 
 // Announcer cues fired by placement results (see App.tsx for the
-// priority rules: board clear > streak milestone > multi-clear).
+// priority rules: board clear > streak milestone > combo count).
 export type AnnouncerCueKey =
   | 'announceBoardClear'
-  | 'announceMultiClear'
+  | 'announceCombo2'
+  | 'announceCombo3'
+  | 'announceCombo4'
+  | 'announceCombo5'
+  | 'announceCombo6'
   | 'announceStreak3'
   | 'announceStreak4'
   | 'announceStreak5'
@@ -115,10 +119,15 @@ const SOURCES: Record<SoundKey, string> = {
   // Announcer: the run-start "CUBEKILL" call, fired on the deal-in
   // title slam's impact frame.
   cubekill: '/cubekill.wav',
-  // Announcer: placement cues. Streak lines ride streaks 3/4/5/6
+  // Announcer: placement cues. Combo lines ride 2-6 patterns cleared
+  // in one placement; streak lines ride streaks 3/4/5/6
   // (good → great → unbelievable → godlike).
   announceBoardClear: '/boardclear.wav',
-  announceMultiClear: '/MultiClear.wav',
+  announceCombo2: '/double.wav',
+  announceCombo3: '/triple.wav',
+  announceCombo4: '/quad.wav',
+  announceCombo5: '/quintuple.wav',
+  announceCombo6: '/sextuple.wav',
   announceStreak3: '/goodstreak.wav',
   announceStreak4: '/greatstreak.wav',
   announceStreak5: '/unbelievablestreak.wav',
@@ -138,7 +147,11 @@ const VOLUMES: Record<SoundKey, number> = {
   // peaks so the musical layer keeps the crown overall.
   cubekill: 0.9,
   announceBoardClear: 0.88,
-  announceMultiClear: 0.82,
+  announceCombo2: 0.8,
+  announceCombo3: 0.82,
+  announceCombo4: 0.84,
+  announceCombo5: 0.86,
+  announceCombo6: 0.88,
   announceStreak3: 0.82,
   announceStreak4: 0.84,
   announceStreak5: 0.86,

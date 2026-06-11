@@ -38,7 +38,15 @@
       one primary cue per placement; suppressed in tutorial and on game-ending placements;
       single-player only for now): boardclear.wav = board clear (outranks all);
       goodstreak/greatstreak/unbelievablestreak/godlikestreak.wav = streak exactly
-      3/4/5/6; MultiClear.wav = 2+ patterns in one placement (lowest priority)
+      3/4/5/6; double/triple/quad/quintuple/sextuple.wav = 2/3/4/5/6 patterns in one
+      placement (lowest priority; 7+ clamps to sextuple). MultiClear.wav retired —
+      replaced by the per-count combo lines.
+- [x] Announcer text pops (`showAnnouncerPop` + `.hexaclear-announcer-pop`): celebratory
+      call text punches in above the board on the voice's beat, sized to magnitude,
+      colored by kind (combo gold / streak ember / board-clear blaze), rides the
+      screenshake, never mounts under reduced motion. Theme dress: glass gilt Cinzel,
+      mondrian flat Archivo Black (red streaks), win98 bevel dialog chip (LCD-red
+      streaks); wood/audius use the Monoton default.
 - [ ] Announcer, wishlist (recorded lines welcome): "CLOSE CALL!" (critical-exit hook in
       App.tsx, softer/relief tone), "JACKPOT!" (2+ rubies in one placement, layered
       +200ms under the primary per the design doc), per-count combo upgrades to replace
