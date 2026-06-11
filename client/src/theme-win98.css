@@ -3508,3 +3508,145 @@
 [data-theme="win98"] .hexaclear-announcer-pop.kind-boardclear {
   color: #d40000;
 }
+
+/* ====================================================================
+   PAUSE MENU — Win98 pass. The editorial bottom sheet becomes a
+   system object: a raised grey window with a navy titlebar masthead,
+   menu rows as Start-menu items (full-row navy hover, system font,
+   no display type), etched separators, and the settings page as a
+   classic property sheet. Same structure, native dialect.
+   ==================================================================== */
+[data-theme="win98"] .hexaclear-pmenu {
+  background: var(--w98-surface);
+  border-radius: 0;
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  box-shadow: 1px 1px 0 var(--w98-deep-shadow);
+  padding: 3px 3px 8px;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-masthead {
+  background: var(--w98-titlebar);
+  border-bottom: none;
+  padding: 5px 8px;
+  margin-bottom: 4px;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-kicker {
+  color: var(--w98-text-on-navy);
+  letter-spacing: 0.06em;
+  font-size: 13px;
+  text-transform: none;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-kicker::after {
+  content: ' — CUBEKILL.EXE';
+}
+
+[data-theme="win98"] .hexaclear-pmenu-context {
+  color: var(--w98-text-on-navy);
+  letter-spacing: 0.02em;
+  font-size: 12px;
+  text-transform: none;
+  opacity: 0.85;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-row {
+  border-bottom: 1px solid var(--w98-shadow);
+  box-shadow: 0 1px 0 var(--w98-highlight);
+  padding: 9px 10px;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-row-title,
+[data-theme="win98"] .hexaclear-pmenu-row.is-hero .hexaclear-pmenu-row-title {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  background: none;
+  color: var(--w98-text);
+  -webkit-text-fill-color: var(--w98-text);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-row.is-hero .hexaclear-pmenu-row-title {
+  font-size: 18px;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-row-note {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--w98-surface-darker);
+}
+
+/* Start-menu hover: the whole row floods navy, text inverts, and the
+   title does NOT slide — Win98 doesn't do whimsy. */
+[data-theme="win98"] .hexaclear-pmenu-row:hover,
+[data-theme="win98"] .hexaclear-pmenu-row:focus-visible {
+  background: var(--w98-selected);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-row:hover .hexaclear-pmenu-row-title,
+[data-theme="win98"]
+  .hexaclear-pmenu-row:focus-visible
+  .hexaclear-pmenu-row-title,
+[data-theme="win98"]
+  .hexaclear-pmenu-row.is-hero:hover
+  .hexaclear-pmenu-row-title {
+  color: var(--w98-selected-text);
+  -webkit-text-fill-color: var(--w98-selected-text);
+  background: none;
+  transform: none;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-row:hover .hexaclear-pmenu-row-note {
+  color: var(--w98-selected-text);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-runrow {
+  padding: 8px 10px 2px;
+  gap: 14px;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-runlink {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--w98-titlebar);
+  text-decoration: underline;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-runlink.is-warn,
+[data-theme="win98"] .hexaclear-pmenu-runlink.is-danger {
+  color: #d40000;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-settings-head {
+  border-bottom: 1px solid var(--w98-shadow);
+  box-shadow: 0 1px 0 var(--w98-highlight);
+  padding: 8px 10px 6px;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-settings-title {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: none;
+  color: var(--w98-text);
+}
+
+[data-theme="win98"] .hexaclear-pmenu-back {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--w98-titlebar);
+  text-decoration: underline;
+}
+
+[data-theme="win98"] .hexaclear-pmenu-settings-body {
+  padding: 0 8px;
+}

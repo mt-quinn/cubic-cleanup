@@ -4736,6 +4736,259 @@ body {
   visibility: hidden;
 }
 
+/* ====================================================================
+   PAUSE MENU — editorial monolith. A bottom sheet rising over the
+   dimmed board: tiny tracked-out masthead, then an index of giant
+   display-type rows (Archivo Black — already loaded for Mondrian),
+   each annotated with one line of live data, separated by hairline
+   rules. Rows deal in with the hand's stagger vocabulary. Settings is
+   page two of the same sheet. Themes redress via the
+   .hexaclear-pmenu-* hooks (win98 pass lives in theme-win98.css).
+   ==================================================================== */
+.hexaclear-overlay.hexaclear-pmenu-overlay {
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.hexaclear-pmenu {
+  width: min(450px, 100%);
+  max-height: 92%;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #321a0e 0%, #220e06 100%);
+  border-radius: 20px 20px 0 0;
+  padding: 1.05rem 1.4rem 1.2rem;
+  box-shadow:
+    0 -16px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 206, 142, 0.16);
+  animation: hexaclear-pmenu-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes hexaclear-pmenu-in {
+  0% {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.hexaclear-pmenu-masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 205, 150, 0.22);
+}
+
+.hexaclear-pmenu-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(255, 220, 170, 0.85);
+}
+
+.hexaclear-pmenu-context {
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 214, 165, 0.45);
+}
+
+.hexaclear-pmenu-index {
+  display: flex;
+  flex-direction: column;
+}
+
+.hexaclear-pmenu-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 205, 150, 0.14);
+  padding: 0.82rem 0.1rem 0.74rem;
+  cursor: pointer;
+  text-align: left;
+  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
+    calc(40ms + var(--pmenu-i, 0) * 45ms) both;
+}
+
+@keyframes hexaclear-pmenu-row-in {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hexaclear-pmenu-row-title {
+  font-family: 'Archivo Black', 'Archivo', Arial, sans-serif;
+  font-size: 1.55rem;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.015em;
+  color: #ecc88f;
+  transition: transform 140ms ease, color 140ms ease;
+}
+
+.hexaclear-pmenu-row:hover .hexaclear-pmenu-row-title,
+.hexaclear-pmenu-row:focus-visible .hexaclear-pmenu-row-title {
+  color: #ffe8b0;
+  transform: translateX(6px);
+}
+
+.hexaclear-pmenu-row:active .hexaclear-pmenu-row-title {
+  transform: translateX(6px) scale(0.985);
+}
+
+.hexaclear-pmenu-row.is-hero .hexaclear-pmenu-row-title {
+  font-size: 2.35rem;
+  background: linear-gradient(180deg, #ffedb8 12%, #eaa94f 88%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.hexaclear-pmenu-row.is-hero:hover .hexaclear-pmenu-row-title,
+.hexaclear-pmenu-row.is-hero:focus-visible .hexaclear-pmenu-row-title {
+  background: linear-gradient(180deg, #fff5d2 12%, #f4b964 88%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.hexaclear-pmenu-row-note {
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 214, 165, 0.42);
+  transition: color 140ms ease;
+}
+
+.hexaclear-pmenu-row:hover .hexaclear-pmenu-row-note {
+  color: rgba(255, 224, 180, 0.7);
+}
+
+/* Run-scoped quiet links: small caps strip under the index. */
+.hexaclear-pmenu-runrow {
+  display: flex;
+  gap: 1.6rem;
+  padding: 0.95rem 0.1rem 0.1rem;
+  animation: hexaclear-pmenu-row-in 300ms cubic-bezier(0.2, 0.9, 0.3, 1)
+    calc(40ms + var(--pmenu-i, 0) * 45ms) both;
+}
+
+.hexaclear-pmenu-runlink {
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 214, 165, 0.55);
+  transition: color 140ms ease;
+}
+
+.hexaclear-pmenu-runlink:hover {
+  color: rgba(255, 224, 180, 0.9);
+}
+
+.hexaclear-pmenu-runlink.is-warn {
+  color: rgba(240, 160, 80, 0.8);
+}
+
+.hexaclear-pmenu-runlink.is-warn:hover {
+  color: #f0a050;
+}
+
+.hexaclear-pmenu-runlink.is-danger {
+  color: rgba(255, 122, 92, 0.8);
+}
+
+.hexaclear-pmenu-runlink.is-danger:hover {
+  color: #ff7a5c;
+}
+
+/* Page two: Settings. Same sheet, new page — slides in from the
+   right edge of the sheet. Group internals reuse the existing
+   hexaclear-menu-settings-* control styles. */
+.hexaclear-pmenu-settings {
+  animation: hexaclear-pmenu-page-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1)
+    both;
+}
+
+@keyframes hexaclear-pmenu-page-in {
+  0% {
+    opacity: 0;
+    transform: translateX(26px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.hexaclear-pmenu-settings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-direction: row-reverse;
+  padding: 0.82rem 0.1rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 205, 150, 0.14);
+  margin-bottom: 0.7rem;
+}
+
+.hexaclear-pmenu-settings-title {
+  font-family: 'Archivo Black', 'Archivo', Arial, sans-serif;
+  font-size: 1.55rem;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #ecc88f;
+}
+
+.hexaclear-pmenu-back {
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 214, 165, 0.55);
+  transition: color 140ms ease;
+}
+
+.hexaclear-pmenu-back:hover {
+  color: rgba(255, 224, 180, 0.9);
+}
+
+.hexaclear-pmenu-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* Reduced motion: sheet and rows appear in place. */
+.cubic-viewport.reduced-motion .hexaclear-pmenu,
+.cubic-viewport.reduced-motion .hexaclear-pmenu-row,
+.cubic-viewport.reduced-motion .hexaclear-pmenu-runrow,
+.cubic-viewport.reduced-motion .hexaclear-pmenu-settings {
+  animation: none;
+}
+
 /* GAME-OVER COLLAPSE: when a run ends, every filled hex pops loose in
    a wave radiating from the killing piece and tumbles down the board
    into a debris pile along the bottom rim. The falling objects are
