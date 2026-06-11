@@ -1435,13 +1435,18 @@ const DEAL_IN_HAND_BASE_DELAY_MS = 1600
 const DEAL_IN_TOTAL_MS = 3600
 const DEAL_IN_REDUCED_MOTION_MS = 320
 
-// Living Board critical-state hysteresis: the alarm raises when the
-// hand (+hold) has this few total valid placements left, and won't
-// stand down until the player claws back real breathing room (or any
-// clear lands, which cuts it instantly). The gap prevents strobing
-// when fits hover around the line.
-const CRITICAL_ENTER_MAX_PLACEMENTS = 5
-const CRITICAL_EXIT_MIN_PLACEMENTS = 8
+// Living Board critical-state hysteresis, adaptive to hand size: raw
+// total placements scale with how many pieces you're holding, so a
+// fixed threshold cried wolf with one piece left (one piece × five
+// comfortable fits = "5 total" even on a healthy board). The alarm
+// instead raises when the player averages <= ENTER_PER_PIECE fits per
+// available piece (hand + hold), and stands down at that level plus a
+// fixed gap so it never strobes around the line.
+//   3 pieces: enter <= 6, exit >= 9
+//   2 pieces: enter <= 4, exit >= 7
+//   1 piece:  enter <= 2, exit >= 5
+const CRITICAL_ENTER_PER_PIECE = 2
+const CRITICAL_EXIT_GAP = 3
 
 // Deal-in announce: the CUBEKILL wordmark slams in over the cascade
 // (CSS: .hexaclear-dealin-announce — in at 160ms, impact ~340ms, gone
@@ -3802,6 +3807,14 @@ function App() {
     !gameOverWindingDown
   const [criticalActive, setCriticalActive] = useState(false)
   const criticalOnsetTimerRef = useRef<number | null>(null)
+  // Adaptive thresholds: scarcity is judged per available piece
+  // (hand + hold), not in raw totals — see the constants' comment.
+  const criticalCandidates = Math.max(
+    1,
+    game.hand.length + (game.hold ? 1 : 0),
+  )
+  const criticalEnterMax = CRITICAL_ENTER_PER_PIECE * criticalCandidates
+  const criticalExitMin = criticalEnterMax + CRITICAL_EXIT_GAP
   // The liveness map must vanish on the SAME render as the placement
   // that drops the board into critical territory — keying it off
   // criticalActive alone leaks the fresh valid-placement outlines for
@@ -3812,7 +3825,7 @@ function App() {
   const criticalImminent =
     criticalActive ||
     (liveness.totalPlacements > 0 &&
-      liveness.totalPlacements <= CRITICAL_ENTER_MAX_PLACEMENTS)
+      liveness.totalPlacements <= criticalEnterMax)
 
   useEffect(() => {
     const clearOnsetTimer = () => {
@@ -3836,7 +3849,7 @@ function App() {
       // pulse never restarts mid-crisis (per review: exit-and-re-enter
       // flicker felt awkward). This exit is the "CLOSE CALL!"
       // announcer hook.
-      if (liveness.totalPlacements >= CRITICAL_EXIT_MIN_PLACEMENTS) {
+      if (liveness.totalPlacements >= criticalExitMin) {
         clearOnsetTimer()
         setCriticalActive(false)
       }
@@ -3848,7 +3861,7 @@ function App() {
     // hitstop) and snap every empty cell to the alarm simultaneously.
     if (
       liveness.totalPlacements > 0 &&
-      liveness.totalPlacements <= CRITICAL_ENTER_MAX_PLACEMENTS &&
+      liveness.totalPlacements <= criticalEnterMax &&
       clearingCells.length === 0 &&
       criticalOnsetTimerRef.current === null
     ) {
@@ -3860,7 +3873,14 @@ function App() {
     }
 
     return clearOnsetTimer
-  }, [livenessEnabled, criticalActive, liveness, clearingCells])
+  }, [
+    livenessEnabled,
+    criticalActive,
+    liveness,
+    clearingCells,
+    criticalEnterMax,
+    criticalExitMin,
+  ])
 
   // Critical audio: 55Hz heartbeat thump + master lowpass while the
   // alarm is up. audio.ts owns the clock; this just flips the switch

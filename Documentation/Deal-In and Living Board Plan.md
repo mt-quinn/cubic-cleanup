@@ -164,7 +164,7 @@ counts** for the current hand (reuse `hasAnyValidMove` machinery in
 
 ### Phase B — Critical state ("under threat")
 
-- **Enter at ≤5 total valid placements; exit ONLY at ≥8** (hysteresis, no strobing; the
+- **Adaptive thresholds (per Quinn): scarcity is judged per available piece (hand + hold), not raw totals** — enter at ≤2 fits per piece (3 pieces: ≤6; 2: ≤4; 1: ≤2), exit at enter+3 (hysteresis, no strobing; the
   alarm holds continuously across placements, clears, and new hands until escape is real).
 - Onset beat: after the triggering placement resolves, 120ms full freeze, then ALL
   empty cells snap to alarm state **simultaneously**; a global 900ms pulse clock starts
