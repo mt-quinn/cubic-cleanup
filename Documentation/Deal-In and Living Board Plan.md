@@ -119,9 +119,11 @@ counts** for the current hand (reuse `hasAnyValidMove` machinery in
 - Onset beat: after the triggering placement resolves, 120ms full freeze, then ALL
   empty cells snap to alarm state **simultaneously**; a global 900ms pulse clock starts
   (cells + hand + score readout in sync).
-- The alarm is **uniform = information-free**: no valid/invalid distinction per cell,
-  and **dead-piece sag suspends** (hand differentiation would leak where the last fit
-  lives). Player memory of the pre-critical map is earned knowledge.
+- The BOARD alarm is **uniform = information-free**: no valid/invalid distinction per
+  cell. The HAND keeps its differentiation — unplayable pieces stay grey/sagged even
+  in critical, and only playable pieces catch the ember glow (Quinn call 2026-06-11,
+  reversing the earlier "suspend the sag" spec: piece-level info is desirable at the
+  climax; only the cell map is revoked).
 - Audio: synthesized 55Hz sine thump per pulse (Web Audio oscillator, ~−18dB under
   master, no asset files) + master lowpass easing toward ~2.4kHz. Both cut instantly
   on exit. Reduced motion: pulses become static state change; thump stays.

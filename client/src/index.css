@@ -4779,7 +4779,9 @@ body {
 /* Hand and score readout ride the same clock: the pieces catch a soft
    ember glow (HTML context, so drop-shadow is safe) and the score
    value flushes toward the alarm color at the pulse peak. */
-.cubic-viewport.is-critical .hexaclear-piece-button .hexaclear-piece-svg {
+.cubic-viewport.is-critical
+  .hexaclear-piece-button:not(.unplayable)
+  .hexaclear-piece-svg {
   animation: hexaclear-alarm-glow 900ms ease-in-out infinite;
 }
 
@@ -4799,20 +4801,11 @@ body {
   }
 }
 
-/* Suspend dead-piece differentiation while critical: uniform threat,
-   no answer key. (Players keep whatever they learned before the siren
-   started — that's memory, which is skill.) */
-.cubic-viewport.is-critical .hexaclear-piece-button.unplayable {
-  --hexaclear-piece-target-opacity: 1;
-  opacity: 1;
-  transform: none;
-}
-
-.cubic-viewport.is-critical
-  .hexaclear-piece-button.unplayable
-  .hexaclear-piece-svg {
-  filter: none;
-}
+/* Unplayable pieces KEEP their grey/sag during critical (Quinn call,
+   2026-06-11, reversing the earlier "uniform threat" spec): knowing
+   which pieces are dead is desirable information even at the climax.
+   They're excluded from the ember glow below so they stay inert ash
+   while the still-playable pieces catch the alarm light. */
 
 /* Reduced motion: no breath, no pulsing — liveness keeps its static
    brightness distinction (it's information), and critical becomes a
