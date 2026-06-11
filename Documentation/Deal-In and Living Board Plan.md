@@ -32,8 +32,10 @@
 - [ ] Living Board: death gutter-out (live cells extinguish one-by-one before wind-down) —
       deferred; current behavior is the pre-existing desaturate wind-down
 - [ ] Living Board: multiplayer support — deferred, system fully disabled when `isMultiplayer`
-- [ ] Announcer ("CLOSE CALL!" etc.): the critical-exit branch in App.tsx is the hook point,
-      **no audio assets yet** — Quinn will supply voice lines later
+- [x] Announcer, first line: "CUBEKILL" (client/public/cubekill.wav) fires on the deal-in
+      title-slam impact via `playCubekillAnnounce`; plays under reduced motion too
+- [ ] Announcer, remaining lines ("CLOSE CALL!", combos, streaks): the critical-exit
+      branch in App.tsx is the hook point — Quinn will supply voice lines later
 
 Implementation deviations from spec (all minor, flag to Quinn if they read wrong):
 - Onset freeze reuses the existing 90ms hitstop (spec said 120ms); alarm raises 120ms
