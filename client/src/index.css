@@ -3612,7 +3612,7 @@ body {
 .hexaclear-run-stat {
   min-width: 52px;
   flex: 1 1 52px;
-  padding: 0.4rem 0.18rem 0.34rem;
+  padding: 0.3rem 0.18rem 0.26rem;
   text-align: center;
 }
 .hexaclear-run-stat-value {
@@ -7410,10 +7410,16 @@ body {
   text-align: left;
   min-width: 18rem;
   max-width: min(22rem, calc(100vw - 2rem));
-  padding: 1.1rem 1.2rem 1rem;
+  padding: 0.9rem 1.1rem 0.9rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.45rem;
+  /* Never a horizontal scrollbar: the sticky footer's negative
+     margins can poke past the reserved scrollbar gutter when classic
+     (non-overlay) scrollbars are enabled, which spawned an overflow-x
+     bar + corner. `clip` removes the horizontal scroll mechanism
+     entirely. */
+  overflow-x: clip;
   /* Hard cap on modal height so a long leaderboard + reel +
      run-stats stack can never bleed off short phone viewports.
      `svh` (small viewport height) bakes in the worst-case URL
@@ -7422,7 +7428,7 @@ body {
      the sticky `.hexaclear-gameover-footer` below keeps the
      primary CTA reachable in one tap regardless of how much the
      player scrolls in the middle. */
-  max-height: min(90svh, 720px);
+  max-height: min(94svh, 720px);
   overflow-y: auto;
   /* `stable` reserves space for the scrollbar even when not
      scrolling so toggling tabs / global mode doesn't reflow
@@ -7457,12 +7463,14 @@ body {
    gradient on narrow phones. */
 .hexaclear-gameover-footer {
   position: sticky;
-  bottom: -1rem;
+  bottom: -0.9rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  margin: 0.2rem -1.2rem -1rem;
-  padding: 0.85rem 1.2rem 1rem;
+  /* Margins mirror the card padding exactly (0.9rem/1.1rem) so the
+     fade reaches the card edges without poking past them. */
+  margin: 0.2rem -1.1rem -0.9rem;
+  padding: 0.65rem 1.1rem 0.9rem;
   background: linear-gradient(
     180deg,
     rgba(42, 18, 9, 0) 0%,
@@ -7477,7 +7485,9 @@ body {
   font-family: 'Monoton', system-ui, sans-serif;
   font-weight: 400;
   text-transform: uppercase;
-  font-size: 1.5rem;
+  /* Scales down with short viewports so the recap content wins the
+     space fight before anything needs to scroll. */
+  font-size: clamp(1.15rem, 3.6svh, 1.45rem);
   letter-spacing: 0.06em;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
@@ -7512,7 +7522,7 @@ body {
 .hexaclear-gameover-headline-value {
   font-family: 'Nunito', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 2.2rem;
+  font-size: clamp(1.7rem, 4.6svh, 2.1rem);
   font-variant-numeric: tabular-nums;
   color: #ffe8a3;
   text-shadow: 0 2px 0 #b2481b, 0 0 12px rgba(0, 0, 0, 0.45);
@@ -8388,9 +8398,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  margin: 0.4rem 0;
-  padding: 0.4rem 0.5rem;
+  gap: 0.3rem;
+  margin: 0.2rem 0;
+  padding: 0.35rem 0.45rem;
   border-radius: 14px;
   background: linear-gradient(
     180deg,
@@ -8436,10 +8446,10 @@ body {
   display: block;
   width: auto;
   max-width: 100%;
-  /* Heights ~140-160px per the design doc; let the SVG scale
-     proportionally inside that bound so the rosette fits even
-     on the smaller mobile gameover modal. */
-  height: 150px;
+  /* ~140-160px per the design doc on roomy screens, compressing
+     toward 110px on short viewports — the reel is the most
+     compressible element in the recap stack, so it yields first. */
+  height: clamp(110px, 17svh, 150px);
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
 }
 
