@@ -143,19 +143,20 @@ const VOLUMES: Record<SoundKey, number> = {
   error: 0.64,
   gameOver: 0.85,
   break: 0.85,
-  // The announcer leads its moment, but stays shy of the clear-SFX
-  // peaks so the musical layer keeps the crown overall.
-  cubekill: 0.9,
-  announceBoardClear: 0.88,
-  announceCombo2: 0.8,
-  announceCombo3: 0.82,
-  announceCombo4: 0.84,
-  announceCombo5: 0.86,
-  announceCombo6: 0.88,
-  announceStreakGood: 0.82,
-  announceStreakGreat: 0.84,
-  announceStreakUnbelievable: 0.86,
-  announceStreakGodlike: 0.88,
+  // The announcer sits clearly under the clear-SFX peaks so the
+  // musical layer keeps the crown overall (full set trimmed -33% per
+  // mix review).
+  cubekill: 0.6,
+  announceBoardClear: 0.59,
+  announceCombo2: 0.54,
+  announceCombo3: 0.55,
+  announceCombo4: 0.56,
+  announceCombo5: 0.58,
+  announceCombo6: 0.59,
+  announceStreakGood: 0.55,
+  announceStreakGreat: 0.56,
+  announceStreakUnbelievable: 0.58,
+  announceStreakGodlike: 0.59,
 }
 
 const LS_VOLUME_KEY = 'cubic-master-volume'
