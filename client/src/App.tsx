@@ -1417,15 +1417,17 @@ type BoardRenderData = {
 }
 
 // Deal-in timing constants. The rosette stagger doubles as the audio
-// tick schedule (one pitch-stepped tick per rosette).
-const DEAL_IN_ROSETTE_STAGGER_MS = 45
-const DEAL_IN_CELL_STAGGER_STANDARD_MS = 12
-const DEAL_IN_CELL_STAGGER_BIG_MS = 5
-const DEAL_IN_HAND_BASE_DELAY_MS = 400
-// Active-state window. Long enough to cover the slowest hand fly-in
-// (base 400ms + slot 2 stagger 350ms + 900ms animation = 1650ms) so the
-// fly-in delay variable never changes under a running animation.
-const DEAL_IN_TOTAL_MS = 2100
+// tick schedule (one pitch-stepped tick per rosette). Deliberately
+// slow and ceremonial per Quinn's review — the cascade alone runs
+// ~1.9s, the full choreography ~3.5s. Any tap skips.
+const DEAL_IN_ROSETTE_STAGGER_MS = 180
+const DEAL_IN_CELL_STAGGER_STANDARD_MS = 48
+const DEAL_IN_CELL_STAGGER_BIG_MS = 20
+const DEAL_IN_HAND_BASE_DELAY_MS = 1600
+// Active-state window. Long enough to cover the slowest beat (score
+// readout pop ends ~3.5s; last hand fly-in ends ~2.85s) so the fly-in
+// delay variable never changes under a running animation.
+const DEAL_IN_TOTAL_MS = 3600
 const DEAL_IN_REDUCED_MOTION_MS = 320
 
 const buildDealDelays = (
@@ -17746,11 +17748,11 @@ function App() {
                 }}
                 style={{
                   // During the deal-in the hand waits for the board
-                  // cascade (base +400ms). dealInActive stays true past
-                  // the last fly-in's end (DEAL_IN_TOTAL_MS) so this
-                  // value never shrinks under a running animation —
-                  // except on explicit skip, where the jump-forward is
-                  // the desired fast-forward.
+                  // cascade (base +1600ms). dealInActive stays true
+                  // past the last fly-in's end (DEAL_IN_TOTAL_MS) so
+                  // this value never shrinks under a running animation
+                  // — except on explicit skip, where the jump-forward
+                  // is the desired fast-forward.
                   ['--hexaclear-fly-in-delay' as string]: `${
                     (dealInActive ? DEAL_IN_HAND_BASE_DELAY_MS : 0) +
                     slotIndex * 175

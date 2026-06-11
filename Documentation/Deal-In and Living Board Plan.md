@@ -29,19 +29,20 @@ switch that creates a new game, tutorial exit, and cold load of a pristine (move
 score=0) game. Resumed mid-run games restore instantly with no animation. Never plays
 during tutorial stages.
 
-Timeline (≈900ms perceived, state window 2100ms to cover hand tail):
+Timeline (≈3.5s perceived, state window 3600ms; slowed 4x from the first cut at
+Quinn's request — ceremonial, not snappy):
 
-1. **0–~570ms — board cascade.** Cells pop in (scale 0 → 1.07 → 1, ~230ms each)
+1. **0–~1.9s — board cascade.** Cells pop in (scale 0 → 1.07 → 1, ~520ms each)
    rosette by rosette: center flower first, then the six outer flowers clockwise by
-   screen angle. Rosette stagger 45ms; within a rosette, cells order center-out
-   (12ms stagger standard board, 5ms big board). Board chrome (panel, outline,
+   screen angle. Rosette stagger 180ms; within a rosette, cells order center-out
+   (48ms stagger standard board, 20ms big board). Board chrome (panel, outline,
    grooves) stays static — only the playable surface cascades. Each rosette start
    plays a `click_up` tick pitch-stepped upward across the seven flowers
    (`playDealTick(i, 7)`, playbackRate 1.0→2.0, reduced gain).
-2. **400–1650ms — hand deal.** Existing `hexaclear-hand-flyin` animation, base delay
-   +400ms during deal-in (slot stagger 175ms unchanged).
-3. **~620–990ms — chrome beat.** Wordmark brightness shimmer (360ms @ 620ms);
-   score readout pop (240ms @ 750ms).
+2. **1.6–2.85s — hand deal.** Existing `hexaclear-hand-flyin` animation, base delay
+   +1600ms during deal-in (slot stagger 175ms unchanged).
+3. **2.4–3.5s — chrome beat.** Wordmark brightness shimmer (600ms @ 2400ms);
+   score readout pop (480ms @ 3000ms).
 
 Skip: any `pointerdown` during the deal-in ends it immediately (cells snap to final,
 hand animations fast-forward 400ms). Reduced motion: cell/chrome animations off, board
