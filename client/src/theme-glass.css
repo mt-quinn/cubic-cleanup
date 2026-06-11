@@ -26,17 +26,17 @@
   /* Carved limestone — warm tones that read as the same masonry the wall
      and window surround are cut from, so every readout/control looks
      carved INTO the cathedral rather than dropped on top of it. */
-  --glass-stone: #5b523a;
-  --glass-stone-deep: #2d2415; /* deep recessed niche */
-  --glass-stone-face: #756a4b; /* lit face of a molding */
-  --glass-stone-raise: #9d9168; /* raised, sun-struck edge */
-  --glass-stone-shadow: #181107; /* deep joint shadow / carved border */
+  --glass-stone: #3a2f1e;
+  --glass-stone-deep: #20170c; /* deep recessed niche */
+  --glass-stone-face: #4a3d28; /* lit face of a molding */
+  --glass-stone-raise: #5c4c30; /* raised, sun-struck edge */
+  --glass-stone-shadow: #0f0a03; /* deep joint shadow / carved border */
 
   /* Lead came — warm near-black lead with a dim sheen, NOT gold/grey.
      The "hi" is only a restrained brushed-graphite catch of light, kept
      dim + desaturated so the leading reads as dark lead, never as bright
      grey/lavender piping. */
-  --glass-came: #0a0806;
+  --glass-came: #100d0b;
   --glass-came-hi: #5e5c63;
   --glass-came-lo: #000000;
 
@@ -71,9 +71,9 @@
   --cube-golden-right: #8c0f29;
 
   /* Glass pane transmission — one continuous window, board-lit. */
-  --glass-pane-fill-opacity: 0.68;
-  --glass-pane-empty: rgba(34, 50, 68, 0.62);
-  --glass-ruby-pane-opacity: 0.7;
+  --glass-pane-fill-opacity: 0.44;
+  --glass-pane-empty: rgba(22, 28, 38, 0.48);
+  --glass-ruby-pane-opacity: 0.52;
   --glass-hand-pane-opacity: 0.58;
 
   /* Reusable stone grain + blind-arcade wall (URL-encoded SVG). */
@@ -115,13 +115,7 @@
     /* cut-stone ashlar coursing */
     var(--glass-ashlar),
     /* base limestone, lit at the top course, sinking to shadow below */
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--glass-stone-raise) 54%, #282016) 0%,
-      var(--glass-stone) 44%,
-      var(--glass-stone-deep) 78%,
-      #160f08 100%
-    );
+    linear-gradient(180deg, #4b4030 0%, #392d1d 46%, #251c11 78%, #181107 100%);
   background-repeat: no-repeat, no-repeat, repeat, repeat, no-repeat;
   background-size: auto, auto, 180px 180px, 128px 236px, auto;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
@@ -544,19 +538,6 @@
   pointer-events: none;
 }
 
-/* A broad, soft shadow just inside the aperture: glass appears set back
-   behind the stone reveal instead of painted flush on the wall. */
-[data-theme="glass"] .hexaclear-glass-recess-shadow {
-  fill: none;
-  stroke: rgba(20, 15, 8, 0.7);
-  stroke-width: 9.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.17;
-  filter: blur(2.8px);
-}
-
 /* A slow brightness breathe stands in for the old opacity pulse — it
    keeps the field fully opaque (so masonry never bleeds through the
    panes) while the backlight still seems to swell and settle. */
@@ -569,50 +550,20 @@
   50% { filter: brightness(1.09); }
 }
 
-/* Window reveal — a recessed joint plus a raised limestone face, using
-   the same vertical lighting ramp as the surrounding wall. */
+/* Window reveal — lit stone face only on the outer hull; the wide back
+   shadow stroke reads as a harsh black ring against the masonry wall. */
 [data-theme="glass"] .hexaclear-board-outline-back {
-  stroke: url(#glass-stone-joint-gradient);
-  stroke-width: 12.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.34;
-  filter:
-    drop-shadow(0.8px 1.6px 0.8px rgba(0, 0, 0, 0.38))
-    blur(0.2px);
+  display: none;
 }
 [data-theme="glass"] .hexaclear-board-outline-front {
-  stroke: url(#glass-stone-face-gradient);
-  stroke-width: 7.8;
+  stroke: var(--glass-stone-raise);
+  stroke-width: 8.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.88;
-  filter:
-    drop-shadow(0 -0.7px 0 rgba(255, 244, 214, 0.12))
-    drop-shadow(0 1.2px 0.75px rgba(0, 0, 0, 0.4));
-  transition: none;
-}
-[data-theme="glass"] .hexaclear-board-outline-arris {
-  stroke: url(#glass-stone-arris-gradient);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.42;
-  mix-blend-mode: screen;
+  opacity: 0.85;
   filter: none;
   transition: none;
-}
-[data-theme="glass"] .hexaclear-board-outline-texture {
-  stroke: url(#glass-stone-speckle);
-  stroke-width: 6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.18;
-  mix-blend-mode: soft-light;
 }
 
 /* ====================================================================
@@ -775,29 +726,21 @@
 [data-theme="glass"] .hexaclear-cell-outline {
   fill: none;
   stroke: var(--glass-came);
-  stroke-width: 2.75;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.94;
   paint-order: stroke;
 }
-[data-theme="glass"] .hexaclear-cell-outline.perimeter-adjacent {
-  stroke: var(--glass-came);
-  stroke-width: 2.75;
-  opacity: 0.94;
-}
-/* Hull lip — a shallow limestone incision, not black lead. The exterior
-   stone reveal already owns this boundary; a dark inner outline makes the
-   board read as a separate sticker on the wall. */
+/* Hull rim lead — inset closed path on the glass lip; inter-rosette stone
+   tracery is painted above it so mullions wrap the solder at junctions. */
 [data-theme="glass"] .hexaclear-glass-perimeter-lead {
   fill: none;
-  stroke: color-mix(in srgb, var(--glass-stone-face) 68%, var(--glass-stone-deep));
-  stroke-width: 1.6;
+  stroke: var(--glass-came);
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.34;
 }
 [data-theme="glass"] .hexaclear-hex-bevels {
   display: none;
@@ -810,64 +753,13 @@
    (#glass-field) shines through every cell; jewel colour is a flat
    translucent pigment layer — not opaque cube faces stacked on top. */
 [data-theme="glass"] .hexaclear-hex.filled {
-  fill: color-mix(in srgb, var(--cube-top) 82%, var(--glass-backlight));
+  fill: var(--cube-top);
   fill-opacity: var(--glass-pane-fill-opacity);
   stroke: none;
 }
 [data-theme="glass"] .hexaclear-hex.filled.golden {
-  fill: color-mix(in srgb, var(--cube-golden-top) 84%, var(--glass-backlight));
+  fill: var(--cube-golden-top);
   fill-opacity: var(--glass-ruby-pane-opacity);
-}
-
-[data-theme="glass"] .hexaclear-pane-depth {
-  fill: url(#glass-pane-depth);
-  stroke: none;
-  opacity: 0.78;
-  mix-blend-mode: soft-light;
-}
-[data-theme="glass"] .hexaclear-pane-depth.filled {
-  opacity: 0.86;
-}
-[data-theme="glass"] .hexaclear-pane-depth.empty {
-  opacity: 0.58;
-}
-[data-theme="glass"] .hexaclear-pane-depth.golden {
-  opacity: 0.8;
-}
-[data-theme="glass"] .hexaclear-pane-sheen {
-  fill: url(#glass-pane-sheen);
-  stroke: none;
-  opacity: 0.22;
-  mix-blend-mode: screen;
-}
-[data-theme="glass"] .hexaclear-pane-sheen.filled {
-  opacity: 0.32;
-}
-[data-theme="glass"] .hexaclear-pane-sheen.empty {
-  opacity: 0.12;
-}
-[data-theme="glass"] .hexaclear-pane-seed {
-  fill: url(#glass-pane-seed);
-  stroke: none;
-  opacity: 0.2;
-  mix-blend-mode: overlay;
-}
-[data-theme="glass"] .hexaclear-pane-seed.filled {
-  opacity: 0.3;
-}
-[data-theme="glass"] .hexaclear-pane-seed.empty {
-  opacity: 0.16;
-}
-[data-theme="glass"] .hexaclear-pane-seed.golden {
-  opacity: 0.24;
-}
-[data-theme="glass"] .hexaclear-pane-depth.preview-invalid,
-[data-theme="glass"] .hexaclear-pane-depth.clearing,
-[data-theme="glass"] .hexaclear-pane-sheen.preview-invalid,
-[data-theme="glass"] .hexaclear-pane-sheen.clearing,
-[data-theme="glass"] .hexaclear-pane-seed.preview-invalid,
-[data-theme="glass"] .hexaclear-pane-seed.clearing {
-  display: none;
 }
 
 /* Cube geometry is only a label carrier (ruby +10, daily count). */
@@ -909,45 +801,22 @@
 }
 
 [data-theme="glass"] .hexaclear-flower-boundary-back {
-  stroke: url(#glass-stone-joint-gradient);
-  stroke-width: 10.2;
+  stroke: var(--glass-stone-shadow);
+  stroke-width: 10;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.38;
-  filter:
-    drop-shadow(0.8px 1.5px 0.65px rgba(0, 0, 0, 0.34))
-    blur(0.16px);
+  opacity: 0.95;
+  filter: none;
 }
 [data-theme="glass"] .hexaclear-flower-boundary {
-  stroke: url(#glass-stone-face-gradient);
+  stroke: var(--glass-stone-raise);
   stroke-width: 6;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.84;
-  filter:
-    drop-shadow(0 -0.65px 0 rgba(255, 244, 214, 0.1))
-    drop-shadow(0 1px 0.6px rgba(0, 0, 0, 0.36));
-}
-[data-theme="glass"] .hexaclear-flower-boundary-arris {
-  stroke: url(#glass-stone-arris-gradient);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.36;
-  mix-blend-mode: screen;
+  opacity: 0.88;
   filter: none;
-}
-[data-theme="glass"] .hexaclear-flower-boundary-texture {
-  stroke: url(#glass-stone-speckle);
-  stroke-width: 5.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.2;
-  mix-blend-mode: soft-light;
 }
 [data-theme="glass"] .hexaclear-flower-boundary-group {
   filter: none;
@@ -1871,4 +1740,27 @@
     filter: brightness(1);
   }
   [data-theme="glass"] .hexaclear-glass-shard { display: none; }
+}
+
+/* Deal-in announce: same gilt inscription as the wordmark so the
+   settle into the header reads as one object. Gradient text can't
+   carry text-shadow (it leaks through the clip), and the shared
+   keyframes own `filter`, so the relief shadows are dropped here —
+   at announce scale the gold gradient carries it alone. */
+[data-theme="glass"] .hexaclear-dealin-announce-text {
+  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: linear-gradient(
+    180deg,
+    #fff2cf 0%,
+    #ecc868 36%,
+    #c8941f 64%,
+    #7c540d 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
 }

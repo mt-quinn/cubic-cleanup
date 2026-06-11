@@ -3443,6 +3443,13 @@ function App() {
   const [dealInActive, setDealInActive] = useState(false)
   const dealInTimersRef = useRef<number[]>([])
   const dealInSkipCleanupRef = useRef<(() => void) | null>(null)
+  // CUBEKILL announce lifecycle: the wordmark is absent from the
+  // header while the announce flies (is-announce-flying hides it),
+  // slams in big over the board, then settles into the header title's
+  // measured position — at which point `announceLanded` unmounts the
+  // overlay and reveals the real title in the same spot.
+  const [announceLanded, setAnnounceLanded] = useState(false)
+  const announceTextRef = useRef<HTMLSpanElement | null>(null)
 
   const finishDealIn = useCallback(() => {
     for (const t of dealInTimersRef.current) window.clearTimeout(t)
@@ -3459,6 +3466,7 @@ function App() {
   const startDealIn = useCallback(() => {
     finishDealIn()
     setDealInActive(true)
+    setAnnounceLanded(false)
     // Remount the hand buttons so the fly-in always replays as part of
     // the choreography (callers that already bump the token just merge
     // into the same remount).
@@ -4078,6 +4086,41 @@ function App() {
   useEffect(() => {
     reducedMotionRef.current = reducedMotion
   }, [reducedMotion])
+
+  // Measure the announce's settle target: the header title's rect. The
+  // overlay span's layout box sits at the viewport center untransformed
+  // (fixed inset-0 flex), so offset* gives its true size while the
+  // keyframes hold it scaled — getBoundingClientRect would lie here.
+  // If the theme hides the title entirely (Win98 does), there's nothing
+  // to settle into: mark `no-settle` and the announce falls back to the
+  // original fade-out.
+  useLayoutEffect(() => {
+    if (!dealInActive || reducedMotion || announceLanded) return
+    const el = announceTextRef.current
+    if (!el) return
+    const title = document.querySelector<HTMLElement>('.hexaclear-title')
+    const rect = title?.getBoundingClientRect()
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      el.classList.add('no-settle')
+      return
+    }
+    const ownH = el.offsetHeight
+    if (ownH === 0) {
+      el.classList.add('no-settle')
+      return
+    }
+    const cx = window.innerWidth / 2
+    const cy = window.innerHeight / 2
+    el.style.setProperty(
+      '--hexaclear-settle-x',
+      `${rect.left + rect.width / 2 - cx}px`,
+    )
+    el.style.setProperty(
+      '--hexaclear-settle-y',
+      `${rect.top + rect.height / 2 - cy}px`,
+    )
+    el.style.setProperty('--hexaclear-settle-scale', `${rect.height / ownH}`)
+  }, [dealInActive, reducedMotion, announceLanded])
 
   // Cold-load deal-in: if the session opens onto a pristine board (a
   // brand-new run, or a restored save with zero moves — visually
@@ -9872,6 +9915,9 @@ function App() {
         'cubic-viewport',
         hitstop ? 'hitstop' : '',
         dealInActive ? 'is-dealing-in' : '',
+        dealInActive && !reducedMotion && !announceLanded
+          ? 'is-announce-flying'
+          : '',
         livenessEnabled ? 'is-liveness' : '',
         criticalActive ? 'is-critical' : '',
         reducedMotion ? 'reduced-motion' : '',
@@ -14932,13 +14978,27 @@ function App() {
           )}
           {/* CUBEKILL announce: slams over the board cascade at the
               start of every deal-in — the run is ANNOUNCED, Quake
-              style. Pure CSS lifecycle (in 160ms, impact 340ms with a
-              matching screen kick, gone ~1.5s); unmounts instantly on
-              skip because dealInActive drops. Hidden under reduced
-              motion. */}
-          {dealInActive && !reducedMotion && (
+              style — then settles into the header title's measured
+              position (the title is hidden until the announce lands,
+              so it reads as the same object arriving). Unmounts
+              instantly on skip because dealInActive drops. Hidden
+              under reduced motion. */}
+          {dealInActive && !reducedMotion && !announceLanded && (
             <div className="hexaclear-dealin-announce" aria-hidden="true">
-              Cubekill
+              <span
+                ref={announceTextRef}
+                className="hexaclear-dealin-announce-text"
+                onAnimationEnd={(e) => {
+                  if (
+                    e.animationName === 'hexaclear-dealin-announce-settle' ||
+                    e.animationName === 'hexaclear-dealin-announce-fade'
+                  ) {
+                    setAnnounceLanded(true)
+                  }
+                }}
+              >
+                Cubekill
+              </span>
             </div>
           )}
           {/* iOS Safari refuses to resume an AudioContext from a touch

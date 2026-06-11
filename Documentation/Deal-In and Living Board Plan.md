@@ -71,11 +71,17 @@ Quinn's request — ceremonial, not snappy):
    (`playDealTick(i, 7)`, playbackRate 1.0→2.0, reduced gain).
 2. **1.6–2.85s — hand deal.** Existing `hexaclear-hand-flyin` animation, base delay
    +1600ms during deal-in (slot stagger 175ms unchanged).
-3. **0.16–1.5s — CUBEKILL announce.** The wordmark, huge (`clamp(2.8rem, 13vw,
-   6.5rem)`, Monoton), slams over the cascade: blur+scale 2.6 → impact at ~340ms with
-   a small screen kick (shake intensity 2.5), brief hold, gone by ~1.5s. The impact
-   beat is the slot for a Quake-style "CUBEKILL" voice line later. Hidden under
-   reduced motion; unmounts on skip.
+3. **0.16–1.66s — CUBEKILL announce.** The wordmark, huge (`clamp(2.8rem, 13vw,
+   6.5rem)`), slams over the cascade — blur+scale 2.6 → impact at ~340ms with a small
+   screen kick (shake intensity 2.5) — holds, then **flies up and settles into the
+   header title's place** (~1.1–1.66s; destination measured in App.tsx, passed as
+   `--hexaclear-settle-x/y/scale`). The header title is hidden while the announce
+   flies (`is-announce-flying`) so it reads as one object taking its seat; on
+   `animationend` the overlay unmounts and the real title shows. Per-theme dress:
+   wood = Monoton gold, glass = Cinzel Decorative gilt gradient, mondrian = Archivo
+   Black flat black, win98 = giant navy titlebar fragment (its header title is
+   `display:none`, so it gets `no-settle` and fades out instead). Impact beat = the
+   future "CUBEKILL" voice-line slot. Hidden under reduced motion; unmounts on skip.
 4. **2.4–3.5s — chrome beat.** Wordmark brightness shimmer (600ms @ 2400ms);
    score readout pop (480ms @ 3000ms).
 

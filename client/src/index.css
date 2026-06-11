@@ -4628,10 +4628,19 @@ body {
 }
 
 /* CUBEKILL announce: the wordmark, huge, slammed over the cascade like
-   a Quake match-start call. Big but fast — in at 160ms, impact frame
-   ~340ms (App.tsx kicks the screen on the same beat, and that's the
-   future "CUBEKILL" voice-line slot), holding briefly, gone by ~1.5s
-   so the stage is clear before the hand deals at 1.6s. */
+   a Quake match-start call — then it SETTLES INTO the header title's
+   place. The header title is hidden while the announce flies
+   (is-announce-flying), so the whole beat reads as one object: the
+   name arrives, announces the run, and takes its seat. Timeline: in at
+   160ms, impact ~340ms (App.tsx kicks the screen on the same beat —
+   the future "CUBEKILL" voice-line slot), hold, then fly to the
+   header from ~1.1s, landing ~1.66s as the hand deals below.
+
+   The settle destination is measured per-layout in App.tsx and passed
+   via --hexaclear-settle-x/y/scale. Themes restyle the text (font,
+   color) to match their own wordmark so the landing is seamless; if a
+   theme hides the title entirely (Win98), App.tsx adds `no-settle`
+   and the announce falls back to a fade-out. */
 .hexaclear-dealin-announce {
   position: fixed;
   inset: 0;
@@ -4640,37 +4649,79 @@ body {
   justify-content: center;
   pointer-events: none;
   z-index: 80;
+}
+
+.hexaclear-dealin-announce-text {
+  display: inline-block;
   font-family: 'Monoton', system-ui, sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   font-size: clamp(2.8rem, 13vw, 6.5rem);
   color: #ffe8a3;
   text-shadow:
     0 2px 0 rgba(0, 0, 0, 0.55),
     0 0 30px rgba(255, 170, 60, 0.45),
     0 10px 34px rgba(0, 0, 0, 0.5);
-  animation: hexaclear-dealin-announce 1350ms cubic-bezier(0.22, 1, 0.36, 1)
-    160ms both;
+  animation: hexaclear-dealin-announce-settle 1500ms
+    cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
 }
 
-@keyframes hexaclear-dealin-announce {
+.hexaclear-dealin-announce-text.no-settle {
+  animation-name: hexaclear-dealin-announce-fade;
+}
+
+@keyframes hexaclear-dealin-announce-settle {
   0% {
     opacity: 0;
     transform: scale(2.6);
     filter: blur(7px);
   }
-  13% {
+  12% {
     opacity: 1;
     transform: scale(1);
     filter: blur(0);
   }
-  17% {
+  16% {
     transform: scale(1.05);
   }
-  22% {
+  20% {
     transform: scale(1);
   }
-  72% {
+  62% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+    /* the flight leg: fast launch, soft landing */
+    animation-timing-function: cubic-bezier(0.55, 0, 0.25, 1);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate(
+        var(--hexaclear-settle-x, 0px),
+        var(--hexaclear-settle-y, -38vh)
+      )
+      scale(var(--hexaclear-settle-scale, 0.24));
+  }
+}
+
+@keyframes hexaclear-dealin-announce-fade {
+  0% {
+    opacity: 0;
+    transform: scale(2.6);
+    filter: blur(7px);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  16% {
+    transform: scale(1.05);
+  }
+  20% {
+    transform: scale(1);
+  }
+  70% {
     opacity: 1;
     transform: scale(1);
   }
@@ -4678,6 +4729,11 @@ body {
     opacity: 0;
     transform: scale(1.16);
   }
+}
+
+/* The seat is empty until the name arrives. */
+.cubic-viewport.is-announce-flying .hexaclear-title {
+  visibility: hidden;
 }
 
 /* Wordmark shimmer as the cascade resolves (~2.4s), then the score

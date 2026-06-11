@@ -3468,3 +3468,21 @@
   .lcd-digits {
   animation: none;
 }
+
+/* Deal-in announce: Win98 hides the header wordmark, so the announce
+   has no seat to settle into (App.tsx adds `no-settle` -> fade-out).
+   It arrives as a giant titlebar fragment instead: navy bar, white
+   system-font caption, raised bevel. */
+[data-theme="win98"] .hexaclear-dealin-announce-text {
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: clamp(2.2rem, 10vw, 5rem);
+  color: var(--w98-text-on-navy);
+  background: var(--w98-titlebar);
+  padding: 0.1em 0.4em;
+  border: 2px solid;
+  border-color: var(--w98-highlight) var(--w98-deep-shadow)
+    var(--w98-deep-shadow) var(--w98-highlight);
+  text-shadow: none;
+}

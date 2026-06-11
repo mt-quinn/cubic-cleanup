@@ -1385,3 +1385,13 @@
   outline: none;
   box-shadow: inset 0 0 0 2px var(--md-blue);
 }
+
+/* Deal-in announce: the wordmark's own heavy grotesque, flat black —
+   De Stijl announces in type weight, not glow. */
+[data-theme="mondrian"] .hexaclear-dealin-announce-text {
+  font-family: var(--md-font-black);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--md-line-hi);
+  text-shadow: none;
+}
