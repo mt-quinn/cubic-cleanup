@@ -3626,11 +3626,15 @@
 }
 
 /* Utility strip: underlined system links; Settings as a small
-   raised button. */
+   raised button. No divider rule — Win98 dialogs don't underline
+   their button rows; the strip is just a clean bottom row with the
+   link and button on a shared vertical center. */
 [data-theme="win98"] .hexaclear-pmenu-utility {
-  border-top: 1px solid var(--w98-shadow);
-  box-shadow: 0 -1px 0 var(--w98-highlight) inset;
-  padding-top: 9px;
+  border-top: none;
+  box-shadow: none;
+  margin-top: 12px;
+  padding: 0 2px;
+  align-items: center;
 }
 
 [data-theme="win98"] .hexaclear-pmenu-runlink {
