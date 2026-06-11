@@ -3802,6 +3802,17 @@ function App() {
     !gameOverWindingDown
   const [criticalActive, setCriticalActive] = useState(false)
   const criticalOnsetTimerRef = useRef<number | null>(null)
+  // The liveness map must vanish on the SAME render as the placement
+  // that drops the board into critical territory — keying it off
+  // criticalActive alone leaks the fresh valid-placement outlines for
+  // the onset-delay window (and through clear animations) before the
+  // alarm lands. Derived directly from the fit count, this hides the
+  // map instantly and keeps it hidden through the hysteresis band
+  // while the alarm holds.
+  const criticalImminent =
+    criticalActive ||
+    (liveness.totalPlacements > 0 &&
+      liveness.totalPlacements <= CRITICAL_ENTER_MAX_PLACEMENTS)
 
   useEffect(() => {
     const clearOnsetTimer = () => {
@@ -3818,16 +3829,14 @@ function App() {
     }
 
     if (criticalActive) {
-      // Exit instantly when a clear lands (the relight is the payoff —
-      // the alarm must cut on the same frame the clear starts) or once
-      // the player has breathing room again. If the board is still at
-      // <=5 after the clear settles, the enter branch below re-fires
-      // with a fresh onset beat. This is also where the "CLOSE CALL!"
-      // announcer cue will hook in once voice lines exist.
-      if (
-        clearingCells.length > 0 ||
-        liveness.totalPlacements >= CRITICAL_EXIT_MIN_PLACEMENTS
-      ) {
+      // Exit ONLY when the player has real breathing room again (>=
+      // the hysteresis ceiling). Clears that merely dent the danger do
+      // NOT exit — the alarm holds continuously across placements,
+      // clears, and fresh hands until the escape is genuine, so the
+      // pulse never restarts mid-crisis (per review: exit-and-re-enter
+      // flicker felt awkward). This exit is the "CLOSE CALL!"
+      // announcer hook.
+      if (liveness.totalPlacements >= CRITICAL_EXIT_MIN_PLACEMENTS) {
         clearOnsetTimer()
         setCriticalActive(false)
       }
@@ -12058,7 +12067,7 @@ function App() {
                 // around them), and while disabled (tutorial/MP/over).
                 const isDeadCell =
                   livenessEnabled &&
-                  !criticalActive &&
+                  !criticalImminent &&
                   !isFilled &&
                   !isDailyTarget &&
                   !liveness.liveCellIds.has(cell.id)

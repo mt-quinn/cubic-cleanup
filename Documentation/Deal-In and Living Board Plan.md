@@ -73,8 +73,11 @@ Implementation deviations from spec (all minor, flag to Quinn if they read wrong
 - The live-cell breath lives on the dimple (`.hexaclear-slot-fill`), not the hex
   polygon — the polygon's animation slot is contended (octave-2 tint drift, glass
   preview glows) and CSS animations don't compose.
-- Exit-on-clear re-enters with a fresh onset if the board is still ≤5 after the clear
-  settles (enter waits for `clearingCells` to drain).
+- (Revised per Quinn 2026-06-11, round 2): critical does NOT exit on clears anymore —
+  the original exit-and-re-enter on every clear made the alarm flicker and leaked the
+  liveness map between pulses. The alarm now holds continuously until ≥8 fits. The map
+  is suppressed via `criticalImminent` (derived from the fit count, not criticalActive)
+  so it vanishes on the same render as the placement that enters critical territory.
 
 Unrelated pre-existing WIP: `client/src/theme-glass.css` has uncommitted stained-glass
 masonry tuning from an earlier session (see root `task_plan.md`/`findings.md`). Keep it
@@ -161,7 +164,8 @@ counts** for the current hand (reuse `hasAnyValidMove` machinery in
 
 ### Phase B — Critical state ("under threat")
 
-- **Enter at ≤5 total valid placements; exit at ≥8 or on any clear** (hysteresis, no strobing).
+- **Enter at ≤5 total valid placements; exit ONLY at ≥8** (hysteresis, no strobing; the
+  alarm holds continuously across placements, clears, and new hands until escape is real).
 - Onset beat: after the triggering placement resolves, 120ms full freeze, then ALL
   empty cells snap to alarm state **simultaneously**; a global 900ms pulse clock starts
   (cells + hand + score readout in sync).
