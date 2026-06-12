@@ -60,7 +60,7 @@
       App.tsx, softer/relief tone), "JACKPOT!" (2+ rubies in one placement, layered
       +200ms under the primary per the design doc), per-count combo upgrades to replace
       generic MultiClear (DOUBLE/TRIPLE/OVERKILL/MEGA CLEAR/ULTRA CLEAR for 2/3/4/5/6+),
-      streak extensions past 6 (8/10/12 — DOMINATING / UNSTOPPABLE / WICKED SICK), a
+      streak extensions past 5 (8/10/12 — DOMINATING / UNSTOPPABLE / WICKED SICK), a
       daily-win line (FLAWLESS), optional deadpan game-over line
 - [ ] Announcer settings toggle (design doc: separate `Announcer` checkbox, default on)
 - [ ] Announcer in multiplayer (placement path exists at the mp.lastPlacement effect)
@@ -169,8 +169,10 @@ counts** for the current hand (reuse `hasAnyValidMove` machinery in
 - Onset beat: after the triggering placement resolves, 120ms full freeze, then ALL
   empty cells snap to alarm state **simultaneously**; a global 900ms pulse clock starts
   (cells + hand + score readout in sync).
-- The BOARD alarm is **uniform = information-free**: no valid/invalid distinction per
-  cell. The HAND keeps its differentiation — unplayable pieces stay grey/sagged even
+- (Revised per playtest 2026-06-11, round 3): the liveness map STAYS VISIBLE during
+  critical — hunting for where pieces can't go isn't interesting difficulty even in the
+  endgame. The alarm overlay pulses over the map rather than replacing it. The HAND
+  also keeps its differentiation — unplayable pieces stay grey/sagged even
   in critical, and only playable pieces catch the ember glow (Quinn call 2026-06-11,
   reversing the earlier "suspend the sag" spec: piece-level info is desirable at the
   climax; only the cell map is revoked).

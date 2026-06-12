@@ -1429,6 +1429,9 @@ const DEAL_IN_ROSETTE_STAGGER_MS = 180
 const DEAL_IN_CELL_STAGGER_STANDARD_MS = 48
 const DEAL_IN_CELL_STAGGER_BIG_MS = 20
 const DEAL_IN_HAND_BASE_DELAY_MS = 1600
+// Flat audio offset for the rosette ticks: the UI click of the button
+// that started the run needs to finish before the first tick.
+const DEAL_IN_TICK_BASE_DELAY_MS = 220
 // Active-state window. Long enough to cover the slowest beat (score
 // readout pop ends ~3.5s; last hand fly-in ends ~2.85s) so the fly-in
 // delay variable never changes under a running animation.
@@ -3543,17 +3546,17 @@ function App() {
     // harmless no-op and the deal-in stays visual-only, as designed.
     unlockAudioOnGesture()
 
-    // One pitch-stepped tick per rosette, on the rosette stagger clock.
-    // playDealTick no-ops while audio is locked/muted, so cold loads
-    // (no gesture yet) stay silent without special-casing here. The
-    // first tick is nudged off t=0 to give the just-resumed context a
-    // beat to reach 'running' (resume() is async even inside a
-    // gesture).
+    // One pitch-stepped tick per rosette, on the rosette stagger
+    // clock, with a flat base delay so the run-starting button's own
+    // UI click finishes before the first tick lands (they collided
+    // audibly) — this also gives the just-resumed AudioContext time
+    // to reach 'running'. playDealTick no-ops while audio is
+    // locked/muted, so cold loads stay silent without special-casing.
     for (let i = 0; i < 7; i++) {
       dealInTimersRef.current.push(
         window.setTimeout(
           () => playDealTick(i, 7),
-          Math.max(40, i * DEAL_IN_ROSETTE_STAGGER_MS),
+          DEAL_IN_TICK_BASE_DELAY_MS + i * DEAL_IN_ROSETTE_STAGGER_MS,
         ),
       )
     }
@@ -3815,17 +3818,6 @@ function App() {
   )
   const criticalEnterMax = CRITICAL_ENTER_PER_PIECE * criticalCandidates
   const criticalExitMin = criticalEnterMax + CRITICAL_EXIT_GAP
-  // The liveness map must vanish on the SAME render as the placement
-  // that drops the board into critical territory — keying it off
-  // criticalActive alone leaks the fresh valid-placement outlines for
-  // the onset-delay window (and through clear animations) before the
-  // alarm lands. Derived directly from the fit count, this hides the
-  // map instantly and keeps it hidden through the hysteresis band
-  // while the alarm holds.
-  const criticalImminent =
-    criticalActive ||
-    (liveness.totalPlacements > 0 &&
-      liveness.totalPlacements <= criticalEnterMax)
 
   useEffect(() => {
     const clearOnsetTimer = () => {
@@ -7143,10 +7135,17 @@ function App() {
                 6: { cue: 'announceCombo6', text: 'Sextuple!' },
               } as const
             )[Math.min(clearCount, 6)]
+            // Tiebreak (per playtest): whichever cue carries the
+            // HIGHER number wins — streak 4 beats a double, but a
+            // triple beats streak 3 because combos win ties. A streak
+            // past 5 has no voice line, so the combo call carries
+            // those moments regardless.
+            const comboLevel = clearCount >= 2 && combo ? clearCount : 0
+            const streakLevel = streak ? streakAfterClear : 0
             if (result.boardCleared) {
               playAnnouncerCue('announceBoardClear')
               showAnnouncerPop('Board Clear!', 'boardclear', 1.45)
-            } else if (streak) {
+            } else if (streak && streakLevel > comboLevel) {
               playAnnouncerCue(streak.cue)
               showAnnouncerPop(
                 streak.text,
@@ -7159,6 +7158,13 @@ function App() {
                 combo.text,
                 'combo',
                 1 + (Math.min(clearCount, 6) - 2) * 0.09,
+              )
+            } else if (streak) {
+              playAnnouncerCue(streak.cue)
+              showAnnouncerPop(
+                streak.text,
+                'streak',
+                1.05 + (streakAfterClear - 2) * 0.1,
               )
             }
           }
@@ -12090,13 +12096,15 @@ function App() {
                 const clearingClasses = clearingClassesByCell[cell.id] ?? []
 
                 // Living Board phase A: an empty cell no current piece
-                // can reach goes dark. Suppressed during critical (the
-                // alarm is uniform — no map), for daily numbered targets
-                // (their glow is gameplay-critical and the dimming flows
-                // around them), and while disabled (tutorial/MP/over).
+                // can reach goes dark. Stays visible during critical
+                // too (per playtest: hunting for where pieces CAN'T go
+                // isn't interesting difficulty, even in the endgame) —
+                // the alarm overlay pulses over the map rather than
+                // replacing it. Exempt: daily numbered targets (their
+                // glow is gameplay-critical) and disabled states
+                // (tutorial/MP/game over).
                 const isDeadCell =
                   livenessEnabled &&
-                  !criticalImminent &&
                   !isFilled &&
                   !isDailyTarget &&
                   !liveness.liveCellIds.has(cell.id)
@@ -12408,7 +12416,14 @@ function App() {
                         </text>
                       )}
                     {(isFilled || (isDailyTarget && isDailyHitPulsing)) &&
-                      !isRecentlyPlaced &&
+                      // Just-placed cubes normally live only in the
+                      // lock-in pop overlay for ~220ms — but on a
+                      // game-ending placement the collapse clones the
+                      // cells in that exact window, so the killing
+                      // piece must render in-cell too or it vanishes
+                      // from the debris (double-draw with the overlay
+                      // is invisible: identical geometry).
+                      (!isRecentlyPlaced || game.gameOver) &&
                       (theme !== 'glass' ||
                         isGolden ||
                         isDailyTarget ||
