@@ -5169,11 +5169,12 @@ body {
    their own wordmark voice. */
 .hexaclear-announcer-pop {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 50%;
+  right: auto;
   top: 12%;
-  display: flex;
-  justify-content: center;
+  width: max-content;
+  max-width: min(92vw, 100%);
+  text-align: center;
   pointer-events: none;
   z-index: 30;
   font-family: 'Monoton', system-ui, sans-serif;
@@ -5208,25 +5209,25 @@ body {
 @keyframes hexaclear-announcer-pop {
   0% {
     opacity: 0;
-    transform: scale(1.7);
+    transform: translateX(-50%) scale(1.7);
   }
   14% {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(-50%) scale(1);
   }
   18% {
-    transform: scale(1.04);
+    transform: translateX(-50%) scale(1.04);
   }
   24% {
-    transform: scale(1);
+    transform: translateX(-50%) scale(1);
   }
   78% {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateX(-50%) scale(1) translateY(0);
   }
   100% {
     opacity: 0;
-    transform: scale(1.06) translateY(-8px);
+    transform: translateX(-50%) scale(1.06) translateY(-8px);
   }
 }
 
@@ -9172,4 +9173,3 @@ body {
   border-width: 2px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
-

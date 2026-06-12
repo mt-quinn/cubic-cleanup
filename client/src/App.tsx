@@ -3885,6 +3885,13 @@ function App() {
   // Bumped each time a placement clears the entire board (+25 bonus).
   // Drives a one-shot golden flash overlay on the board wrapper.
   const [boardClearFlashToken, setBoardClearFlashToken] = useState(0)
+  useEffect(() => {
+    if (boardClearFlashToken <= 0) return
+    const id = window.setTimeout(() => {
+      setBoardClearFlashToken(0)
+    }, 950)
+    return () => window.clearTimeout(id)
+  }, [boardClearFlashToken])
   const [failedPlacementPieceId, setFailedPlacementPieceId] = useState<string | null>(
     null,
   )
