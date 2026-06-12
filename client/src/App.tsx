@@ -15947,7 +15947,7 @@ function App() {
                                     playUiClick()
                                   }}
                                 />
-                                <span>Board highlights</span>
+                                <span>Unreachable space highlight</span>
                               </label>
                             </div>
                           </div>
