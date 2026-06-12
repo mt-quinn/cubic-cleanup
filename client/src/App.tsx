@@ -3808,6 +3808,12 @@ function App() {
     tutorialStage === 0 &&
     !game.gameOver &&
     !gameOverWindingDown
+  const [boardHighlightsEnabled, setBoardHighlightsEnabled] =
+    useState<boolean>(() => {
+      if (typeof window === 'undefined') return true
+      return window.localStorage.getItem('cubic-board-highlights') !== 'false'
+    })
+  const boardHighlightsActive = livenessEnabled && boardHighlightsEnabled
   const [criticalActive, setCriticalActive] = useState(false)
   const criticalOnsetTimerRef = useRef<number | null>(null)
   // Adaptive thresholds: scarcity is judged per available piece
@@ -8753,6 +8759,21 @@ function App() {
     }
   }, [colorblindSupport])
 
+  // Board highlights are an informational visual layer only. Turning
+  // them off hides unreachable-cell paint, but critical pressure still
+  // uses liveness totals for its alarm/audio state.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        'cubic-board-highlights',
+        boardHighlightsEnabled ? 'true' : 'false',
+      )
+    } catch {
+      // Best-effort persistence.
+    }
+  }, [boardHighlightsEnabled])
+
   // Apply the active theme to <html data-theme="..."> and persist it.
   // Every theme override in CSS is scoped under that selector so
   // switching is purely a single attribute write — no remount needed,
@@ -10273,7 +10294,7 @@ function App() {
         dealInActive && !reducedMotion && !announceLanded
           ? 'is-announce-flying'
           : '',
-        livenessEnabled ? 'is-liveness' : '',
+        boardHighlightsActive ? 'is-liveness' : '',
         criticalActive ? 'is-critical' : '',
         reducedMotion ? 'reduced-motion' : '',
         colorblindSupport ? 'is-colorblind' : '',
@@ -12109,9 +12130,11 @@ function App() {
                 // the alarm overlay pulses over the map rather than
                 // replacing it. Exempt: daily numbered targets (their
                 // glow is gameplay-critical) and disabled states
-                // (tutorial/MP/game over).
+                // (tutorial/MP/game over). The settings toggle only
+                // controls this board map; liveness still feeds the
+                // low-placement critical alarm.
                 const isDeadCell =
-                  livenessEnabled &&
+                  boardHighlightsActive &&
                   !isFilled &&
                   !isDailyTarget &&
                   !liveness.liveCellIds.has(cell.id)
@@ -15914,6 +15937,17 @@ function App() {
                                   }}
                                 />
                                 <span>Colorblind support</span>
+                              </label>
+                              <label className="hexaclear-menu-settings-toggle-row">
+                                <input
+                                  type="checkbox"
+                                  checked={boardHighlightsEnabled}
+                                  onChange={(e) => {
+                                    setBoardHighlightsEnabled(e.target.checked)
+                                    playUiClick()
+                                  }}
+                                />
+                                <span>Board highlights</span>
                               </label>
                             </div>
                           </div>
