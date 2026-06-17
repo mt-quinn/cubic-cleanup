@@ -2687,8 +2687,12 @@
 
 /* Header buttons: undo while in-play — same Win98 raised chrome. */
 [data-theme="win98"] .hexaclear-undo-button {
-  background: var(--w98-surface) !important;
-  color: var(--w98-text) !important;
+  /* Track the score-tier cube color so the button retints with the board
+     every 1000 points (--w98-cube-fill is driven per tier by paletteForTier
+     and inherits from .cubic-viewport; tier 0 = the default teal). The fill
+     runs dark/mid, so use the light "on-navy" ink to stay legible. */
+  background: var(--w98-cube-fill) !important;
+  color: var(--w98-text-on-navy) !important;
   font-family: inherit !important;
   font-size: 11px !important;
   font-weight: 400 !important;
@@ -3727,4 +3731,11 @@
 
 [data-theme="win98"] .hexaclear-pmenu-settings-body {
   padding: 0 8px;
+}
+
+/* Stats dashboard accent — classic navy, square corners. */
+:root[data-theme="win98"] {
+  --dash-accent: #000080;
+  --dash-accent-ink: #ffffff;
+  --dash-radius: 0px;
 }

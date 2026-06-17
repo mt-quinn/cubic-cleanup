@@ -1914,3 +1914,10 @@
   font-family: 'Cinzel', Georgia, serif;
   color: #ead9ac;
 }
+
+/* Stats dashboard accent — lit gold against the stone. */
+:root[data-theme="glass"] {
+  --dash-accent: var(--glass-gold-bright, #f0c46a);
+  --dash-accent-ink: #1a1206;
+  --dash-radius: 10px;
+}

@@ -2340,3 +2340,10 @@
 [data-theme="audius"] .hexaclear-pmenu-utility {
   border-top: 1px solid color-mix(in srgb, var(--audius-cube-left, #42d6bd) 18%, transparent);
 }
+
+/* Stats dashboard accent — rides the audio-reactive cube hue. */
+:root[data-theme="audius"] {
+  --dash-accent: var(--audius-cube-top, #b483ff);
+  --dash-accent-ink: #120a1f;
+  --dash-radius: 12px;
+}

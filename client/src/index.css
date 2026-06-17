@@ -4203,8 +4203,13 @@ body {
   bottom: 0.8rem;
   padding: 0.3rem 0.8rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 205, 143, 0.9);
-  background: linear-gradient(135deg, #f0c77a, #f08a4b);
+  /* Track the score-tier palette so the button shifts in lockstep with the
+     cubes/hexes every 1000 points (the --cube-* / --score-tier-accent vars
+     are @property-registered and transition over 1600ms on .cubic-viewport,
+     and inherit down to this button). At tier 0 these resolve to the default
+     amber palette, matching the original button color. */
+  border: 1px solid color-mix(in srgb, var(--score-tier-accent) 80%, #1c0d02);
+  background: linear-gradient(135deg, var(--cube-top), var(--cube-left));
   color: #3a1204;
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -9172,4 +9177,302 @@ body {
 .cubic-viewport.is-colorblind .hexaclear-pvp-delta-swatch {
   border-width: 2px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+/* ====================================================================
+   Stats dashboard (statsDashboard.tsx)
+   --------------------------------------------------------------------
+   Theme-agnostic by construction: the card frame + text color come
+   from the shared `.hexaclear-overlay-card`, muted text and hairlines
+   are mixed off `currentColor`, and the one chromatic accent is
+   `--dash-accent` (overridden per theme below). So a single base block
+   reads correctly on every theme; theme files only set the accent +
+   corner radius.
+   ==================================================================== */
+:root {
+  --dash-accent: #f0a54b;
+  --dash-accent-ink: #2a1709;
+  --dash-radius: 12px;
+}
+.hexaclear-dash-card {
+  max-width: 470px;
+  width: 100%;
+  text-align: left;
+}
+.hexaclear-dash-foci {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.hexaclear-dash-focus {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: var(--dash-radius);
+  cursor: pointer;
+}
+.hexaclear-dash-focus.is-on {
+  background: var(--dash-accent);
+  border-color: var(--dash-accent);
+  color: var(--dash-accent-ink);
+}
+.hexaclear-dash-archetype {
+  margin-top: 18px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dash-accent);
+}
+.hexaclear-dash-zlabel {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+.hexaclear-dash-headrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+.hexaclear-dash-edit {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 12px;
+  border-radius: var(--dash-radius);
+  cursor: pointer;
+}
+.hexaclear-dash-edit.is-on {
+  background: var(--dash-accent);
+  border-color: var(--dash-accent);
+  color: var(--dash-accent-ink);
+}
+.hexaclear-dash-headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 30px;
+  margin-top: 12px;
+}
+.hexaclear-dash-head {
+  position: relative;
+}
+.hexaclear-dash-head-value {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+.hexaclear-dash-head-label {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.hexaclear-dash-unpin {
+  position: absolute;
+  top: -8px;
+  right: -16px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 0;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.hexaclear-dash-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+.hexaclear-dash-pin {
+  background: color-mix(in srgb, var(--dash-accent) 15%, transparent);
+  border: 0;
+  color: var(--dash-accent);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 11px;
+  border-radius: var(--dash-radius);
+  cursor: pointer;
+}
+.hexaclear-dash-herolabel {
+  margin-top: 22px;
+  margin-bottom: 8px;
+}
+.hexaclear-dash-hero {
+  min-height: 40px;
+}
+.hexaclear-dash-svg {
+  width: 100%;
+  max-width: 300px;
+  display: block;
+  margin: 0 auto;
+}
+.hexaclear-dash-spark {
+  width: 100%;
+  height: 96px;
+  display: block;
+}
+.hexaclear-dash-callout {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.hexaclear-dash-callout .is-up {
+  color: #4caf6a;
+}
+.hexaclear-dash-callout .is-down {
+  color: #d8694a;
+}
+.hexaclear-dash-empty {
+  margin: 8px 0;
+  font-size: 13px;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.hexaclear-dash-heatmap {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 3px;
+  width: 100%;
+  max-width: 300px;
+}
+.hexaclear-dash-heatmap span {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+.hexaclear-dash-heatmap span.lvl-1 {
+  background: color-mix(in srgb, var(--dash-accent) 45%, transparent);
+}
+.hexaclear-dash-heatmap span.lvl-2 {
+  background: var(--dash-accent);
+}
+.hexaclear-dash-heatmap span.lvl--1 {
+  background: transparent;
+}
+.hexaclear-dash-gauge {
+  display: flex;
+  justify-content: center;
+}
+.hexaclear-dash-gauge svg {
+  width: 140px;
+  height: 140px;
+}
+.hexaclear-dash-glance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 26px;
+  margin-top: 10px;
+}
+.hexaclear-dash-gvalue {
+  display: block;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+}
+.hexaclear-dash-glabel {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+}
+.hexaclear-dash-trophies {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-top: 10px;
+  padding-bottom: 4px;
+}
+.hexaclear-dash-trophy {
+  flex: 0 0 auto;
+  min-width: 104px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: var(--dash-radius);
+  padding: 10px 12px;
+}
+.hexaclear-dash-tlabel {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 58%, transparent);
+}
+.hexaclear-dash-tvalue {
+  display: block;
+  margin-top: 5px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.hexaclear-dash-detail-toggle {
+  margin-top: 22px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  width: 100%;
+  text-align: left;
+  padding: 14px 0 0;
+  color: var(--dash-accent);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.hexaclear-dash-detail-group {
+  margin-top: 12px;
+}
+.hexaclear-dash-detail-glabel {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+  margin-bottom: 2px;
+}
+.hexaclear-dash-detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 13px;
+}
+.hexaclear-dash-detail-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.hexaclear-dash-footer {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 22px;
+}
+.hexaclear-dash-link {
+  background: transparent;
+  border: 0;
+  color: var(--dash-accent);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.hexaclear-dash-headline,
+.hexaclear-dash-glance,
+.hexaclear-dash-detail-value,
+.hexaclear-dash-head-value,
+.hexaclear-dash-gvalue,
+.hexaclear-dash-tvalue {
+  font-variant-numeric: tabular-nums;
 }

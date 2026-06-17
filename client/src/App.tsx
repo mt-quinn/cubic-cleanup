@@ -85,17 +85,19 @@ import {
   clearStatsSyncAccountId,
   foldRunIntoLifetime,
   formatDuration,
-  formatFriendlyDate,
   formatFriendlyDateTime,
   loadLifetimeStats,
   loadStatsSyncAccountId,
   loadStatsSyncBaseline,
   loadStatsSyncLastAt,
+  loadRecentRuns,
+  appendRecentRun,
   saveLifetimeStats,
   saveStatsSyncAccountId,
   saveStatsSyncBaseline,
 } from './stats'
-import type { LifetimeStats, RunStats } from './stats'
+import type { LifetimeStats, RunStats, RecentRun } from './stats'
+import { StatsDashboard } from './statsDashboard'
 import {
   createHighlightSnapshot,
   HighlightReel,
@@ -4217,6 +4219,11 @@ function App() {
   const [highScores, setHighScores] = useState<HighScoreEntry[]>(() =>
     typeof window === 'undefined' ? [] : loadHighScores(),
   )
+  // Capped log of recent finished runs, powering the stats-dashboard
+  // trajectory sparklines. Appended on each gameover (see fold below).
+  const [recentRuns, setRecentRuns] = useState<RecentRun[]>(() =>
+    typeof window === 'undefined' ? [] : loadRecentRuns(),
+  )
   const [pendingHighScore, setPendingHighScore] = useState(false)
   const [pendingScore, setPendingScore] = useState<number | null>(null)
   const [highScoreSaved, setHighScoreSaved] = useState(false)
@@ -7748,6 +7755,38 @@ function App() {
         }
         return next
       })
+      // Log the run into the recent-runs ring buffer for the stats
+      // dashboard trajectory. Bucket it the same way the lifetime
+      // counters do: solo big-board folds into endless; co-op and pvp
+      // are their own buckets.
+      const recentMode: RecentRun['mode'] =
+        isMultiplayer && mpMode === 'pvp'
+          ? 'pvp'
+          : isMultiplayer
+            ? 'coop'
+            : 'endless'
+      const recentEntry: RecentRun =
+        game.mode === 'daily' && !isMultiplayer
+          ? {
+              mode: 'daily',
+              score: game.score,
+              moves: game.moves,
+              durationMs: finishedRun.activePlayMs,
+              patternsCleared: finishedRun.patternsCleared,
+              rubiesCleared: finishedRun.rubiesCleared,
+              date: Date.now(),
+            }
+          : {
+              mode: recentMode,
+              score: game.score,
+              moves: game.moves,
+              durationMs: finishedRun.activePlayMs,
+              patternsCleared: finishedRun.patternsCleared,
+              rubiesCleared: finishedRun.rubiesCleared,
+              date: Date.now(),
+              ...(recentMode === 'pvp' ? { won: pvpSelfWon } : {}),
+            }
+      setRecentRuns(appendRecentRun(recentEntry))
       // Mirror PvP outcomes to the global PvP leaderboard. Each
       // client fires its own submit so the per-player counter
       // upserts independently — SHAME folds in as a loss for every
@@ -16837,346 +16876,25 @@ function App() {
               </div>
             )
           })()}
-          {showStats && (() => {
-            // Profile stats modal. Pulls all values from the cached
-            // `lifetimeStats` (which is itself the localStorage
-            // record). Same compact tile grid as the gameover
-            // run-stats card so the surfaces feel like one family
-            // — three sections (Lifetime / By mode / Records) each
-            // built from a list of optional tiles. Records hide
-            // tiles for unset records so a brand-new profile shows
-            // a minimal "you haven't earned this yet" state instead
-            // of a wall of dashes.
-            const ls = lifetimeStats
-            const hasAnyGame =
-              ls.gamesPlayedEndless +
-                ls.gamesPlayedDaily +
-                ls.gamesPlayedCoop +
-                ls.gamesPlayedPvp >
-              0
-            const totalGames =
-              ls.gamesPlayedEndless +
-              ls.gamesPlayedDaily +
-              ls.gamesPlayedCoop +
-              ls.gamesPlayedPvp
-            const avgRunMs =
-              totalGames > 0 ? ls.totalActivePlayMs / totalGames : 0
-            const formatAverage = (value: number): string =>
-              Number.isFinite(value) ? String(Math.round(value)) : '0'
-            const displayTotalScore = ls.totalScore
-            const avgClearsPerGame =
-              totalGames > 0 ? ls.patternsCleared / totalGames : 0
-            // Score/game only averages across modes that produce a
-            // score (endless / big / co-op). Daily ranks by moves and
-            // PvP is a territory race, so including them drags the
-            // average toward zero with games that were never even
-            // eligible to contribute points. `scoredGamesPlayed` and
-            // `totalScore` are already kept in lockstep on the stats
-            // side; see `foldRunIntoLifetime`.
-            const avgScorePerGame =
-              ls.scoredGamesPlayed > 0
-                ? displayTotalScore / ls.scoredGamesPlayed
-                : 0
-            const trackingSince = formatFriendlyDate(ls.startedTrackingAt)
-
-            const summaryStats: StatDatum[] = [
-              {
-                key: 'time',
-                label: 'Time',
-                value: formatDuration(ls.totalActivePlayMs),
-              },
-              {
-                key: 'pieces',
-                label: 'Pieces',
-                value: String(ls.piecesPlaced),
-              },
-              {
-                key: 'clears',
-                label: 'Clears',
-                value: String(ls.patternsCleared),
-              },
-              {
-                key: 'rubies',
-                label: 'Rubies',
-                value: String(ls.rubiesCleared),
-              },
-              {
-                key: 'total-score',
-                label: 'Total score',
-                value: String(displayTotalScore),
-              },
-            ]
-            const performanceStats: StatDatum[] = [
-              {
-                key: 'score-game',
-                label: 'Score/game',
-                value: formatAverage(avgScorePerGame),
-              },
-              {
-                key: 'time-game',
-                label: 'Time/game',
-                value: formatDuration(avgRunMs),
-              },
-              {
-                key: 'clears-game',
-                label: 'Clears/game',
-                value: formatAverage(avgClearsPerGame),
-              },
-            ]
-            if (ls.boardClears > 0) {
-              summaryStats.push({
-                key: 'boards',
-                label: 'Board clears',
-                value: String(ls.boardClears),
-              })
-            }
-
-            const modeStats: StatDatum[] = [
-              {
-                key: 'endless',
-                label: 'Endless',
-                value: String(ls.gamesPlayedEndless),
-              },
-              {
-                key: 'daily',
-                label: 'Daily',
-                value: String(ls.gamesPlayedDaily),
-              },
-              {
-                key: 'coop',
-                label: 'Co-op',
-                value: String(ls.gamesPlayedCoop),
-              },
-            ]
-            if (ls.gamesPlayedPvp > 0) {
-              modeStats.push({
-                key: 'pvp',
-                label: 'PvP',
-                value: String(ls.gamesPlayedPvp),
-              })
-              modeStats.push({
-                key: 'pvp-wins',
-                label: 'PvP wins',
-                value: String(ls.pvpWins),
-              })
-              if (ls.pvpShames > 0) {
-                modeStats.push({
-                  key: 'pvp-shames',
-                  label: 'Shames',
-                  value: String(ls.pvpShames),
-                })
-              }
-            }
-            if (ls.dailyDaysCleared.length > 0) {
-              modeStats.push({
-                key: 'daily-days',
-                label: 'Days cleared',
-                value: String(ls.dailyDaysCleared.length),
-              })
-            }
-            if (ls.coopPartnerIds.length > 0) {
-              modeStats.push({
-                key: 'partners',
-                label: 'Partners',
-                value: String(ls.coopPartnerIds.length),
-              })
-            }
-
-            const records: StatDatum[] = []
-            if (ls.bestEndlessScore > 0) {
-              records.push({
-                key: 'best-score',
-                label: 'Best score',
-                value: String(ls.bestEndlessScore),
-              })
-            }
-            if (ls.bestDailyMoves !== null) {
-              records.push({
-                key: 'best-daily',
-                label: 'Best daily',
-                value: String(ls.bestDailyMoves),
-              })
-            }
-            if (ls.bestCombo >= 2) {
-              records.push({
-                key: 'best-combo',
-                label: 'Best combo',
-                value: `×${ls.bestCombo}`,
-              })
-            }
-            if (ls.bestStreak > 0) {
-              records.push({
-                key: 'best-streak',
-                label: 'Best streak',
-                value: String(ls.bestStreak),
-              })
-            }
-            if (ls.bestSinglePlacement > 0) {
-              records.push({
-                key: 'best-hit',
-                label: 'Best clear',
-                value: `+${ls.bestSinglePlacement}`,
-              })
-            }
-            if (ls.bestRubiesInRun > 0) {
-              records.push({
-                key: 'best-rubies',
-                label: 'Most rubies',
-                value: String(ls.bestRubiesInRun),
-              })
-            }
-            if (ls.longestRunMs > 0) {
-              records.push({
-                key: 'longest',
-                label: 'Longest',
-                value: formatDuration(ls.longestRunMs),
-              })
-            }
-
-            const renderStatLine = (stat: StatDatum) => (
-              <div key={stat.key} className="hexaclear-statline">
-                <span className="hexaclear-statline-label">{stat.label}</span>
-                <span className="hexaclear-statline-value">{stat.value}</span>
-              </div>
-            )
-
-            const renderRecordRows = (items: StatDatum[]) => {
-              if (items.length === 0) return null
-              return (
-                <div className="hexaclear-record-book">
-                  {items.map((record) => (
-                    <div key={record.key} className="hexaclear-record-row">
-                      <span className="hexaclear-record-label">
-                        {record.label}
-                      </span>
-                      <span className="hexaclear-record-value">
-                        {record.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )
-            }
-
-            const renderModeSplit = () => (
-              <div className="hexaclear-mode-ledger">
-                {modeStats.map((mode) => (
-                  <div key={mode.key} className="hexaclear-mode-ledger-item">
-                    <span className="hexaclear-mode-ledger-value">
-                      {mode.value}
-                    </span>
-                    <span className="hexaclear-mode-ledger-label">
-                      {mode.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )
-
-            const renderPerformancePanel = () => (
-              <div className="hexaclear-performance-panel">
-                <div className="hexaclear-performance-feature">
-                  <span className="hexaclear-performance-feature-value">
-                    {formatAverage(avgScorePerGame)}
-                  </span>
-                  <span className="hexaclear-performance-feature-label">
-                    Score/game
-                  </span>
-                </div>
-                <div className="hexaclear-performance-list">
-                  {performanceStats
-                    .filter((stat) => stat.key !== 'score-game')
-                    .map(renderStatLine)}
-                </div>
-              </div>
-            )
-
-            const renderSummary = () => (
-              <div className="hexaclear-profile-summary">
-                <div className="hexaclear-profile-summary-main">
-                  <span className="hexaclear-profile-summary-value">
-                    {totalGames}
-                  </span>
-                  <span className="hexaclear-profile-summary-label">
-                    {totalGames === 1 ? 'Game played' : 'Games played'}
-                  </span>
-                </div>
-                <div className="hexaclear-profile-summary-lines">
-                  {summaryStats.map((stat) => (
-                    <div
-                      key={stat.key}
-                      className="hexaclear-profile-summary-line"
-                    >
-                      <span>{stat.label}</span>
-                      <strong>{stat.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-
-            return (
-              <div
-                className="hexaclear-overlay"
-                onClick={(e) => {
-                  if (e.target !== e.currentTarget) return
-                  playUiClick()
-                  setShowStats(false)
-                  setShowMenu(true)
-                }}
-              >
-                <div className="hexaclear-overlay-card hexaclear-stats-card">
-                  <div className="title">Stats</div>
-                  {!hasAnyGame ? (
-                    <p className="hexaclear-scores-empty">
-                      Finish a run and your stats will start filling in here.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          Totals
-                        </div>
-                        {renderSummary()}
-                      </div>
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          Averages
-                        </div>
-                        {renderPerformancePanel()}
-                      </div>
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          Games Played
-                        </div>
-                        {renderModeSplit()}
-                      </div>
-                      <div className="hexaclear-stats-section">
-                        <div className="hexaclear-stats-section-label">
-                          Records
-                        </div>
-                        {renderRecordRows(records)}
-                      </div>
-                      <p className="hexaclear-stats-tracking-since">
-                        Tracking since {trackingSince}
-                      </p>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="hexaclear-reset"
-                    onClick={() => {
-                      playUiClick()
-                      setShowStats(false)
-                      setShowMenu(true)
-                    }}
-                  >
-                    Back
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
+          {showStats && (
+            <StatsDashboard
+              lifetimeStats={lifetimeStats}
+              pieceStats={pieceStats}
+              highScores={highScores}
+              recentRuns={recentRuns}
+              onBack={() => {
+                playUiClick()
+                setShowStats(false)
+                setShowMenu(true)
+              }}
+              onOpenDailyHistory={() => {
+                playUiClick()
+                setShowStats(false)
+                setShowDailyHistory(true)
+              }}
+              playUiClick={playUiClick}
+            />
+          )}
           {showDailyHistory && (() => {
             // Daily-history calendar. Renders one month at a time
             // (Sun–Sat header) with prev/next chevrons clamped to

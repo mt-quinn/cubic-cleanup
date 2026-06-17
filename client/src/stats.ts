@@ -671,3 +671,135 @@ export const formatFriendlyDateTime = (timestamp: number): string => {
   const mm = minutes.toString().padStart(2, '0')
   return `${month} ${day}, ${year} at ${hours12}:${mm} ${suffix}`
 }
+
+// ===================================================================
+// Recent-runs ring buffer
+// -------------------------------------------------------------------
+// The lifetime profile only keeps aggregates, which can't power a
+// per-run trajectory ("are my last 20 runs trending up?"). This is a
+// small, capped log of recent finished runs — local-only, best-effort,
+// same defensive load pattern as the rest of this file. We append on
+// every gameover (see App.tsx fold path) and read it on the stats
+// dashboard to draw the trajectory sparklines.
+// ===================================================================
+
+export type RecentRunMode = 'endless' | 'daily' | 'coop' | 'pvp'
+
+export type RecentRun = {
+  // Normalized bucket the run belongs to. Solo big-board folds into
+  // 'endless' (shares the endless scoring loop); co-op and pvp are
+  // their own buckets.
+  mode: RecentRunMode
+  score: number
+  moves: number
+  durationMs: number
+  patternsCleared: number
+  rubiesCleared: number
+  // ms timestamp the run ended.
+  date: number
+  // PvP only: did this device win the match. Undefined elsewhere.
+  won?: boolean
+}
+
+const RECENT_RUNS_KEY = 'cubic-recent-runs-v1'
+const RECENT_RUNS_CAP = 60
+
+export const loadRecentRuns = (): RecentRun[] => {
+  try {
+    if (typeof window === 'undefined') return []
+    const raw = window.localStorage.getItem(RECENT_RUNS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    const modes = new Set(['endless', 'daily', 'coop', 'pvp'])
+    return parsed
+      .filter(
+        (e): e is RecentRun =>
+          !!e &&
+          typeof e === 'object' &&
+          modes.has((e as RecentRun).mode) &&
+          Number.isFinite((e as RecentRun).date),
+      )
+      .slice(-RECENT_RUNS_CAP)
+  } catch {
+    return []
+  }
+}
+
+// Append a finished run and persist the capped tail. Returns the new
+// list so callers can keep state in lockstep without a re-read.
+export const appendRecentRun = (run: RecentRun): RecentRun[] => {
+  try {
+    if (typeof window === 'undefined') return []
+    const next = [...loadRecentRuns(), run].slice(-RECENT_RUNS_CAP)
+    window.localStorage.setItem(RECENT_RUNS_KEY, JSON.stringify(next))
+    return next
+  } catch {
+    return []
+  }
+}
+
+// ===================================================================
+// Stats-dashboard preferences (focus + pinned headline stats)
+// -------------------------------------------------------------------
+// Which focus the player last looked at, and the headline stats they
+// pinned per focus. Local-only UI preference (no account mirror): it
+// describes how this device wants to *view* the synced stats, not the
+// stats themselves. Unknown focuses / non-string pins are dropped on
+// load so a malformed entry can't break the dashboard.
+// ===================================================================
+
+export type DashboardFocus = 'overall' | 'endless' | 'daily' | 'pvp' | 'coop'
+
+export type DashboardPrefs = {
+  focus: DashboardFocus
+  // Per-focus pinned headline stat keys. Absent focus = use the
+  // focus's preset defaults.
+  pins: Partial<Record<DashboardFocus, string[]>>
+}
+
+const DASHBOARD_PREFS_KEY = 'cubic-stats-dashboard-v1'
+const DASHBOARD_FOCUSES = new Set<DashboardFocus>([
+  'overall',
+  'endless',
+  'daily',
+  'pvp',
+  'coop',
+])
+
+export const loadDashboardPrefs = (): DashboardPrefs => {
+  const fallback: DashboardPrefs = { focus: 'overall', pins: {} }
+  try {
+    if (typeof window === 'undefined') return fallback
+    const raw = window.localStorage.getItem(DASHBOARD_PREFS_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as Partial<DashboardPrefs>
+    if (!parsed || typeof parsed !== 'object') return fallback
+    const focus =
+      typeof parsed.focus === 'string' &&
+      DASHBOARD_FOCUSES.has(parsed.focus as DashboardFocus)
+        ? (parsed.focus as DashboardFocus)
+        : 'overall'
+    const pins: Partial<Record<DashboardFocus, string[]>> = {}
+    if (parsed.pins && typeof parsed.pins === 'object') {
+      for (const [key, value] of Object.entries(parsed.pins)) {
+        if (!DASHBOARD_FOCUSES.has(key as DashboardFocus)) continue
+        if (!Array.isArray(value)) continue
+        const clean = value.filter((v) => typeof v === 'string').slice(0, 4)
+        if (clean.length > 0) pins[key as DashboardFocus] = clean
+      }
+    }
+    return { focus, pins }
+  } catch {
+    return fallback
+  }
+}
+
+export const saveDashboardPrefs = (prefs: DashboardPrefs): void => {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    // Best-effort UI preference.
+  }
+}

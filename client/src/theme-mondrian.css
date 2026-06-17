@@ -1570,3 +1570,319 @@
 [data-theme="mondrian"] .hexaclear-pmenu-utility {
   border-top: 3px solid var(--md-line);
 }
+
+/* ====================================================================
+   LIGHT-ON-LIGHT TEXT REPAIRS
+   --------------------------------------------------------------------
+   The base stylesheet was authored for the dark "Cubekill" canvas, so a
+   large family of labels, titles and readouts are painted in warm
+   cream / gold (#ffe8a3, #ffe8c7, #ffd9a3, #f0d4a8 …). Abstract repaints
+   every card / panel / HUD surface to the warm-WHITE ground (--md-ground),
+   which left all of that cream text invisible (cream-on-white).
+
+   The theme CSS is @imported at the TOP of index.css, so for equal
+   specificity the base rule wins — every override below is scoped with
+   :root[data-theme="mondrian"] (and mirrors the base selector structure)
+   so it reliably exceeds the base specificity. Buttons inside overlay
+   cards are already handled by the global button override above and are
+   intentionally not repeated here.
+
+   Ink mapping:
+     headings / titles / emphasised values  -> --md-line-hi  (black)
+     body copy / labels / readouts          -> --md-line
+     muted / secondary text                 -> --md-line @ ~65%
+     success                                -> a dark green that reads on white
+     error / danger                         -> --md-red
+     escalating combo accents               -> primaries (kept vivid + dark)
+   ==================================================================== */
+
+/* --- Card titles (account / scores / scoring cards that aren't wrapped
+       in .hexaclear-overlay-card, so the existing overlay-card .title
+       rule does not reach them) --- */
+:root[data-theme="mondrian"] .hexaclear-account-card .title,
+:root[data-theme="mondrian"] .hexaclear-scores-card .title,
+:root[data-theme="mondrian"] .hexaclear-scoring-card .title,
+:root[data-theme="mondrian"] .hexaclear-gameover-card .title {
+  color: var(--md-line-hi);
+}
+
+/* --- Game-over card: daily-win headline + intro + reason + section labels
+       (the daily-win .title ties the overlay-card .title rule on
+       specificity, so it needs an explicit, higher-specificity override) --- */
+:root[data-theme="mondrian"] .hexaclear-gameover-card.daily-win .title,
+:root[data-theme="mondrian"] .hexaclear-gameover-card.daily-win .hexaclear-gameover-headline-value {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-gameover-daily-intro-copy,
+:root[data-theme="mondrian"] .hexaclear-gameover-save-inline-label,
+:root[data-theme="mondrian"] .hexaclear-gameover-section-label {
+  color: var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-gameover-ftue-reason {
+  color: var(--md-line-hi);
+  background: color-mix(in srgb, var(--md-red) 14%, var(--md-ground));
+}
+
+/* --- Save-GIF / highlight-reel export menu --- */
+:root[data-theme="mondrian"] .hexaclear-export-gif-count,
+:root[data-theme="mondrian"] .hexaclear-export-gif-step {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-export-gif-meta,
+:root[data-theme="mondrian"] .hexaclear-export-gif-step-label,
+:root[data-theme="mondrian"] .hexaclear-multi-reel-empty {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+
+/* --- Main-menu account zone --- */
+:root[data-theme="mondrian"] .hexaclear-menu-account-secondary {
+  color: var(--md-line) !important;
+}
+:root[data-theme="mondrian"] .hexaclear-menu-settings-account-button {
+  color: var(--md-line-hi) !important;
+}
+
+/* --- Account panel (sign-in / profile) --- */
+:root[data-theme="mondrian"] .hexaclear-account-copy strong,
+:root[data-theme="mondrian"] .hexaclear-account-mode-row button.is-active,
+:root[data-theme="mondrian"] .hexaclear-account-online span,
+:root[data-theme="mondrian"] .hexaclear-account-stat span,
+:root[data-theme="mondrian"] .hexaclear-profile-summary-line strong {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-account-form label,
+:root[data-theme="mondrian"] .hexaclear-account-mode-row button,
+:root[data-theme="mondrian"] .hexaclear-account-online strong,
+:root[data-theme="mondrian"] .hexaclear-account-stat strong,
+:root[data-theme="mondrian"] .hexaclear-profile-summary-line span {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+:root[data-theme="mondrian"] .hexaclear-account-message {
+  color: #1f7a3d; /* success — readable green on warm white */
+}
+:root[data-theme="mondrian"] .hexaclear-account-message.is-error {
+  color: var(--md-red);
+}
+
+/* --- Music-visualizer (Audius) panel --- */
+:root[data-theme="mondrian"] .hexaclear-audius-search {
+  color: var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-audius-field,
+:root[data-theme="mondrian"] .hexaclear-audius-meta,
+:root[data-theme="mondrian"] .hexaclear-audius-panel-head,
+:root[data-theme="mondrian"] .hexaclear-audius-volume,
+:root[data-theme="mondrian"] .hexaclear-audius-volume output {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+:root[data-theme="mondrian"] .hexaclear-audius-error {
+  color: var(--md-red);
+}
+
+/* --- Scores / leaderboard / history --- */
+:root[data-theme="mondrian"] .hexaclear-scores-date-stepper,
+:root[data-theme="mondrian"] .hexaclear-scores-pagination,
+:root[data-theme="mondrian"] .hexaclear-scores-confirm-text {
+  color: var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-highscores li.recent .name,
+:root[data-theme="mondrian"] .hexaclear-highscores li.recent .value {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-history-month-summary {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+:root[data-theme="mondrian"] .hexaclear-history-month-check,
+:root[data-theme="mondrian"] .hexaclear-history-nav-label-perfected {
+  color: #1f7a3d; /* perfected / cleared — readable green */
+}
+
+/* NOTE: the debug modal, emote/smiley picker, PvP delta chip and the
+   "daily cleared" pill carry their own dark wood backgrounds from the base
+   sheet. Those surfaces are fully relit to the De Stijl palette in the
+   "DARK PANEL RELIGHT" section at the end of this file. */
+
+/* --- Co-op / spectator HUD (over the light board) --- */
+:root[data-theme="mondrian"] .hexaclear-coop-hud {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-coop-leave {
+  color: var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-spectator-banner {
+  color: var(--md-line-hi);
+}
+
+/* --- PvP HUD, standings, deltas, win/shame cards --- */
+:root[data-theme="mondrian"] .hexaclear-pvp-record,
+:root[data-theme="mondrian"] .hexaclear-pvp-row,
+:root[data-theme="mondrian"] .hexaclear-pvp-standings-row,
+:root[data-theme="mondrian"] .hexaclear-pvp-standings-row.is-winner,
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-entry.is-self .hexaclear-pvp-delta-name,
+:root[data-theme="mondrian"] .hexaclear-pvp-row.is-self .hexaclear-pvp-row-name,
+:root[data-theme="mondrian"] .hexaclear-pvp-row.is-self .hexaclear-pvp-row-pct {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-entry.is-unattributed .hexaclear-pvp-delta-name,
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-sep,
+:root[data-theme="mondrian"] .hexaclear-pvp-record-rate,
+:root[data-theme="mondrian"] .hexaclear-pvp-scores-header,
+:root[data-theme="mondrian"] .hexaclear-pvp-sort-pill,
+:root[data-theme="mondrian"] .hexaclear-pvp-standings-label,
+:root[data-theme="mondrian"] .hexaclear-pvp-standings-rank,
+:root[data-theme="mondrian"] .hexaclear-pvp-win-subtitle,
+:root[data-theme="mondrian"] .hexaclear-pvp-win-tag,
+:root[data-theme="mondrian"] .hexaclear-pvp-shame-subtitle,
+:root[data-theme="mondrian"] .hexaclear-pvp-shame-blurb {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+
+/* --- Tutorial / FTUE prompts that float over the light board --- */
+:root[data-theme="mondrian"] .hexaclear-tutorial-skip {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+
+/* --- Pause-menu run links: hover states fell back to base cream --- */
+:root[data-theme="mondrian"] .hexaclear-pmenu-runlink:hover {
+  color: var(--md-blue);
+}
+:root[data-theme="mondrian"] .hexaclear-pmenu-runlink.is-warn:hover,
+:root[data-theme="mondrian"] .hexaclear-pmenu-runlink.is-danger:hover {
+  color: var(--md-red);
+}
+
+/* --- Escalating combo feedback that floats over the light board.
+       Keep the "hotter = more intense" read, but using primaries dark
+       enough to register on warm white (yellow is reserved for fills,
+       not text here). --- */
+:root[data-theme="mondrian"] .hexaclear-streak-tier-1,
+:root[data-theme="mondrian"] .hexaclear-multi-clear-tier-2,
+:root[data-theme="mondrian"] .hexaclear-streak-tier-2,
+:root[data-theme="mondrian"] .hexaclear-streak-tier-3 {
+  color: var(--md-blue);
+}
+:root[data-theme="mondrian"] .hexaclear-multi-clear-tier-3,
+:root[data-theme="mondrian"] .hexaclear-streak-tier-4,
+:root[data-theme="mondrian"] .hexaclear-streak-tier-5 {
+  color: var(--md-red);
+}
+:root[data-theme="mondrian"] .hexaclear-score-particle-value {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-score-particle-label {
+  color: var(--md-blue);
+}
+:root[data-theme="mondrian"] .hexaclear-score-particle.is-negative .hexaclear-score-particle-value {
+  color: var(--md-red);
+}
+
+/* ====================================================================
+   DARK PANEL RELIGHT
+   --------------------------------------------------------------------
+   These components ship their own dark "wood" backgrounds from the base
+   sheet (debug modal, emote/smiley picker, PvP delta chip, daily-cleared
+   pill). Out of the box they float as dark brown boxes inside the warm
+   white De Stijl gallery. Repaint them as flat planes on the warm-white
+   ground with heavy black structural edges and primary accents, matching
+   the rest of the Abstract theme.
+   ==================================================================== */
+
+/* --- Debug modal (developer overlay) --- */
+:root[data-theme="mondrian"] .hexaclear-debug-modal {
+  background: var(--md-ground);
+  border: 3px solid var(--md-line);
+  box-shadow: 8px 8px 0 var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-debug-modal-header h2,
+:root[data-theme="mondrian"] .hexaclear-debug-modal-header button,
+:root[data-theme="mondrian"] .hexaclear-debug-values h3 {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-debug-modal-header button:hover {
+  color: var(--md-red);
+}
+:root[data-theme="mondrian"] .hexaclear-debug-slider label,
+:root[data-theme="mondrian"] .hexaclear-debug-values p {
+  color: var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-debug-slider input[type="range"] {
+  background: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-debug-slider input[type="range"]::-webkit-slider-thumb {
+  background: var(--md-blue);
+}
+:root[data-theme="mondrian"] .hexaclear-debug-slider input[type="range"]::-moz-range-thumb {
+  background: var(--md-blue);
+  border: none;
+}
+
+/* --- Emote trigger + picker panel --- */
+:root[data-theme="mondrian"] .hexaclear-emote-trigger {
+  background: var(--md-yellow);
+  border: 2px solid var(--md-line);
+  color: var(--md-line-hi);
+  box-shadow: 3px 3px 0 var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-emote-panel {
+  background: var(--md-ground);
+  border: 2px solid var(--md-line);
+  box-shadow: 8px 8px 0 var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-emote-panel-title {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-emote-option {
+  background: var(--md-ground-2);
+  border: 1px solid var(--md-line);
+  color: var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-emote-option:hover {
+  background: var(--md-yellow);
+  color: var(--md-line-hi);
+}
+
+/* --- Smiley rows (leaderboard reactions) --- */
+:root[data-theme="mondrian"] .hexaclear-smiley-name {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-smiley-rank {
+  background: var(--md-ground-2);
+  border: 1px solid var(--md-line);
+  color: var(--md-line);
+}
+
+/* --- PvP delta chip --- */
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-chip {
+  background: var(--md-ground);
+  border: 1px solid var(--md-line);
+  color: var(--md-line);
+  box-shadow: 3px 3px 0 var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-chip-label {
+  color: color-mix(in srgb, var(--md-line) 65%, transparent);
+}
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-entry.is-self .hexaclear-pvp-delta-name {
+  color: var(--md-line-hi);
+}
+:root[data-theme="mondrian"] .hexaclear-pvp-delta-sep {
+  color: color-mix(in srgb, var(--md-line) 40%, transparent);
+}
+
+/* --- "Daily cleared" achievement pill: a yellow celebration plane --- */
+:root[data-theme="mondrian"] .hexaclear-daily-cleared-label {
+  background: var(--md-yellow);
+  border: 2px solid var(--md-line);
+  color: var(--md-line-hi);
+  box-shadow: 3px 3px 0 var(--md-line);
+}
+:root[data-theme="mondrian"] .hexaclear-daily-cleared-badge,
+:root[data-theme="mondrian"] .hexaclear-daily-cleared-check {
+  color: var(--md-line-hi);
+}
+
+/* Stats dashboard accent — De Stijl blue plane, hard corners. */
+:root[data-theme="mondrian"] {
+  --dash-accent: var(--md-blue);
+  --dash-accent-ink: var(--md-ground);
+  --dash-radius: 0px;
+}
