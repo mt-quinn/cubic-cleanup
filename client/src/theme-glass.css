@@ -566,6 +566,42 @@
   transition: none;
 }
 
+/* These glass-only overlay SVG elements are rendered in App.tsx above the
+   actual panes. SVG defaults fill unknown polygons black, so every decorative
+   overlay must opt into an explicit non-opaque paint or it can cover the
+   whole board. */
+[data-theme="glass"] .hexaclear-glass-recess-shadow,
+[data-theme="glass"] .hexaclear-pane-depth,
+[data-theme="glass"] .hexaclear-pane-sheen,
+[data-theme="glass"] .hexaclear-pane-seed {
+  fill: none;
+  stroke: none;
+  pointer-events: none;
+}
+[data-theme="glass"] .hexaclear-glass-recess-shadow {
+  stroke: rgba(0, 0, 0, 0.38);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+[data-theme="glass"] .hexaclear-board-outline-arris,
+[data-theme="glass"] .hexaclear-board-outline-texture {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+[data-theme="glass"] .hexaclear-board-outline-arris {
+  stroke: rgba(255, 244, 214, 0.2);
+  stroke-width: 2;
+}
+[data-theme="glass"] .hexaclear-board-outline-texture {
+  stroke: rgba(0, 0, 0, 0.18);
+  stroke-width: 1;
+  stroke-dasharray: 4 7;
+}
+
 /* ====================================================================
    The rose window — a carved limestone oculus set into the wall
    --------------------------------------------------------------------

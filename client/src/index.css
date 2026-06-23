@@ -9194,10 +9194,30 @@ body {
   --dash-accent-ink: #2a1709;
   --dash-radius: 12px;
 }
+/* Anchor the stats overlay to the viewport (not the board wrapper, which
+   hugs the board's aspect ratio and is often shorter than the screen).
+   That, plus the card's own max-height, guarantees the dashboard always
+   fits the viewport and scrolls internally instead of spilling off-screen.
+   No transformed/filtered ancestor exists, so `fixed` resolves to the
+   viewport. */
+.hexaclear-dash-overlay {
+  position: fixed;
+  inset: 0;
+  padding: 0.75rem;
+  overflow-y: auto;
+  z-index: 60;
+}
 .hexaclear-dash-card {
   max-width: 470px;
   width: 100%;
   text-align: left;
+  /* The dashboard varies a lot in height (focus, pinned headline count,
+     expanded detail drawer, short landscape viewports), so it must never
+     grow past the screen — cap it to the viewport and scroll internally
+     before it can become unreachable. `dvh` tracks mobile browser chrome. */
+  max-height: calc(100dvh - 1.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .hexaclear-dash-foci {
   display: flex;

@@ -122,11 +122,18 @@ const computeDerived = (
   }
   const comboRate = clears > 0 ? combos / clears : 0
 
+  // A day counts as "cleared" if it's in the local cleared set OR has a
+  // synced per-day best-moves entry — the latter is the cross-device
+  // source of truth (the daily-history calendar leans on it the same
+  // way), so clears earned on another signed-in device still show up.
+  const clearedKeys = new Set<string>([
+    ...ls.dailyDaysCleared,
+    ...Object.keys(ls.dailyBestMovesByDate),
+  ])
+  const playedKeys = new Set<string>([...ls.dailyDaysPlayed, ...clearedKeys])
   const dailyClearPct =
-    ls.dailyDaysPlayed.length > 0
-      ? ls.dailyDaysCleared.length / ls.dailyDaysPlayed.length
-      : 0
-  const streaks = computeStreaks(ls.dailyDaysCleared)
+    playedKeys.size > 0 ? clearedKeys.size / playedKeys.size : 0
+  const streaks = computeStreaks(Array.from(clearedKeys))
   const pvpWinPct = ls.gamesPlayedPvp > 0 ? ls.pvpWins / ls.gamesPlayedPvp : 0
 
   const endlessRuns = recentRuns.filter((r) => r.mode === 'endless')
@@ -183,10 +190,10 @@ const computeDerived = (
     'total-score': { label: 'Total score', value: fmtInt(ls.totalScore), ok: ls.totalScore > 0 },
     'best-score': { label: 'Best score', value: fmtInt(ls.bestEndlessScore), ok: ls.bestEndlessScore > 0 },
     'best-daily': { label: 'Best daily', value: ls.bestDailyMoves !== null ? `${ls.bestDailyMoves}` : '—', ok: ls.bestDailyMoves !== null },
-    'day-streak': { label: 'Day streak', value: `${streaks.current}`, ok: ls.dailyDaysCleared.length > 0 },
-    'best-streak': { label: 'Best streak', value: `${streaks.best}`, ok: ls.dailyDaysCleared.length > 0 },
-    'days-cleared': { label: 'Days cleared', value: fmtInt(ls.dailyDaysCleared.length), ok: ls.dailyDaysCleared.length > 0 },
-    'daily-clear': { label: 'Daily clear', value: fmtPct(dailyClearPct), ok: ls.dailyDaysPlayed.length > 0 },
+    'day-streak': { label: 'Day streak', value: `${streaks.current}`, ok: clearedKeys.size > 0 },
+    'best-streak': { label: 'Best streak', value: `${streaks.best}`, ok: clearedKeys.size > 0 },
+    'days-cleared': { label: 'Days cleared', value: fmtInt(clearedKeys.size), ok: clearedKeys.size > 0 },
+    'daily-clear': { label: 'Daily clear', value: fmtPct(dailyClearPct), ok: playedKeys.size > 0 },
     'pvp-win': { label: 'Win rate', value: fmtPct(pvpWinPct), ok: ls.gamesPlayedPvp > 0 },
     'pvp-wins': { label: 'Wins', value: fmtInt(ls.pvpWins), ok: ls.gamesPlayedPvp > 0 },
     clears: { label: 'Clears', value: fmtInt(ls.patternsCleared), ok: ls.patternsCleared > 0 },
@@ -212,8 +219,8 @@ const computeDerived = (
     archetype: ARCH[topI],
     endlessSeries,
     coopSeries,
-    clearedSet: new Set(ls.dailyDaysCleared),
-    playedSet: new Set(ls.dailyDaysPlayed),
+    clearedSet: clearedKeys,
+    playedSet: playedKeys,
     pvpWins: ls.pvpWins,
     pvpLosses: Math.max(0, ls.gamesPlayedPvp - ls.pvpWins),
   }
@@ -404,7 +411,11 @@ const Heatmap = ({ cleared, played }: { cleared: Set<string>; played: Set<string
         continue
       }
       const date = new Date(today.getTime() - offset * 86400000)
-      const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
+      // Match the app's zero-padded key format (buildDateKey/getTodayKey),
+      // e.g. "2026-06-17" — an unpadded key never matches the stored set.
+      const mm = String(date.getMonth() + 1).padStart(2, '0')
+      const dd = String(date.getDate()).padStart(2, '0')
+      const key = `${date.getFullYear()}-${mm}-${dd}`
       const level = cleared.has(key) ? 2 : played.has(key) ? 1 : 0
       cells.push({ key, level })
     }
@@ -512,7 +523,7 @@ export const StatsDashboard = ({
 
   return (
     <div
-      className="hexaclear-overlay"
+      className="hexaclear-overlay hexaclear-dash-overlay"
       onClick={(e) => {
         if (e.target !== e.currentTarget) return
         onBack()
