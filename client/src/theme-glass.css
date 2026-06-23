@@ -13,7 +13,7 @@
      2. Flat translucent jewel fills (paletteForTier 'glass').
      3. Per-rosette stone tracery strokes (full bay perimeter).
      4. Thin lead came between adjacent panes.
-     5. A refracted ambient backlight (url(#glass-refract)).
+     5. A shared ambient backlight clipped to the pane field.
      6. Continuous limestone wall on the page chrome.
 
    Cascade note (mirrors win98): never put !important on the animated
@@ -531,25 +531,6 @@
 [data-theme="glass"] .glass-field-stop-mid { stop-color: hsl(var(--glass-light-hue, 42) 28% 68%); }
 [data-theme="glass"] .glass-field-stop-edge { stop-color: hsl(var(--glass-light-hue, 42) 32% 46%); }
 
-/* Single diagonal sheen over the whole window aperture. */
-[data-theme="glass"] .hexaclear-glass-glare {
-  opacity: 0.16;
-  mix-blend-mode: screen;
-  pointer-events: none;
-}
-
-/* A slow brightness breathe stands in for the old opacity pulse — it
-   keeps the field fully opaque (so masonry never bleeds through the
-   panes) while the backlight still seems to swell and settle. */
-[data-theme="glass"] .hexaclear-glass-field {
-  animation: hexaclear-glass-field-breathe 9s ease-in-out infinite;
-  will-change: filter;
-}
-@keyframes hexaclear-glass-field-breathe {
-  0%, 100% { filter: brightness(0.93); }
-  50% { filter: brightness(1.09); }
-}
-
 /* Window reveal — lit stone face only on the outer hull; the wide back
    shadow stroke reads as a harsh black ring against the masonry wall. */
 [data-theme="glass"] .hexaclear-board-outline-back {
@@ -572,36 +553,31 @@
    whole board. */
 [data-theme="glass"] .hexaclear-glass-recess-shadow,
 [data-theme="glass"] .hexaclear-pane-depth,
-[data-theme="glass"] .hexaclear-pane-sheen,
 [data-theme="glass"] .hexaclear-pane-seed {
-  fill: none;
   stroke: none;
   pointer-events: none;
 }
+[data-theme="glass"] .hexaclear-pane-depth {
+  fill: url(#glass-pane-depth);
+  opacity: var(--glass-pane-depth-opacity, 0.78);
+  mix-blend-mode: multiply;
+}
+[data-theme="glass"] .hexaclear-pane-seed {
+  fill: var(--glass-pane-seed-fill, url(#glass-pane-seed-a));
+  opacity: var(--glass-pane-seed-opacity, 0.86);
+  mix-blend-mode: screen;
+}
+[data-theme="glass"] .hexaclear-pane-depth.empty,
+[data-theme="glass"] .hexaclear-pane-seed.empty {
+  display: none;
+}
 [data-theme="glass"] .hexaclear-glass-recess-shadow {
+  fill: none;
   stroke: rgba(0, 0, 0, 0.38);
   stroke-width: 6;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-[data-theme="glass"] .hexaclear-board-outline-arris,
-[data-theme="glass"] .hexaclear-board-outline-texture {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  pointer-events: none;
-}
-[data-theme="glass"] .hexaclear-board-outline-arris {
-  stroke: rgba(255, 244, 214, 0.2);
-  stroke-width: 2;
-}
-[data-theme="glass"] .hexaclear-board-outline-texture {
-  stroke: rgba(0, 0, 0, 0.18);
-  stroke-width: 1;
-  stroke-dasharray: 4 7;
-}
-
 /* ====================================================================
    The rose window — a carved limestone oculus set into the wall
    --------------------------------------------------------------------
@@ -790,7 +766,7 @@
    translucent pigment layer — not opaque cube faces stacked on top. */
 [data-theme="glass"] .hexaclear-hex.filled {
   fill: var(--cube-top);
-  fill-opacity: var(--glass-pane-fill-opacity);
+  fill-opacity: calc(var(--glass-pane-fill-opacity) + var(--glass-pane-fill-boost, 0));
   stroke: none;
 }
 [data-theme="glass"] .hexaclear-hex.filled.golden {
@@ -1216,7 +1192,7 @@
 
 [data-theme="glass"] .hexaclear-hex.piece {
   fill: var(--cube-top);
-  fill-opacity: var(--glass-hand-pane-opacity);
+  fill-opacity: calc(var(--glass-hand-pane-opacity) + var(--glass-pane-fill-boost, 0));
   stroke: none;
 }
 [data-theme="glass"] .hexaclear-hex-bevels.piece {

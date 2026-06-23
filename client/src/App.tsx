@@ -11723,28 +11723,6 @@ function App() {
                   result. */}
               {theme === 'glass' && (
                 <>
-                  {/* Diagonal specular sheen laid over each lit pane — a
-                      bright streak fading to nothing, like a glaze catching
-                      window light. Painted onto the per-face light overlay. */}
-                  <linearGradient
-                    id="glass-sheen"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="100%"
-                  >
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
-                    <stop offset="34%" stopColor="#ffffff" stopOpacity="0.18" />
-                    <stop offset="60%" stopColor="#ffffff" stopOpacity="0" />
-                  </linearGradient>
-                  {/* Inner pane luminance: a hot center falling to a dark
-                      leaded rim, so each pane reads as lit from behind with
-                      volume rather than a flat fill. */}
-                  <radialGradient id="glass-inner-light" cx="50%" cy="42%" r="62%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
-                    <stop offset="46%" stopColor="#ffffff" stopOpacity="0.12" />
-                    <stop offset="100%" stopColor="#000000" stopOpacity="0.32" />
-                  </radialGradient>
                   {/* Pane volume: luminous center, darker thickness at the
                       leaded edge. This is intentionally stronger than a
                       decorative texture; it makes each hex read as glass
@@ -11756,18 +11734,6 @@ function App() {
                     <stop offset="84%" stopColor="#15120b" stopOpacity="0.22" />
                     <stop offset="100%" stopColor="#050402" stopOpacity="0.48" />
                   </radialGradient>
-                  <linearGradient
-                    id="glass-pane-sheen"
-                    x1="12%"
-                    y1="4%"
-                    x2="86%"
-                    y2="92%"
-                  >
-                    <stop offset="0%" stopColor="#fff9e4" stopOpacity="0.38" />
-                    <stop offset="20%" stopColor="#ffffff" stopOpacity="0.1" />
-                    <stop offset="48%" stopColor="#ffffff" stopOpacity="0" />
-                    <stop offset="100%" stopColor="#000000" stopOpacity="0" />
-                  </linearGradient>
                   {/* Board-space limestone ramps. These use the same vertical
                       clerestory light as the page wall, so the hull reveal
                       and rosette tracery read as stone cut from the
@@ -11811,67 +11777,87 @@ function App() {
                     <stop offset="100%" stopColor="rgba(255, 244, 214, 0)" />
                   </linearGradient>
                   <pattern
-                    id="glass-stone-speckle"
+                    id="glass-pane-seed-a"
                     patternUnits="userSpaceOnUse"
-                    width="42"
-                    height="42"
+                    width="46"
+                    height="46"
                   >
-                    <rect width="42" height="42" fill="transparent" />
-                    <circle cx="7" cy="9" r="0.7" fill="rgba(255, 244, 214, 0.22)" />
-                    <circle cx="30" cy="14" r="0.55" fill="rgba(255, 244, 214, 0.16)" />
-                    <circle cx="18" cy="31" r="0.6" fill="rgba(0, 0, 0, 0.18)" />
-                    <circle cx="37" cy="35" r="0.45" fill="rgba(0, 0, 0, 0.14)" />
-                  </pattern>
-                  <pattern
-                    id="glass-pane-seed"
-                    patternUnits="userSpaceOnUse"
-                    width="34"
-                    height="34"
-                  >
-                    <rect width="34" height="34" fill="transparent" />
-                    <circle cx="6" cy="8" r="0.65" fill="rgba(255, 255, 255, 0.28)" />
-                    <circle cx="24" cy="12" r="0.5" fill="rgba(255, 255, 255, 0.2)" />
-                    <circle cx="15" cy="25" r="0.55" fill="rgba(0, 0, 0, 0.18)" />
+                    <rect width="46" height="46" fill="transparent" />
                     <path
-                      d="M3 22 C10 18 16 20 22 15 S30 11 33 15"
+                      d="M-2 32 C7 24 15 28 23 18 S39 5 49 14"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.24)"
+                      strokeWidth="1.6"
+                    />
+                    <path
+                      d="M-4 12 C8 17 12 9 22 15 S36 30 50 23"
+                      fill="none"
+                      stroke="rgba(0,0,0,0.2)"
+                      strokeWidth="1.25"
+                    />
+                    <path
+                      d="M10 48 C15 37 25 39 31 28 S37 10 48 6"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.16)"
+                      strokeWidth="1.1"
+                    />
+                    <circle cx="7" cy="9" r="0.9" fill="rgba(255, 255, 255, 0.34)" />
+                    <circle cx="31" cy="15" r="0.7" fill="rgba(255, 255, 255, 0.24)" />
+                    <circle cx="18" cy="34" r="0.75" fill="rgba(0, 0, 0, 0.2)" />
+                    <path
+                      d="M1 41 C9 37 18 40 25 34 S38 30 45 35"
                       fill="none"
                       stroke="rgba(255,255,255,0.13)"
-                      strokeWidth="0.7"
+                      strokeWidth="0.75"
                     />
                     <path
-                      d="M2 5 C9 9 13 6 19 10 S28 17 33 13"
+                      d="M3 4 C10 8 16 5 23 10 S37 18 44 12"
                       fill="none"
                       stroke="rgba(0,0,0,0.12)"
-                      strokeWidth="0.65"
+                      strokeWidth="0.75"
                     />
                   </pattern>
-                  {/* Seedy antique-glass refraction: low-frequency fractal
-                      noise displaces the backlight layer it's applied to, so
-                      the light bleeding through ripples and pools the way it
-                      does through hand-poured cathedral glass. Kept subtle and
-                      static. */}
-                  <filter
-                    id="glass-refract"
-                    x="-20%"
-                    y="-20%"
-                    width="140%"
-                    height="140%"
+                  <pattern
+                    id="glass-pane-seed-b"
+                    patternUnits="userSpaceOnUse"
+                    width="52"
+                    height="52"
                   >
-                    <feTurbulence
-                      type="fractalNoise"
-                      baseFrequency="0.012 0.026"
-                      numOctaves={2}
-                      seed={7}
-                      result="noise"
-                    />
-                    <feDisplacementMap
-                      in="SourceGraphic"
-                      in2="noise"
-                      scale={7}
-                      xChannelSelector="R"
-                      yChannelSelector="G"
-                    />
-                  </filter>
+                    <rect width="52" height="52" fill="transparent" />
+                    <path d="M-6 17 C8 8 17 13 28 7 S43 2 57 10" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="1.45" />
+                    <path d="M2 44 C14 34 26 42 35 29 S43 18 55 20" fill="none" stroke="rgba(0,0,0,0.22)" strokeWidth="1.35" />
+                    <path d="M13 -4 C18 10 31 11 34 24 S40 42 53 50" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+                    <circle cx="10" cy="31" r="0.8" fill="rgba(255,255,255,0.3)" />
+                    <circle cx="39" cy="11" r="0.65" fill="rgba(255,255,255,0.24)" />
+                    <circle cx="25" cy="45" r="0.8" fill="rgba(0,0,0,0.18)" />
+                  </pattern>
+                  <pattern
+                    id="glass-pane-seed-c"
+                    patternUnits="userSpaceOnUse"
+                    width="58"
+                    height="42"
+                  >
+                    <rect width="58" height="42" fill="transparent" />
+                    <path d="M-5 34 C9 28 18 31 28 22 S44 11 63 17" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.55" />
+                    <path d="M-3 9 C13 16 19 4 31 11 S45 23 60 15" fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth="1.2" />
+                    <path d="M8 2 C17 8 18 18 29 18 S45 25 50 41" fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="0.9" />
+                    <circle cx="18" cy="29" r="0.75" fill="rgba(255,255,255,0.28)" />
+                    <circle cx="45" cy="34" r="0.7" fill="rgba(0,0,0,0.17)" />
+                  </pattern>
+                  <pattern
+                    id="glass-pane-seed-d"
+                    patternUnits="userSpaceOnUse"
+                    width="43"
+                    height="55"
+                  >
+                    <rect width="43" height="55" fill="transparent" />
+                    <path d="M8 -5 C5 10 17 18 13 29 S17 44 30 60" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.45" />
+                    <path d="M-5 23 C8 27 16 19 25 25 S35 41 48 34" fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth="1.25" />
+                    <path d="M-3 48 C8 39 21 45 29 35 S34 18 48 13" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="1" />
+                    <circle cx="12" cy="14" r="0.8" fill="rgba(255,255,255,0.3)" />
+                    <circle cx="31" cy="45" r="0.7" fill="rgba(255,255,255,0.22)" />
+                    <circle cx="29" cy="22" r="0.75" fill="rgba(0,0,0,0.18)" />
+                  </pattern>
                   {/* The backlit field. ONE sheet of lit cathedral-blue
                       glass, center-bright and dimming outward, clipped to
                       the union of every hex pane below so it shows ONLY
@@ -11885,19 +11871,6 @@ function App() {
                     <stop className="glass-field-stop-mid" offset="52%" />
                     <stop className="glass-field-stop-edge" offset="100%" />
                   </radialGradient>
-                  {/* One soft diagonal glare across the whole aperture —
-                      board-level, not per-pane hotspots. */}
-                  <linearGradient
-                    id="glass-glare"
-                    x1="8%"
-                    y1="4%"
-                    x2="78%"
-                    y2="88%"
-                  >
-                    <stop offset="0%" stopColor="rgba(255, 252, 244, 0.42)" />
-                    <stop offset="38%" stopColor="rgba(255, 252, 244, 0.08)" />
-                    <stop offset="100%" stopColor="rgba(255, 252, 244, 0)" />
-                  </linearGradient>
                   <clipPath
                     id="glass-field-clip"
                     clipPathUnits="userSpaceOnUse"
@@ -11981,16 +11954,6 @@ function App() {
                   height={boardLayout.height}
                   fill="url(#glass-field)"
                   clipPath="url(#glass-field-clip)"
-                  filter="url(#glass-refract)"
-                />
-                <rect
-                  x={0}
-                  y={0}
-                  width={boardLayout.width}
-                  height={boardLayout.height}
-                  fill="url(#glass-glare)"
-                  clipPath="url(#glass-field-clip)"
-                  className="hexaclear-glass-glare"
                 />
               </g>
             )}
@@ -12027,33 +11990,6 @@ function App() {
                 className="hexaclear-board-outline-front"
               />
             ))}
-            {theme === 'glass' &&
-              boardRender.outlineSegments.map((seg, idx) => (
-                <line
-                  key={`outline-arris-${idx}`}
-                  x1={seg.x1}
-                  y1={seg.y1}
-                  x2={seg.x2}
-                  y2={seg.y2}
-                  className="hexaclear-board-outline-arris"
-                  aria-hidden="true"
-                  pointerEvents="none"
-                />
-              ))}
-            {theme === 'glass' &&
-              boardRender.outlineSegments.map((seg, idx) => (
-                <line
-                  key={`outline-texture-${idx}`}
-                  x1={seg.x1}
-                  y1={seg.y1}
-                  x2={seg.x2}
-                  y2={seg.y2}
-                  className="hexaclear-board-outline-texture"
-                  aria-hidden="true"
-                  pointerEvents="none"
-                />
-              ))}
-
             {(() => {
               return boardDef.cells.map((cell) => {
                 const pos = boardLayout.positions[cell.id]
@@ -12268,6 +12204,43 @@ function App() {
                       : undefined
                 }
                 const cubeStyle = glassJewelStyle ?? partnerHueStyle
+                const glassPaneHash =
+                  theme === 'glass' ? hashString(`glass-pane:${cell.id}`) : 0
+                const glassPaneJitter = (glassPaneHash % 1000) / 1000
+                const glassPaneStyle =
+                  theme === 'glass'
+                    ? ({
+                        '--glass-pane-fill-boost': `${(
+                          0.1 +
+                          glassPaneJitter * 0.18
+                        ).toFixed(3)}`,
+                        '--glass-pane-depth-opacity': `${(
+                          0.68 +
+                          glassPaneJitter * 0.24
+                        ).toFixed(3)}`,
+                        '--glass-pane-seed-opacity': `${(
+                          0.72 +
+                          ((glassPaneHash >>> 10) % 1000) / 1000 * 0.28
+                        ).toFixed(3)}`,
+                        '--glass-pane-seed-fill': `url(#glass-pane-seed-${
+                          ['a', 'b', 'c', 'd'][(glassPaneHash >>> 20) % 4]
+                        })`,
+                      } as React.CSSProperties)
+                    : undefined
+                const cellGroupStyle = dealInActive
+                  ? ({
+                      ...(tintOverlayColor ? cellTintStyle : {}),
+                      ...(glassPaneStyle ?? {}),
+                      ['--hexaclear-deal-delay' as string]: `${
+                        boardRender.dealDelayByCellId[cell.id] ?? 0
+                      }ms`,
+                    } as React.CSSProperties)
+                  : tintOverlayColor || glassPaneStyle
+                  ? ({
+                      ...(tintOverlayColor ? cellTintStyle : {}),
+                      ...(glassPaneStyle ?? {}),
+                    } as React.CSSProperties)
+                  : undefined
 
                 return (
                   <g
@@ -12288,18 +12261,7 @@ function App() {
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    style={
-                      dealInActive
-                        ? ({
-                            ...(tintOverlayColor ? cellTintStyle : {}),
-                            ['--hexaclear-deal-delay' as string]: `${
-                              boardRender.dealDelayByCellId[cell.id] ?? 0
-                            }ms`,
-                          } as React.CSSProperties)
-                        : tintOverlayColor
-                        ? cellTintStyle
-                        : undefined
-                    }
+                    style={cellGroupStyle}
                   >
                     <polygon
                       points={points}
@@ -12371,26 +12333,6 @@ function App() {
                             : '',
                           isClearing ? 'clearing' : '',
                           willClearInPreview ? 'preview-clear' : '',
-                          inPreview
-                            ? previewValid
-                              ? 'preview-valid'
-                              : 'preview-invalid'
-                            : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        aria-hidden="true"
-                        pointerEvents="none"
-                      />
-                    )}
-                    {theme === 'glass' && (
-                      <polygon
-                        points={points}
-                        className={[
-                          'hexaclear-pane-sheen',
-                          isFilled ? 'filled' : 'empty',
-                          isGolden ? 'golden' : '',
-                          isClearing ? 'clearing' : '',
                           inPreview
                             ? previewValid
                               ? 'preview-valid'
@@ -12930,42 +12872,6 @@ function App() {
                   }
                 />
               ))}
-              {theme === 'glass' &&
-                glassInterRosetteFlowerFrontSegments.map((seg, idx) => (
-                  <line
-                    key={`flower-arris-${idx}`}
-                    x1={seg.x1}
-                    y1={seg.y1}
-                    x2={seg.x2}
-                    y2={seg.y2}
-                    className="hexaclear-flower-boundary-arris"
-                    clipPath={
-                      glassStoneTraceryClipLoop
-                        ? 'url(#glass-stone-tracery-clip)'
-                        : undefined
-                    }
-                    aria-hidden="true"
-                    pointerEvents="none"
-                  />
-                ))}
-              {theme === 'glass' &&
-                glassInterRosetteFlowerFrontSegments.map((seg, idx) => (
-                  <line
-                    key={`flower-texture-${idx}`}
-                    x1={seg.x1}
-                    y1={seg.y1}
-                    x2={seg.x2}
-                    y2={seg.y2}
-                    className="hexaclear-flower-boundary-texture"
-                    clipPath={
-                      glassStoneTraceryClipLoop
-                        ? 'url(#glass-stone-tracery-clip)'
-                        : undefined
-                    }
-                    aria-hidden="true"
-                    pointerEvents="none"
-                  />
-                ))}
             </g>
             {/* Win98 etched-groove rosette frame. One closed
                 polygon per rosette per groove tone; CSS hides the
@@ -18448,6 +18354,22 @@ const PiecePreview = ({
   cubeStyles,
 }: PiecePreviewProps) => {
   const coords = shape.cells
+  const pieceHashBase = coords.map((c) => `${c.q},${c.r}`).join('|')
+  const piecePaneStyleFor = (idx: number): React.CSSProperties => {
+    const h = hashString(`glass-piece-pane:${pieceHashBase}:${idx}`)
+    const jitter = (h % 1000) / 1000
+    return {
+      '--glass-pane-fill-boost': `${(0.1 + jitter * 0.18).toFixed(3)}`,
+      '--glass-pane-depth-opacity': `${(0.68 + jitter * 0.24).toFixed(3)}`,
+      '--glass-pane-seed-opacity': `${(
+        0.72 +
+        ((h >>> 10) % 1000) / 1000 * 0.28
+      ).toFixed(3)}`,
+      '--glass-pane-seed-fill': `url(#glass-pane-seed-${
+        ['a', 'b', 'c', 'd'][(h >>> 20) % 4]
+      })`,
+    } as React.CSSProperties
+  }
 
   if (mode === 'board') {
     let minQ = Infinity
@@ -18483,11 +18405,23 @@ const PiecePreview = ({
           const points = buildHexPoints(cx, cy)
           const bevel = buildHexBevelPaths(cx, cy)
           return (
-            <g key={idx}>
+            <g key={idx} style={piecePaneStyleFor(idx)}>
               <polygon
                 points={points}
                 className="hexaclear-hex piece"
                 style={cubeStyles?.[idx]}
+              />
+              <polygon
+                points={points}
+                className="hexaclear-pane-depth piece"
+                aria-hidden="true"
+                pointerEvents="none"
+              />
+              <polygon
+                points={points}
+                className="hexaclear-pane-seed piece"
+                aria-hidden="true"
+                pointerEvents="none"
               />
               <g
                 className="hexaclear-hex-bevels piece"
@@ -18597,11 +18531,23 @@ const PiecePreview = ({
           .map((p) => `${p.x},${p.y}`)
           .join(' ')
         return (
-          <g key={idx}>
+          <g key={idx} style={piecePaneStyleFor(idx)}>
             <polygon
               points={points}
               className="hexaclear-hex piece"
               style={cubeStyles?.[idx]}
+            />
+            <polygon
+              points={points}
+              className="hexaclear-pane-depth piece"
+              aria-hidden="true"
+              pointerEvents="none"
+            />
+            <polygon
+              points={points}
+              className="hexaclear-pane-seed piece"
+              aria-hidden="true"
+              pointerEvents="none"
             />
             <g
               className="hexaclear-hex-bevels piece"
