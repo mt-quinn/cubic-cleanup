@@ -23,16 +23,15 @@
    ===================================================================== */
 
 :root[data-theme="glass"] {
-  /* Carved limestone — warm tones that read as the same masonry the wall
-     and window surround are cut from, so every readout/control looks
-     carved INTO the cathedral rather than dropped on top of it. */
-  --glass-stone: #3a2f1e;
-  --glass-stone-deep: #20170c; /* deep recessed niche */
-  --glass-stone-face: #4a3d28; /* lit face of a molding */
-  --glass-stone-raise: #5c4c30; /* raised, sun-struck edge */
-  --glass-stone-shadow: #0f0a03; /* deep joint shadow / carved border */
+  /* Dank gothic limestone and slate. Nearly neutral charcoal, with just
+     enough cold lift on raised cuts to read as damp carved masonry. */
+  --glass-stone: #22282c;
+  --glass-stone-deep: #0b0f13; /* deep recessed niche */
+  --glass-stone-face: #30363b; /* lit face of a molding */
+  --glass-stone-raise: #444c52; /* faint wet arris */
+  --glass-stone-shadow: #030507; /* deep joint shadow / carved border */
 
-  /* Lead came — warm near-black lead with a dim sheen, NOT gold/grey.
+  /* Lead came — cold near-black lead with a dim graphite sheen.
      The "hi" is only a restrained brushed-graphite catch of light, kept
      dim + desaturated so the leading reads as dark lead, never as bright
      grey/lavender piping. */
@@ -40,18 +39,18 @@
   --glass-came-hi: #5e5c63;
   --glass-came-lo: #000000;
 
-  /* Gilt — reserved for tracery inlay, finials, and illuminated text. */
-  --glass-gold: #d8a93f;
-  --glass-gold-bright: #ffe7a8;
-  --glass-gold-deep: #8c6519;
+  /* Cold lit stone/silver inlay. Variable names keep the old API. */
+  --glass-gold: #9fb2c4;
+  --glass-gold-bright: #eef6ff;
+  --glass-gold-deep: #506372;
 
-  /* Parchment ink for body copy on stone. */
-  --glass-ink: #efe7d4;
-  --glass-ink-dim: #b0a585;
+  /* Chilly inscription ink for body copy on stone. */
+  --glass-ink: #e3eaf0;
+  --glass-ink-dim: #a3afb9;
 
-  /* Warm light behind the window; hue tracks the active tier. */
+  /* Cool window backlight; hue tracks the active tier. */
   --glass-light-hue: 210;
-  --glass-backlight: #fff1cf;
+  --glass-backlight: #dcefff;
 
   /* Ruby pane */
   --glass-ruby: #c8133a;
@@ -63,8 +62,8 @@
   --cube-right: #173f86;
   --cube-stroke: var(--glass-came);
   --score-tier-accent: var(--glass-gold);
-  --cube-inverse-bright: #ffd9a0;
-  --cube-inverse-dim: #9c7320;
+  --cube-inverse-bright: #e8f4ff;
+  --cube-inverse-dim: #687989;
 
   --cube-golden-top: #ff5a76;
   --cube-golden-left: #d11d40;
@@ -72,7 +71,7 @@
 
   /* Glass pane transmission — one continuous window, board-lit. */
   --glass-pane-fill-opacity: 0.44;
-  --glass-pane-empty: rgba(22, 28, 38, 0.48);
+  --glass-pane-empty: rgba(14, 20, 28, 0.58);
   --glass-ruby-pane-opacity: 0.52;
   --glass-hand-pane-opacity: 0.58;
 
@@ -80,11 +79,11 @@
   --glass-grain:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.5'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --glass-arcade:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='184' viewBox='0 0 128 184'%3E%3Cg fill='none' stroke='%23d8c79c' stroke-opacity='0.05' stroke-width='2'%3E%3Cpath d='M14 184 L14 96 A50 50 0 0 1 114 96 L114 184'/%3E%3Cpath d='M30 184 L30 104 A34 34 0 0 1 98 104 L98 184'/%3E%3Ccircle cx='64' cy='70' r='9'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='184' viewBox='0 0 128 184'%3E%3Cg fill='none' stroke='%237d8992' stroke-opacity='0.035' stroke-width='2'%3E%3Cpath d='M14 184 L14 96 A50 50 0 0 1 114 96 L114 184'/%3E%3Cpath d='M30 184 L30 104 A34 34 0 0 1 98 104 L98 184'/%3E%3Ccircle cx='64' cy='70' r='9'/%3E%3C/g%3E%3C/svg%3E");
   /* Running-bond ashlar coursing: recessed dark joints + a faint lit
      underbevel, tiled seamlessly as the cathedral wall's cut stone. */
   --glass-ashlar:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='236'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.24' stroke-width='2'%3E%3Cpath d='M0 1 H128 M0 118 H128 M0 235 H128 M0 1 V118 M64 118 V235'/%3E%3C/g%3E%3Cg fill='none' stroke='%23fff1d6' stroke-opacity='0.05' stroke-width='1'%3E%3Cpath d='M0 4 H128 M0 121 H128'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='236'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.34' stroke-width='2'%3E%3Cpath d='M0 1 H128 M0 118 H128 M0 235 H128 M0 1 V118 M64 118 V235'/%3E%3C/g%3E%3Cg fill='none' stroke='%239da8b0' stroke-opacity='0.03' stroke-width='1'%3E%3Cpath d='M0 4 H128 M0 121 H128'/%3E%3C/g%3E%3C/svg%3E");
 
   color: var(--glass-ink);
 }
@@ -98,24 +97,24 @@
 [data-theme="glass"] body,
 [data-theme="glass"] .cubic-viewport {
   background:
-    /* warm clerestory light spilling from high above */
+    /* cold clerestory light spilling from high above */
     radial-gradient(
       130% 78% at 50% -12%,
-      color-mix(in srgb, var(--glass-backlight) 20%, transparent) 0%,
-      transparent 52%
+      color-mix(in srgb, var(--glass-backlight) 8%, transparent) 0%,
+      transparent 46%
     ),
     /* edge vignette so the nave falls into shadow at the margins */
     radial-gradient(
       120% 120% at 50% 42%,
-      transparent 52%,
-      rgba(0, 0, 0, 0.5) 100%
+      transparent 38%,
+      rgba(0, 0, 0, 0.72) 100%
     ),
     /* fine stone tooth */
     var(--glass-grain),
     /* cut-stone ashlar coursing */
     var(--glass-ashlar),
     /* base limestone, lit at the top course, sinking to shadow below */
-    linear-gradient(180deg, #4b4030 0%, #392d1d 46%, #251c11 78%, #181107 100%);
+    linear-gradient(180deg, #2e3539 0%, #20262a 46%, #141a1f 78%, #080c10 100%);
   background-repeat: no-repeat, no-repeat, repeat, repeat, no-repeat;
   background-size: auto, auto, 180px 180px, 128px 236px, auto;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
@@ -169,7 +168,7 @@
     0 7px
   );
   --glass-tablet-bevel:
-    inset 0 1px 0 rgba(255, 240, 208, 0.22),
+    inset 0 1px 0 rgba(228, 242, 255, 0.24),
     inset 0 -2px 5px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(0, 0, 0, 0.42);
   --glass-tablet-face:
@@ -181,16 +180,16 @@
       var(--glass-stone) 78%,
       var(--glass-stone-deep) 100%
     );
-  /* Lit (illuminated) gilt tablet face — gold poured into stone, used for
+  /* Lit (illuminated) limestone tablet face — pale stone lit from above, used for
      the primary CTA + the active tab, exactly like the header's lit mode
      pill. */
   --glass-tablet-face-lit:
-    radial-gradient(120% 150% at 50% -20%, rgba(255, 255, 255, 0.55), transparent 56%),
-    linear-gradient(180deg, var(--glass-gold-bright) 0%, var(--glass-gold) 42%, var(--glass-gold-deep) 100%);
+    radial-gradient(120% 150% at 50% -20%, rgba(255, 255, 255, 0.42), transparent 56%),
+    linear-gradient(180deg, #dfe8ef 0%, #a8b5c0 46%, #65727d 100%);
   --glass-tablet-bevel-lit:
-    inset 0 1px 0 rgba(255, 252, 236, 0.7),
-    inset 0 -3px 6px rgba(120, 78, 12, 0.55),
-    inset 0 0 0 1px rgba(120, 80, 16, 0.5);
+    inset 0 1px 0 rgba(244, 250, 255, 0.62),
+    inset 0 -3px 6px rgba(22, 31, 40, 0.6),
+    inset 0 0 0 1px rgba(85, 101, 114, 0.58);
   /* Larger octagonal cut for the big reliquary panels. */
   --glass-chamfer-lg: polygon(
     16px 0,
@@ -211,7 +210,7 @@
   gap: 0.7rem;
 }
 
-/* --- The wordmark: gilt letters carved into the lintel --------------- */
+/* --- The wordmark: pale stone letters carved into the lintel ---------- */
 [data-theme="glass"] .hexaclear-title {
   position: relative;
   font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
@@ -220,13 +219,13 @@
   letter-spacing: 0.04em;
   line-height: 1.05;
   padding-bottom: 0.26em;
-  /* gold poured into the incision: a bright crown, warm body, dark foot */
+  /* cold carved stone: bright arris, blue-grey face, slate foot */
   background: linear-gradient(
     180deg,
-    #fff2cf 0%,
-    #ecc868 36%,
-    #c8941f 64%,
-    #7c540d 100%
+    #f5fbff 0%,
+    #cbd7e0 36%,
+    #8d9baa 66%,
+    #465461 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -240,8 +239,7 @@
     drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
   text-shadow: none;
 }
-/* An incised gilt rule beneath the wordmark — a classical inscription
-   divider with a small lozenge of light at its center. */
+/* An incised pale-stone rule beneath the wordmark. */
 [data-theme="glass"] .hexaclear-title::after {
   content: "";
   position: absolute;
@@ -311,8 +309,8 @@
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
 }
 
-/* Incised labels — small inscriptional caps lit to the same gilt
-   intensity as the MENU tablet's lettering (gold-bright + warm halo),
+/* Incised labels — small inscriptional caps lit to the same cold
+   intensity as the MENU tablet's lettering (silver-bright + pale halo),
    so CUBES / SCORE / BEST read as illuminated as the menu control. */
 [data-theme="glass"] .hexaclear-live-stat .label,
 [data-theme="glass"] .hexaclear-best-banner .label {
@@ -334,7 +332,7 @@
   color: var(--glass-gold-bright);
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.75),
-    0 -1px 0 rgba(255, 244, 214, 0.18),
+    0 -1px 0 rgba(226, 241, 255, 0.18),
     0 0 12px color-mix(in srgb, var(--score-tier-accent) 50%, transparent);
 }
 
@@ -356,7 +354,7 @@
 }
 
 /* Lit (active) tab + active scores tab + active how-to-play tab:
-   gilt illuminated stone. */
+   illuminated cold stone. */
 [data-theme="glass"] .hexaclear-mode-toggle .mode-pill.active,
 [data-theme="glass"] .hexaclear-scores-tab.is-active,
 [data-theme="glass"] .hexaclear-scoring-tab.is-active {
@@ -366,26 +364,26 @@
       color-mix(in srgb, var(--glass-gold) 38%, transparent) 0%,
       transparent 72%
     ),
-    linear-gradient(180deg, rgba(255, 244, 214, 0.18), transparent 60%),
+    linear-gradient(180deg, rgba(228, 242, 255, 0.18), transparent 60%),
     color-mix(in srgb, var(--glass-gold-deep) 30%, var(--glass-stone-raise));
   color: var(--glass-gold-bright);
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.55),
     0 0 8px color-mix(in srgb, var(--glass-gold) 45%, transparent);
   box-shadow:
-    inset 0 1px 0 rgba(255, 244, 214, 0.28),
+    inset 0 1px 0 rgba(228, 242, 255, 0.28),
     inset 0 -2px 4px rgba(0, 0, 0, 0.4),
     0 0 14px color-mix(in srgb, var(--glass-gold) 26%, transparent);
 }
 
 [data-theme="glass"] .hexaclear-mode-toggle .mode-pill:not(.active):hover {
   color: var(--glass-gold-bright);
-  background: rgba(255, 240, 208, 0.05);
+  background: rgba(216, 232, 246, 0.06);
 }
 
 /* How-to-play + high-score tab strips: a carved stone lintel (chamfered,
-   recessed channel with a gilt hairline), NOT the base orange/round pill.
-   Tabs are inscriptional caps that light to gold when chosen (gilt fill
+   recessed channel with a pale incised hairline), NOT the base orange/round pill.
+   Tabs are inscriptional caps that light to silver-stone when chosen (lit fill
    from the active rule above). */
 [data-theme="glass"] .hexaclear-scoring-tabs,
 [data-theme="glass"] .hexaclear-scores-tabs {
@@ -415,10 +413,10 @@
 [data-theme="glass"] .hexaclear-scoring-tab:not(.is-active):hover,
 [data-theme="glass"] .hexaclear-scores-tab:not(.is-active):hover {
   color: var(--glass-gold-bright);
-  background: rgba(255, 240, 208, 0.05);
+  background: rgba(216, 232, 246, 0.06);
 }
 
-/* --- Menu button: a gilt-lettered stone tablet with a carved boss ---- */
+/* --- Menu button: a pale-lettered stone tablet with a carved boss ---- */
 [data-theme="glass"] .hexaclear-menu-button {
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 600;
@@ -434,7 +432,7 @@
     var(--glass-grain),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--glass-stone-raise) 70%, var(--glass-gold-deep)) 0%,
+      color-mix(in srgb, var(--glass-stone-raise) 82%, var(--glass-gold-deep)) 0%,
       var(--glass-stone-face) 78%,
       var(--glass-stone) 100%
     );
@@ -442,7 +440,7 @@
   background-blend-mode: overlay, normal;
 }
 
-/* Swap the default colour-emoji gear for a gilt carved boss so the
+/* Swap the default colour-emoji gear for a pale carved boss so the
    control reads as cut stone, not an app toolbar. */
 [data-theme="glass"] .hexaclear-menu-button-icon {
   font-size: 0;
@@ -469,7 +467,7 @@
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
 }
 
-/* Undo: a small gilt-lettered stone tablet, not the base orange pill.
+/* Undo: a small pale-lettered stone tablet, not the base orange pill.
    The board SVG was raised to z-index:2 (and the HUD to 6) when the frame
    was removed and the board grown to fill the wrapper; the undo button is
    a sibling INSIDE that wrapper, so without its own stacking it falls
@@ -524,25 +522,29 @@
   z-index: 2;
 }
 
-/* The lit field's hue rides --glass-light-hue (set per octave in
-   paletteForTier), so the backlight rotates in lockstep with the jewels.
-   Center-bright, dimming toward the outer rosettes. */
-[data-theme="glass"] .glass-field-stop-core { stop-color: hsl(var(--glass-light-hue, 42) 22% 88%); }
-[data-theme="glass"] .glass-field-stop-mid { stop-color: hsl(var(--glass-light-hue, 42) 28% 68%); }
-[data-theme="glass"] .glass-field-stop-edge { stop-color: hsl(var(--glass-light-hue, 42) 32% 46%); }
+/* The lit field is the neutral glass glow behind every pane. Keep it fixed
+   so octave hue changes affect jewels, not the empty-window material. */
+[data-theme="glass"] .glass-field-stop-core { stop-color: hsl(210 22% 88%); }
+[data-theme="glass"] .glass-field-stop-mid { stop-color: hsl(210 28% 68%); }
+[data-theme="glass"] .glass-field-stop-edge { stop-color: hsl(210 32% 46%); }
 
-/* Window reveal — lit stone face only on the outer hull; the wide back
-   shadow stroke reads as a harsh black ring against the masonry wall. */
+/* Window reveal — the hull is wall masonry, not a separate bright frame. */
 [data-theme="glass"] .hexaclear-board-outline-back {
-  display: none;
-}
-[data-theme="glass"] .hexaclear-board-outline-front {
-  stroke: var(--glass-stone-raise);
-  stroke-width: 8.5;
+  stroke: color-mix(in srgb, var(--glass-stone-shadow) 72%, #000);
+  stroke-width: 13;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.85;
+  opacity: 0.62;
+  filter: none;
+}
+[data-theme="glass"] .hexaclear-board-outline-front {
+  stroke: color-mix(in srgb, var(--glass-stone-face) 72%, var(--glass-stone));
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.9;
   filter: none;
   transition: none;
 }
@@ -573,8 +575,8 @@
 }
 [data-theme="glass"] .hexaclear-glass-recess-shadow {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.38);
-  stroke-width: 6;
+  stroke: rgba(0, 0, 0, 0.5);
+  stroke-width: 7;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
@@ -583,7 +585,7 @@
    --------------------------------------------------------------------
    Rendered in App.tsx as <GlassRoseFrame/>: an overlay SVG with 16-fold
    tracery (outer torus molding, radial colonettes, foiled oculi, cusped
-   inner edge, gilt fillets) and carved stone spandrels in the corners.
+   inner edge, pale fillets) and carved stone spandrels in the corners.
    The hexagonal board shows through the transparent center.
    ==================================================================== */
 [data-theme="glass"] .hexaclear-glass-frame {
@@ -601,8 +603,8 @@
   width: 100%;
   height: 100%;
   overflow: visible;
-  /* Whole window stands proud of the wall. */
-  filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.6));
+  /* The oculus is cut into the same dark wall, not floating above it. */
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.42));
 }
 /* Keep the corner HUD (pieces left / combo) legible above the stone
    ring and the wall behind it. */
@@ -648,7 +650,7 @@
 /* Quatrefoil roundels carved into the corner masonry. */
 [data-theme="glass"] .hexaclear-glass-rose .rose-corner-stone {
   fill: url(#rose-lime);
-  stroke: rgba(0, 0, 0, 0.4);
+  stroke: rgba(0, 0, 0, 0.5);
   stroke-width: 1.5;
 }
 [data-theme="glass"] .hexaclear-glass-rose .rose-corner-foil circle {
@@ -666,7 +668,7 @@
 [data-theme="glass"] .hexaclear-glass-rose .rose-torus {
   fill: url(#rose-lime);
   fill-rule: evenodd;
-  stroke: rgba(0, 0, 0, 0.45);
+  stroke: rgba(0, 0, 0, 0.55);
   stroke-width: 2;
 }
 [data-theme="glass"] .hexaclear-glass-rose .rose-band {
@@ -674,7 +676,7 @@
   fill-rule: evenodd;
 }
 
-/* Concentric bead courses: dark grooves + a gilt fillet. */
+/* Concentric bead courses: dark grooves + a pale stone fillet. */
 [data-theme="glass"] .hexaclear-glass-rose .rose-bead-dark {
   fill: none;
   stroke: rgba(0, 0, 0, 0.5);
@@ -683,30 +685,30 @@
 [data-theme="glass"] .hexaclear-glass-rose .rose-bead-gilt,
 [data-theme="glass"] .hexaclear-glass-rose .rose-fillet {
   fill: none;
-  stroke: var(--glass-gold);
+  stroke: color-mix(in srgb, var(--glass-stone-raise) 62%, var(--glass-stone-face));
   stroke-width: 3.5;
-  opacity: 0.85;
+  opacity: 0.62;
 }
 [data-theme="glass"] .hexaclear-glass-rose .rose-fillet {
   stroke-width: 5;
-  stroke: color-mix(in srgb, var(--glass-gold) 80%, #2a1d06);
+  stroke: color-mix(in srgb, var(--glass-stone-face) 82%, var(--glass-stone-shadow));
 }
 
 /* Slender carved stone mullions between the lights. */
 [data-theme="glass"] .hexaclear-glass-rose .rose-mullion {
-  stroke: rgba(255, 247, 226, 0.32);
+  stroke: color-mix(in srgb, var(--glass-stone-raise) 54%, transparent);
   stroke-width: 2;
   stroke-linecap: round;
 }
 
-/* Pointed-arch lights — dark cathedral glass cusped in gilt stone. */
+/* Pointed-arch lights — dark cathedral glass cusped in pale stone. */
 [data-theme="glass"] .hexaclear-glass-rose .rose-light {
   fill: url(#rose-eye);
   stroke: var(--glass-gold-deep);
   stroke-width: 2.2;
   stroke-linejoin: round;
 }
-/* A thin bright gilt cusp riding the inside of each light's stone arch. */
+/* A thin bright cusp riding the inside of each light's stone arch. */
 [data-theme="glass"] .hexaclear-glass-rose .rose-light-cusp {
   fill: none;
   stroke: var(--glass-gold);
@@ -718,12 +720,36 @@
 /* ====================================================================
    Empty cells — dark cathedral glass (translucent, not opaque voids)
    ==================================================================== */
-/* Neutral dark glass — flat tint; brightness varies from #glass-field. */
+/* Neutral dark glass — translucent so the fixed backlit field reads through it. */
 [data-theme="glass"] .hexaclear-hex.empty {
   fill: var(--glass-pane-empty);
   fill-opacity: 1;
   stroke: none;
 }
+
+[data-theme="glass"] .hexaclear-cell.cell-dead .hexaclear-hex.empty {
+  fill: rgba(4, 8, 12, 0.74);
+  fill-opacity: 1;
+  opacity: 1;
+}
+
+/* The shared octave-2 layer tints empty-grid strokes in the base theme. Glass
+   empties are dark panes lit by the rose-window field, so keep them neutral. */
+[data-theme="glass"] .cubic-viewport.octave-2 .hexaclear-hex.empty {
+  stroke: none;
+  transition: none;
+  animation: none;
+  filter: none;
+}
+
+[data-theme="glass"] .cubic-viewport.octave-2 .hexaclear-cell.cell-dead .hexaclear-hex.empty {
+  fill: rgba(4, 8, 12, 0.74);
+}
+
+[data-theme="glass"] .cubic-viewport.octave-2 .hexaclear-hex.empty.preview-clear {
+  animation: glass-empty-preview-glow 720ms ease-in-out infinite alternate;
+}
+
 /* Wood-style inner dimple reads as a solid pit — hide it. */
 [data-theme="glass"] .hexaclear-slot-fill {
   display: none;
@@ -814,7 +840,7 @@
 
 [data-theme="glass"] .hexaclear-flower-boundary-back {
   stroke: var(--glass-stone-shadow);
-  stroke-width: 10;
+  stroke-width: 11;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -822,12 +848,12 @@
   filter: none;
 }
 [data-theme="glass"] .hexaclear-flower-boundary {
-  stroke: var(--glass-stone-raise);
-  stroke-width: 6;
+  stroke: color-mix(in srgb, var(--glass-stone-face) 78%, var(--glass-stone));
+  stroke-width: 6.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.88;
+  opacity: 0.92;
   filter: none;
 }
 [data-theme="glass"] .hexaclear-flower-boundary-group {
@@ -906,15 +932,15 @@
   animation: none;
   filter: none;
 }
-/* The pane's leaded rim turns to a glowing gold filament. */
+/* The pane's leaded rim turns to a cold glowing filament. */
 [data-theme="glass"] .hexaclear-cell-outline.filled.preview-clear {
-  stroke: #fff2c4;
+  stroke: #e7f5ff;
   stroke-opacity: 0.95;
   stroke-width: 3.5;
 }
 
 /* Empty cells inside the clear (the holes the dropped piece plugs): a
-   luminous leaded ring + faint warm core so the entire run reads as one
+   luminous leaded ring + faint cold core so the entire run reads as one
    connected band of light, even across the gaps the piece hasn't filled
    yet. */
 [data-theme="glass"] .hexaclear-hex.empty.preview-clear {
@@ -922,12 +948,19 @@
   stroke: none;
   animation: glass-empty-preview-glow 720ms ease-in-out infinite alternate;
 }
+[data-theme="glass"] .hexaclear-hex.empty.preview-valid.preview-clear {
+  fill: rgba(225, 238, 252, 0.58);
+  stroke: #eef6ff;
+  stroke-opacity: 0.94;
+  stroke-width: 3.2;
+  animation: glass-empty-preview-glow 720ms ease-in-out infinite alternate;
+}
 @keyframes glass-empty-preview-glow {
   0% { filter: brightness(1); }
   100% { filter: brightness(1.38); }
 }
 [data-theme="glass"] .hexaclear-cell-outline.empty.preview-clear {
-  stroke: #ffe9b0;
+  stroke: #dcefff;
   stroke-opacity: 0.95;
   stroke-width: 3.5;
   animation: glass-preview-rim 720ms ease-in-out infinite alternate;
@@ -957,7 +990,7 @@
   }
   100% {
     stroke-opacity: 0.85;
-    filter: drop-shadow(0 0 4px rgba(255, 240, 195, 0.65));
+    filter: drop-shadow(0 0 4px rgba(210, 232, 250, 0.65));
   }
 }
 
@@ -978,7 +1011,7 @@
   }
   [data-theme="glass"] .hexaclear-cell-outline.empty.preview-clear {
     animation: none !important;
-    filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
+    filter: drop-shadow(0 0 3px rgba(210, 232, 250, 0.55)) !important;
   }
 }
 [data-theme="glass"]
@@ -1002,7 +1035,7 @@
   .cubic-viewport.reduced-motion
   .hexaclear-cell-outline.empty.preview-clear {
   animation: none !important;
-  filter: drop-shadow(0 0 3px rgba(255, 240, 195, 0.55)) !important;
+  filter: drop-shadow(0 0 3px rgba(210, 232, 250, 0.55)) !important;
 }
 
 /* ====================================================================
@@ -1170,7 +1203,7 @@
   border: 1px solid color-mix(in srgb, var(--glass-stone-raise) 60%, var(--glass-stone-shadow));
   border-radius: 8px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 244, 214, 0.14),
+    inset 0 1px 0 rgba(226, 241, 255, 0.14),
     inset 0 -6px 16px rgba(0, 0, 0, 0.5),
     0 3px 8px rgba(0, 0, 0, 0.4);
 }
@@ -1188,6 +1221,23 @@
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--glass-gold) 42%, transparent),
     0 0 18px color-mix(in srgb, var(--glass-gold) 32%, transparent);
+}
+
+[data-theme="glass"] .hexaclear-streak-value,
+[data-theme="glass"] .hexaclear-multi-clear-value {
+  color: var(--glass-gold-bright);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.75),
+    0 0 10px color-mix(in srgb, var(--glass-gold) 46%, transparent);
+}
+
+[data-theme="glass"] .hexaclear-streak-tier-4,
+[data-theme="glass"] .hexaclear-streak-tier-5,
+[data-theme="glass"] .hexaclear-streak-tier-6,
+[data-theme="glass"] .hexaclear-multi-clear-tier-4,
+[data-theme="glass"] .hexaclear-multi-clear-tier-5,
+[data-theme="glass"] .hexaclear-multi-clear-tier-6 {
+  color: color-mix(in srgb, var(--glass-gold-bright) 82%, #c3d3e0);
 }
 
 [data-theme="glass"] .hexaclear-hex.piece {
@@ -1248,7 +1298,7 @@
   -webkit-clip-path: var(--glass-chamfer-lg);
   clip-path: var(--glass-chamfer-lg);
   /* A slab dressed from the same limestone as the wall & header tablets:
-     stone grain + a top sheen + warm clerestory wash + the running-bond
+     stone grain + a top sheen + cold clerestory wash + the running-bond
      ashlar coursing tiled over a lit-to-shadow limestone body. */
   background:
     var(--glass-grain),
@@ -1269,14 +1319,14 @@
   background-repeat: repeat, no-repeat, no-repeat, repeat, no-repeat;
   background-blend-mode: overlay, normal, normal, normal, normal;
   /* Carved molding cut into the slab edge: a lit top arris, a recessed
-     stone course, an incised gilt fillet, and an inner shadow that sinks
+     stone course, an incised pale fillet, and an inner shadow that sinks
      the field. All inset so they follow the chamfered silhouette. The
      ambient cast shadow rides on drop-shadow (a box-shadow would be
      clipped away by clip-path) so it traces the octagon too. */
   box-shadow:
-    inset 0 2px 0 rgba(255, 244, 214, 0.2),
+    inset 0 2px 0 rgba(226, 241, 255, 0.2),
     inset 0 0 0 5px var(--glass-stone-deep),
-    inset 0 0 0 6px color-mix(in srgb, var(--glass-gold) 52%, #2c2008),
+    inset 0 0 0 6px color-mix(in srgb, var(--glass-gold) 44%, #101820),
     inset 0 0 26px 7px rgba(0, 0, 0, 0.5);
   filter:
     drop-shadow(0 24px 46px rgba(0, 0, 0, 0.78))
@@ -1298,7 +1348,7 @@
 }
 
 /* PvP game-over banners share the inscriptional carve; keep their own
-   tone (gilt for a win, defeated grey for a shame) but drop Monoton. */
+   tone (pale for a win, defeated grey for a shame) but drop Monoton. */
 [data-theme="glass"] .hexaclear-pvp-win-title,
 [data-theme="glass"] .hexaclear-pvp-shame-title {
   font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
@@ -1347,13 +1397,13 @@
    Every interactive control in every modal is dressed from the SAME
    carved stone as the header tablets (BEST / MENU / mode pills):
    chamfered octagonal silhouette, stone-grain + lit-to-shadow limestone
-   face, carved bevel, ambient cast shadow, gilt Cinzel lettering.
+   face, carved bevel, ambient cast shadow, pale Cinzel lettering.
 
    The base menu stylesheet pins background / border / border-radius /
    colour with `!important` (its rounded brown pills + cards), so EVERY
    visual property below is `!important` too — that, not raw specificity,
    is what actually wins the cascade here. The three tiers (limestone /
-   lit-gilt / red-porphyry) use mutually-exclusive selectors so they
+   lit-cold-stone / red-porphyry) use mutually-exclusive selectors so they
    never fight each other.
    ==================================================================== */
 
@@ -1383,26 +1433,26 @@
   transition: filter 120ms ease, color 120ms ease;
 }
 
-/* Pressed-in light + a brighter gilt on hover, matching the header. */
+/* Pressed-in light + a brighter cold highlight on hover, matching the header. */
 [data-theme="glass"] .hexaclear-overlay-card
   button:not(.hexaclear-menu-link):not(.hexaclear-scoring-tab):not(.hexaclear-scores-tab):not(.hexaclear-piecetiary-cell):not(.hexaclear-history-cell):not(.hexaclear-reel-replay):not(.hexaclear-reel-download):not(.hexaclear-scores-expand-toggle):not(.hexaclear-menu-chip-warn):not(.hexaclear-menu-chip-danger):not(.hexaclear-menu-danger-button):not(.hexaclear-menu-new-game-hero):not(.hexaclear-menu-resume-hero):not(.hexaclear-gameover-cta):hover,
 [data-theme="glass"] .hexaclear-gameover-cta-secondary:hover,
 [data-theme="glass"] .hexaclear-gameover-cta-share:hover,
 [data-theme="glass"] .hexaclear-coop-cta:hover {
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.55)) brightness(1.09);
-  color: #fff6df !important;
+  color: #f6fbff !important;
 }
 
-/* Tier 2 — primary actions: illuminated gilt tablets. Gold poured into
-   the chamfered stone and lit from the top, exactly like the header's
+/* Tier 2 — primary actions: illuminated pale-stone tablets, lit from the top
+   exactly like the header's
    active mode pill, just larger. Secondary / share game-over buttons are
-   excluded so the hierarchy (one gold CTA, the rest stone) survives. */
+   excluded so the hierarchy (one bright CTA, the rest stone) survives. */
 [data-theme="glass"] .hexaclear-menu-new-game-hero,
 [data-theme="glass"] .hexaclear-menu-resume-hero,
 [data-theme="glass"] .hexaclear-menu-chip.is-primary,
 [data-theme="glass"] .hexaclear-gameover-cta:not(.hexaclear-gameover-cta-secondary):not(.hexaclear-gameover-cta-share),
 [data-theme="glass"] .hexaclear-coop-mode-pill.is-active {
-  color: #2a1c04 !important;
+  color: #101820 !important;
   border: none !important;
   border-radius: 2px !important;
   -webkit-clip-path: var(--glass-chamfer) !important;
@@ -1411,7 +1461,7 @@
   font-family: 'Cinzel', Georgia, serif !important;
   font-weight: 700 !important;
   letter-spacing: 0.08em;
-  text-shadow: 0 1px 0 rgba(255, 250, 230, 0.5);
+  text-shadow: 0 1px 0 rgba(244, 250, 255, 0.45);
   box-shadow: var(--glass-tablet-bevel-lit) !important;
   filter:
     drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5))
@@ -1502,7 +1552,7 @@
   border-radius: 2px;
   /* Shallow recesses chiselled into the slab — a channel carved a course
      deeper than the surrounding limestone, with a soft inset shadow and a
-     faint gilt rim. Cut from warm stone, NOT black: these hold lists and
+     faint pale rim. Cut from cold stone, NOT black: these hold lists and
      form rows, so they should read as part of the same masonry, never as
      a flat dark box dropped on top. */
   -webkit-clip-path: var(--glass-chamfer);
@@ -1520,7 +1570,7 @@
   box-shadow:
     inset 0 2px 6px rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px color-mix(in srgb, var(--glass-gold) 15%, transparent),
-    inset 0 -1px 0 rgba(255, 240, 208, 0.07);
+    inset 0 -1px 0 rgba(226, 241, 255, 0.08);
   color: var(--glass-ink);
 }
 
@@ -1623,18 +1673,18 @@
   opacity: 0.5;
   color: var(--glass-ink-dim) !important;
 }
-/* Today: a gilt fillet incised around the limestone tile. */
+/* Today: a pale fillet incised around the limestone tile. */
 [data-theme="glass"] .hexaclear-history-cell.is-today {
   box-shadow:
     var(--glass-tablet-bevel),
     inset 0 0 0 2px color-mix(in srgb, var(--glass-gold) 62%, transparent) !important;
 }
-/* A cleared / selected day is illuminated gilt stone — the treasured day. */
+/* A cleared / selected day is illuminated cold stone — the treasured day. */
 [data-theme="glass"] .hexaclear-history-cell.is-cleared,
 [data-theme="glass"] .hexaclear-history-cell.is-active,
 [data-theme="glass"] .hexaclear-history-cell.is-cleared.is-active {
   background: var(--glass-tablet-face-lit) !important;
-  color: #2a1c04 !important;
+  color: #101820 !important;
   border: none !important;
   box-shadow: var(--glass-tablet-bevel-lit) !important;
   filter:
@@ -1645,11 +1695,11 @@
 [data-theme="glass"] .hexaclear-history-cell.is-active .hexaclear-history-day,
 [data-theme="glass"] .hexaclear-history-cell.is-cleared .hexaclear-history-best,
 [data-theme="glass"] .hexaclear-history-cell.is-active .hexaclear-history-best {
-  color: #2a1c04;
+  color: #101820;
 }
 [data-theme="glass"] .hexaclear-history-cell.is-cleared::before {
-  color: #4a2f06;
-  text-shadow: 0 1px 0 rgba(255, 244, 214, 0.4);
+  color: #293642;
+  text-shadow: 0 1px 0 rgba(226, 241, 255, 0.35);
 }
 
 [data-theme="glass"] .hexaclear-reel-hex {
@@ -1704,7 +1754,7 @@
 [data-theme="glass"] .hexaclear-coop-cta.is-copied {
   border-color: color-mix(in srgb, var(--glass-gold) 50%, transparent);
   background: linear-gradient(160deg, var(--glass-gold-bright), var(--glass-gold-deep));
-  color: #2a1c04;
+  color: #101820;
 }
 [data-theme="glass"] .hexaclear-pvp-row-track {
   background: var(--glass-stone-deep);
@@ -1754,21 +1804,21 @@
   [data-theme="glass"] .hexaclear-glass-shard { display: none; }
 }
 
-/* Deal-in announce: same gilt inscription as the wordmark so the
+/* Deal-in announce: same cold stone inscription as the wordmark so the
    settle into the header reads as one object. Gradient text can't
    carry text-shadow (it leaks through the clip), and the shared
    keyframes own `filter`, so the relief shadows are dropped here —
-   at announce scale the gold gradient carries it alone. */
+   at announce scale the pale stone gradient carries it alone. */
 [data-theme="glass"] .hexaclear-dealin-announce-text {
   font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
   font-weight: 700;
   letter-spacing: 0.04em;
   background: linear-gradient(
     180deg,
-    #fff2cf 0%,
-    #ecc868 36%,
-    #c8941f 64%,
-    #7c540d 100%
+    #f5fbff 0%,
+    #cbd7e0 36%,
+    #8d9baa 64%,
+    #465461 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
@@ -1777,13 +1827,13 @@
   text-shadow: none;
 }
 
-/* Announcer text pops: same gilt inscription voice as the wordmark.
-   Streaks warm toward ruby-lit gold; board clears blaze. */
+/* Announcer text pops: same cold stone inscription voice as the wordmark.
+   Streaks cool toward ruby-lit slate; board clears blaze. */
 [data-theme="glass"] .hexaclear-announcer-pop {
   font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
   font-weight: 700;
   letter-spacing: 0.05em;
-  background: linear-gradient(180deg, #fff2cf 0%, #ecc868 42%, #c8941f 72%, #7c540d 100%);
+  background: linear-gradient(180deg, #f5fbff 0%, #cbd7e0 42%, #8d9baa 72%, #465461 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1791,83 +1841,83 @@
   text-shadow: none;
 }
 [data-theme="glass"] .hexaclear-announcer-pop.kind-streak {
-  background: linear-gradient(180deg, #ffd9b0 0%, #f0a050 45%, #c05a18 78%, #6b2c08 100%);
+  background: linear-gradient(180deg, #f1f7ff 0%, #b9c9d8 45%, #7c8e9d 78%, #354554 100%);
   -webkit-background-clip: text;
   background-clip: text;
 }
 
 /* ====================================================================
    PAUSE MENU — Glass pass. The sheet is a carved limestone tablet set
-   into the cathedral: stone-faced panel, gilt inscription type
-   (Cinzel), the hero as a slab of poured gold, place tiles as
-   recessed stone niches with gilt captions, and the settings groups
+   into the cathedral: stone-faced panel, pale inscription type
+   (Cinzel), the hero as a lit limestone slab, place tiles as
+   recessed stone niches with pale captions, and the settings groups
    as the same niches. Same three-tier physics, cathedral materials.
    ==================================================================== */
 [data-theme="glass"] .hexaclear-pmenu {
   background: linear-gradient(
     180deg,
-    var(--glass-stone-face, #4a3d28) 0%,
-    var(--glass-stone-deep, #20170c) 100%
+    var(--glass-stone-face, #48515c) 0%,
+    var(--glass-stone-deep, #151b22) 100%
   );
   border-radius: 14px;
-  border: 1px solid rgba(232, 200, 104, 0.18);
+  border: 1px solid rgba(184, 200, 214, 0.2);
   box-shadow:
     0 18px 50px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 244, 214, 0.18),
+    inset 0 1px 0 rgba(226, 241, 255, 0.18),
     inset 0 -2px 8px rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-masthead {
-  border-bottom: 1px solid rgba(232, 200, 104, 0.28);
+  border-bottom: 1px solid rgba(184, 200, 214, 0.28);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-kicker {
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
   letter-spacing: 0.3em;
-  color: #e8d9b0;
+  color: #c8d5df;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero,
 [data-theme="glass"] .hexaclear-pmenu-back {
   border-radius: 10px;
-  background: linear-gradient(180deg, #f7e3a8 0%, #c8941f 100%);
+  background: var(--glass-tablet-face-lit);
   box-shadow:
-    0 5px 0 #5d3f0a,
+    0 5px 0 #293642,
     0 6px 0 1px rgba(0, 0, 0, 0.5),
     0 16px 28px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 250, 230, 0.6);
+    inset 0 1px 0 rgba(244, 250, 255, 0.55);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero:hover,
 [data-theme="glass"] .hexaclear-pmenu-back:hover {
-  background: linear-gradient(180deg, #fbedc2 0%, #d6a52f 100%);
+  background: linear-gradient(180deg, #f0f7fc 0%, #b4c0ca 55%, #74818c 100%);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero:active,
 [data-theme="glass"] .hexaclear-pmenu-back:active {
   box-shadow:
-    0 1px 0 #5d3f0a,
+    0 1px 0 #293642,
     0 2px 0 1px rgba(0, 0, 0, 0.5),
     0 8px 16px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 250, 230, 0.6);
+    inset 0 1px 0 rgba(244, 250, 255, 0.55);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero-label {
   font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
   font-weight: 700;
-  color: #3b2606;
+  color: #101820;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero-sub {
   font-family: 'Cinzel', Georgia, serif;
-  color: rgba(59, 38, 6, 0.65);
+  color: rgba(16, 24, 32, 0.68);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-back {
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
-  color: #3b2606;
+  color: #101820;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-tile,
@@ -1875,23 +1925,23 @@
   .hexaclear-pmenu-settings-body
   .hexaclear-menu-settings-group {
   border-radius: 9px;
-  border: 1px solid rgba(232, 200, 104, 0.2);
-  background: rgba(10, 6, 2, 0.42);
+  border: 1px solid rgba(184, 200, 214, 0.22);
+  background: rgba(8, 12, 16, 0.46);
   box-shadow:
     inset 0 3px 8px rgba(0, 0, 0, 0.6),
-    inset 0 -1px 0 rgba(232, 200, 104, 0.1);
+    inset 0 -1px 0 rgba(184, 200, 214, 0.1);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-tile:hover,
 [data-theme="glass"] .hexaclear-pmenu-tile:focus-visible {
-  border-color: rgba(232, 200, 104, 0.5);
-  background: rgba(10, 6, 2, 0.3);
+  border-color: rgba(184, 200, 214, 0.52);
+  background: rgba(10, 16, 22, 0.34);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-tile-title {
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
-  color: #ead9ac;
+  color: #d7e2eb;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-tile-stat,
@@ -1899,21 +1949,21 @@
   .hexaclear-pmenu-settings-body
   .hexaclear-menu-settings-group-label {
   font-family: 'Cinzel', Georgia, serif;
-  color: #d8b35c;
+  color: #aebdca;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-settings-title {
   font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
-  color: #ead9ac;
+  color: #d7e2eb;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-runlink {
   font-family: 'Cinzel', Georgia, serif;
-  color: rgba(234, 217, 172, 0.6);
+  color: rgba(215, 226, 235, 0.62);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-runlink.is-warn {
-  color: rgba(232, 168, 78, 0.85);
+  color: rgba(195, 212, 226, 0.86);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-runlink.is-danger {
@@ -1921,15 +1971,15 @@
 }
 
 [data-theme="glass"] .hexaclear-pmenu-settings-chip {
-  border: 1px solid rgba(232, 200, 104, 0.35);
-  background: rgba(10, 6, 2, 0.3);
+  border: 1px solid rgba(184, 200, 214, 0.35);
+  background: rgba(8, 12, 16, 0.34);
   font-family: 'Cinzel', Georgia, serif;
-  color: #ead9ac;
+  color: #d7e2eb;
 }
 
-/* Stats dashboard accent — lit gold against the stone. */
+/* Stats dashboard accent — cold lit stone against the masonry. */
 :root[data-theme="glass"] {
-  --dash-accent: var(--glass-gold-bright, #f0c46a);
-  --dash-accent-ink: #1a1206;
+  --dash-accent: var(--glass-gold-bright, #eef6ff);
+  --dash-accent-ink: #101820;
   --dash-radius: 10px;
 }
