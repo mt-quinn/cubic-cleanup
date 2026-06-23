@@ -11969,8 +11969,10 @@ function App() {
               />
             )}
 
-            {/* Board hull — outer stone reveal (below glass panes). */}
-            {boardRender.outlineSegments.map((seg, idx) => (
+            {/* Board hull. Non-glass themes keep the historical underlay order;
+                glass redraws the exterior stone above panes so perimeter jewel
+                fills cannot overpaint the outer mullion. */}
+            {theme !== 'glass' && boardRender.outlineSegments.map((seg, idx) => (
               <line
                 key={`outline-back-${idx}`}
                 x1={seg.x1}
@@ -11980,7 +11982,7 @@ function App() {
                 className="hexaclear-board-outline-back"
               />
             ))}
-            {boardRender.outlineSegments.map((seg, idx) => (
+            {theme !== 'glass' && boardRender.outlineSegments.map((seg, idx) => (
               <line
                 key={`outline-front-${idx}`}
                 x1={seg.x1}
@@ -12581,9 +12583,36 @@ function App() {
               })
             })()}
 
+            {/* Glass exterior stone reveal: drawn after panes/overlays so the
+                wall mullion cleanly masks perimeter pane color. */}
+            {theme === 'glass' && boardRender.outlineSegments.map((seg, idx) => (
+              <line
+                key={`glass-outline-back-${idx}`}
+                x1={seg.x1}
+                y1={seg.y1}
+                x2={seg.x2}
+                y2={seg.y2}
+                className="hexaclear-board-outline-back"
+                aria-hidden="true"
+                pointerEvents="none"
+              />
+            ))}
+            {theme === 'glass' && boardRender.outlineSegments.map((seg, idx) => (
+              <line
+                key={`glass-outline-front-${idx}`}
+                x1={seg.x1}
+                y1={seg.y1}
+                x2={seg.x2}
+                y2={seg.y2}
+                className="hexaclear-board-outline-front"
+                aria-hidden="true"
+                pointerEvents="none"
+              />
+            ))}
+
             {/* Hull rim lead on the glass lip — before inter-rosette stone so
                 internal mullions wrap over it at junctions. Exterior frame
-                stone is the board outline above (drawn before panes). */}
+                stone is the glass outline pass above. */}
             {theme === 'glass' && glassHullLeadLoop && (
               <polygon
                 points={glassHullLeadLoop

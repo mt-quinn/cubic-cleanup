@@ -47,6 +47,9 @@
   /* Chilly inscription ink for body copy on stone. */
   --glass-ink: #e3eaf0;
   --glass-ink-dim: #a3afb9;
+  --glass-font-display: 'UnifrakturCook', 'IM Fell English SC', 'Cinzel', Georgia, serif;
+  --glass-font-ui: 'Cinzel', 'IM Fell English SC', Georgia, serif;
+  --glass-font-body: 'Cormorant Garamond', Georgia, serif;
 
   /* Cool window backlight; hue tracks the active tier. */
   --glass-light-hue: 210;
@@ -137,6 +140,7 @@
   padding: clamp(1rem, 4dvh, 3rem) clamp(1rem, 4vw, 1.6rem);
   background: transparent;
   box-shadow: none;
+  font-family: var(--glass-font-body);
 }
 [data-theme="glass"] .hexaclear-root::before {
   content: none;
@@ -148,9 +152,8 @@
    Design language: every control is a tablet of cut limestone with a
    chamfered (octagonal) edge, a lit top arris, a shadowed foot, and an
    incised inner channel — as if mortised into the cathedral wall. Text
-   is set in inscriptional Roman capitals (Cinzel); the wordmark in the
-   illuminated Cinzel Decorative. Gilt (poured into the carved letters)
-   is reserved for the title, numerals, and the lit/active state.
+   uses a heavy blackletter wordmark, inscriptional small-caps for controls,
+   and readable old-style serif text for modal copy.
    --------------------------------------------------------------------
    Two reusable tokens:
      --glass-chamfer : the octagonal stone-tablet clip
@@ -168,28 +171,29 @@
     0 7px
   );
   --glass-tablet-bevel:
-    inset 0 1px 0 rgba(228, 242, 255, 0.24),
-    inset 0 -2px 5px rgba(0, 0, 0, 0.6),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.42);
+    inset 0 1px 0 rgba(218, 234, 246, 0.16),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.72),
+    inset 0 0 0 2px rgba(154, 170, 182, 0.08),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.72);
   --glass-tablet-face:
     var(--glass-grain),
     linear-gradient(
       180deg,
-      var(--glass-stone-raise) 0%,
-      var(--glass-stone-face) 38%,
-      var(--glass-stone) 78%,
+      color-mix(in srgb, var(--glass-stone-face) 72%, var(--glass-stone-raise)) 0%,
+      var(--glass-stone-face) 34%,
+      var(--glass-stone) 72%,
       var(--glass-stone-deep) 100%
     );
   /* Lit (illuminated) limestone tablet face — pale stone lit from above, used for
      the primary CTA + the active tab, exactly like the header's lit mode
      pill. */
   --glass-tablet-face-lit:
-    radial-gradient(120% 150% at 50% -20%, rgba(255, 255, 255, 0.42), transparent 56%),
-    linear-gradient(180deg, #dfe8ef 0%, #a8b5c0 46%, #65727d 100%);
+    radial-gradient(120% 150% at 50% -20%, rgba(255, 255, 255, 0.28), transparent 56%),
+    linear-gradient(180deg, #c6d1da 0%, #8c9aa6 46%, #4a565f 100%);
   --glass-tablet-bevel-lit:
-    inset 0 1px 0 rgba(244, 250, 255, 0.62),
-    inset 0 -3px 6px rgba(22, 31, 40, 0.6),
-    inset 0 0 0 1px rgba(85, 101, 114, 0.58);
+    inset 0 1px 0 rgba(244, 250, 255, 0.44),
+    inset 0 0 0 1px rgba(9, 14, 18, 0.74),
+    inset 0 -4px 8px rgba(6, 10, 14, 0.68);
   /* Larger octagonal cut for the big reliquary panels. */
   --glass-chamfer-lg: polygon(
     16px 0,
@@ -213,12 +217,13 @@
 /* --- The wordmark: pale stone letters carved into the lintel ---------- */
 [data-theme="glass"] .hexaclear-title {
   position: relative;
-  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
   font-weight: 700;
-  font-size: 1.62rem;
-  letter-spacing: 0.04em;
-  line-height: 1.05;
-  padding-bottom: 0.26em;
+  font-size: 2.05rem;
+  letter-spacing: 0.01em;
+  line-height: 0.9;
+  text-transform: none;
+  padding-bottom: 0.22em;
   /* cold carved stone: bright arris, blue-grey face, slate foot */
   background: linear-gradient(
     180deg,
@@ -234,9 +239,9 @@
   /* carved depth: a hairline of light on the upper arris, a cast shadow
      below — gives the letters real relief without a flat drop shadow. */
   filter:
-    drop-shadow(0 1px 0 rgba(255, 248, 224, 0.18))
-    drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6))
-    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+    drop-shadow(0 1px 0 rgba(230, 244, 255, 0.18))
+    drop-shadow(0 2px 1px rgba(0, 0, 0, 0.82))
+    drop-shadow(0 6px 8px rgba(0, 0, 0, 0.52));
   text-shadow: none;
 }
 /* An incised pale-stone rule beneath the wordmark. */
@@ -269,12 +274,14 @@
   background-size: 180px 180px, auto;
   background-blend-mode: overlay, normal;
   border: none;
-  border-radius: 2px;
+  border-radius: 0;
   -webkit-clip-path: var(--glass-chamfer);
   clip-path: var(--glass-chamfer);
   box-shadow: var(--glass-tablet-bevel);
   /* the cast shadow follows the chamfered silhouette (clip-path-aware) */
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  filter:
+    drop-shadow(0 2px 2px rgba(0, 0, 0, 0.58))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.24));
   color: var(--glass-ink);
 }
 
@@ -314,10 +321,11 @@
    so CUBES / SCORE / BEST read as illuminated as the menu control. */
 [data-theme="glass"] .hexaclear-live-stat .label,
 [data-theme="glass"] .hexaclear-best-banner .label {
-  font-family: 'Cinzel', Georgia, serif;
-  font-weight: 600;
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
   color: var(--glass-gold-bright);
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
+  font-variant-caps: small-caps;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.7),
     0 0 8px color-mix(in srgb, var(--glass-gold) 30%, transparent);
@@ -327,7 +335,7 @@
 /* Gilt numerals — the value poured into the tablet, lit. */
 [data-theme="glass"] .hexaclear-live-stat .value,
 [data-theme="glass"] .hexaclear-best-banner .value {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   font-weight: 700;
   color: var(--glass-gold-bright);
   text-shadow:
@@ -343,9 +351,10 @@
 }
 
 [data-theme="glass"] .hexaclear-mode-toggle .mode-pill {
-  font-family: 'Cinzel', Georgia, serif;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  font-variant-caps: small-caps;
   border: none;
   border-radius: 1px;
   background: transparent;
@@ -365,20 +374,20 @@
       transparent 72%
     ),
     linear-gradient(180deg, rgba(228, 242, 255, 0.18), transparent 60%),
-    color-mix(in srgb, var(--glass-gold-deep) 30%, var(--glass-stone-raise));
+    color-mix(in srgb, var(--glass-stone-face) 72%, var(--glass-gold-deep));
   color: var(--glass-gold-bright);
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.55),
     0 0 8px color-mix(in srgb, var(--glass-gold) 45%, transparent);
   box-shadow:
-    inset 0 1px 0 rgba(228, 242, 255, 0.28),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.4),
-    0 0 14px color-mix(in srgb, var(--glass-gold) 26%, transparent);
+    inset 0 1px 0 rgba(228, 242, 255, 0.18),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.52),
+    inset 0 0 0 1px color-mix(in srgb, var(--glass-gold) 28%, transparent);
 }
 
 [data-theme="glass"] .hexaclear-mode-toggle .mode-pill:not(.active):hover {
   color: var(--glass-gold-bright);
-  background: rgba(216, 232, 246, 0.06);
+  background: rgba(216, 232, 246, 0.08);
 }
 
 /* How-to-play + high-score tab strips: a carved stone lintel (chamfered,
@@ -402,9 +411,10 @@
 }
 [data-theme="glass"] .hexaclear-scoring-tab,
 [data-theme="glass"] .hexaclear-scores-tab {
-  font-family: 'Cinzel', Georgia, serif;
-  font-weight: 600;
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
   letter-spacing: 0.12em;
+  font-variant-caps: small-caps;
   border-radius: 1px;
   background: transparent;
   color: color-mix(in srgb, var(--glass-ink-dim) 88%, #000);
@@ -418,9 +428,10 @@
 
 /* --- Menu button: a pale-lettered stone tablet with a carved boss ---- */
 [data-theme="glass"] .hexaclear-menu-button {
-  font-family: 'Cinzel', Georgia, serif;
-  font-weight: 600;
-  letter-spacing: 0.16em;
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-variant-caps: small-caps;
   color: var(--glass-gold-bright);
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.7),
@@ -438,6 +449,13 @@
     );
   background-size: 180px 180px, auto;
   background-blend-mode: overlay, normal;
+}
+
+[data-theme="glass"] .hexaclear-menu-button:active,
+[data-theme="glass"] .hexaclear-history-button:active,
+[data-theme="glass"] .hexaclear-undo-button:active {
+  transform: translateY(1px);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.62));
 }
 
 /* Swap the default colour-emoji gear for a pale carved boss so the
@@ -460,9 +478,10 @@
 /* History button (daily mode) inherits the tablet face above; set its
    inscriptional type to match the other controls. */
 [data-theme="glass"] .hexaclear-history-button {
-  font-family: 'Cinzel', Georgia, serif;
-  font-weight: 600;
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
   letter-spacing: 0.12em;
+  font-variant-caps: small-caps;
   color: var(--glass-gold-bright);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
 }
@@ -475,15 +494,20 @@
    the board (same layer as the HUD) so it stays interactive. */
 [data-theme="glass"] .hexaclear-undo-button {
   z-index: 6;
-  border: 1px solid color-mix(in srgb, var(--glass-gold) 42%, var(--glass-stone-shadow));
+  border: 1px solid color-mix(in srgb, var(--glass-gold) 28%, var(--glass-stone-shadow));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 42%),
-    var(--glass-stone-face);
+    var(--glass-grain),
+    linear-gradient(180deg, var(--glass-stone-face), var(--glass-stone-deep));
+  background-size: 180px 180px, auto;
+  background-blend-mode: overlay, normal;
   color: var(--glass-gold-bright);
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.12em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.32),
+    var(--glass-tablet-bevel),
     0 5px 12px rgba(0, 0, 0, 0.5);
 }
 
@@ -616,7 +640,7 @@
    cathedral. The streak tiers keep their own escalating size + heat
    colour — only the typeface is unified here. */
 [data-theme="glass"] .hexaclear-board-hud .board-hud-block {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   letter-spacing: 0.04em;
 }
 /* Tuck the corner HUD tight into the top-left so its plaque sits over the
@@ -642,7 +666,9 @@
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6));
   color: var(--glass-gold-bright);
   font-size: 0.66rem;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: var(--glass-font-ui);
+  font-variant-caps: small-caps;
   line-height: 1.34;
   letter-spacing: 0.07em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
@@ -819,7 +845,7 @@
   stroke: none;
 }
 [data-theme="glass"] .hexaclear-daily-number-centered {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   font-weight: 700;
   fill: #1b2230;
   stroke: rgba(255, 255, 255, 0.32);
@@ -1212,6 +1238,9 @@
 }
 [data-theme="glass"] .hexaclear-hold-label {
   color: var(--glass-gold);
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
+  font-variant-caps: small-caps;
   letter-spacing: 0.1em;
 }
 [data-theme="glass"] .hexaclear-piece-button.selected,
@@ -1226,6 +1255,9 @@
 [data-theme="glass"] .hexaclear-streak-value,
 [data-theme="glass"] .hexaclear-multi-clear-value {
   color: var(--glass-gold-bright);
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
+  font-variant-caps: small-caps;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.75),
     0 0 10px color-mix(in srgb, var(--glass-gold) 46%, transparent);
@@ -1291,6 +1323,7 @@
 [data-theme="glass"] .hexaclear-coop-waiting-card,
 [data-theme="glass"] .hexaclear-coop-error-card {
   color: var(--glass-ink);
+  font-family: var(--glass-font-body);
   border: none;
   /* A single octagonal block of cut limestone — the same chamfered
      silhouette the header tablets are dressed from, just larger. */
@@ -1337,10 +1370,10 @@
 [data-theme="glass"] .hexaclear-audio-unlock-title,
 [data-theme="glass"] .hexaclear-menu-nav-title {
   /* carved inscriptional caps, not the base Monoton neon outline */
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--glass-gold-bright);
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.8),
@@ -1351,8 +1384,9 @@
    tone (pale for a win, defeated grey for a shame) but drop Monoton. */
 [data-theme="glass"] .hexaclear-pvp-win-title,
 [data-theme="glass"] .hexaclear-pvp-shame-title {
-  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
   font-weight: 700;
+  text-transform: none;
   text-shadow:
     0 2px 0 rgba(0, 0, 0, 0.7),
     0 0 16px rgba(0, 0, 0, 0.5);
@@ -1377,6 +1411,7 @@
 [data-theme="glass"] .hexaclear-gameover-subhead,
 [data-theme="glass"] .hexaclear-run-stat-label,
 [data-theme="glass"] .hexaclear-menu-settings-account-text {
+  font-family: var(--glass-font-body);
   color: var(--glass-ink-dim);
   opacity: 1;
 }
@@ -1387,6 +1422,8 @@
 [data-theme="glass"] .hexaclear-profile-summary-value,
 [data-theme="glass"] .hexaclear-performance-feature-value,
 [data-theme="glass"] .hexaclear-record-value {
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
   color: var(--glass-gold-bright);
   text-shadow: 0 0 10px color-mix(in srgb, var(--glass-gold) 35%, transparent);
 }
@@ -1424,11 +1461,14 @@
   background-size: 180px 180px, auto !important;
   background-blend-mode: overlay, normal !important;
   box-shadow: var(--glass-tablet-bevel) !important;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  filter:
+    drop-shadow(0 2px 2px rgba(0, 0, 0, 0.58))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.22));
   color: var(--glass-gold-bright) !important;
-  font-family: 'Cinzel', Georgia, serif !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.06em;
+  font-family: var(--glass-font-ui) !important;
+  font-weight: 700 !important;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.08em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
   transition: filter 120ms ease, color 120ms ease;
 }
@@ -1458,8 +1498,9 @@
   -webkit-clip-path: var(--glass-chamfer) !important;
   clip-path: var(--glass-chamfer) !important;
   background: var(--glass-tablet-face-lit) !important;
-  font-family: 'Cinzel', Georgia, serif !important;
+  font-family: var(--glass-font-ui) !important;
   font-weight: 700 !important;
+  font-variant-caps: small-caps;
   letter-spacing: 0.08em;
   text-shadow: 0 1px 0 rgba(244, 250, 255, 0.45);
   box-shadow: var(--glass-tablet-bevel-lit) !important;
@@ -1500,8 +1541,9 @@
     inset 0 -2px 5px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(0, 0, 0, 0.5) !important;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
-  font-family: 'Cinzel', Georgia, serif !important;
+  font-family: var(--glass-font-ui) !important;
   font-weight: 700 !important;
+  font-variant-caps: small-caps;
   letter-spacing: 0.06em;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
   transition: filter 120ms ease, color 120ms ease;
@@ -1634,8 +1676,9 @@
    Daily-history calendar — each day a small carved stone tile
    ==================================================================== */
 [data-theme="glass"] .hexaclear-history-weekday {
-  font-family: 'Cinzel', Georgia, serif;
-  font-weight: 600;
+  font-family: var(--glass-font-ui);
+  font-weight: 700;
+  font-variant-caps: small-caps;
   letter-spacing: 0.12em;
   color: var(--glass-ink-dim);
 }
@@ -1658,11 +1701,11 @@
   padding: 0.3rem 0.2rem !important;
 }
 [data-theme="glass"] .hexaclear-history-day {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   font-weight: 700;
 }
 [data-theme="glass"] .hexaclear-history-best {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-body);
   color: var(--glass-ink-dim);
 }
 /* Unavailable days sink into a recessed, unlit niche. */
@@ -1810,9 +1853,10 @@
    keyframes own `filter`, so the relief shadows are dropped here —
    at announce scale the pale stone gradient carries it alone. */
 [data-theme="glass"] .hexaclear-dealin-announce-text {
-  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
   font-weight: 700;
   letter-spacing: 0.04em;
+  text-transform: none;
   background: linear-gradient(
     180deg,
     #f5fbff 0%,
@@ -1830,9 +1874,10 @@
 /* Announcer text pops: same cold stone inscription voice as the wordmark.
    Streaks cool toward ruby-lit slate; board clears blaze. */
 [data-theme="glass"] .hexaclear-announcer-pop {
-  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
   font-weight: 700;
   letter-spacing: 0.05em;
+  text-transform: none;
   background: linear-gradient(180deg, #f5fbff 0%, #cbd7e0 42%, #8d9baa 72%, #465461 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -1872,7 +1917,7 @@
 }
 
 [data-theme="glass"] .hexaclear-pmenu-kicker {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   font-weight: 700;
   letter-spacing: 0.3em;
   color: #c8d5df;
@@ -1880,7 +1925,9 @@
 
 [data-theme="glass"] .hexaclear-pmenu-hero,
 [data-theme="glass"] .hexaclear-pmenu-back {
-  border-radius: 10px;
+  border-radius: 2px;
+  -webkit-clip-path: var(--glass-chamfer);
+  clip-path: var(--glass-chamfer);
   background: var(--glass-tablet-face-lit);
   box-shadow:
     0 5px 0 #293642,
@@ -1904,19 +1951,21 @@
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero-label {
-  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
   font-weight: 700;
+  text-transform: none;
   color: #101820;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-hero-sub {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-body);
   color: rgba(16, 24, 32, 0.68);
 }
 
 [data-theme="glass"] .hexaclear-pmenu-back {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   font-weight: 700;
+  font-variant-caps: small-caps;
   color: #101820;
 }
 
@@ -1939,8 +1988,9 @@
 }
 
 [data-theme="glass"] .hexaclear-pmenu-tile-title {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
   font-weight: 700;
+  font-variant-caps: small-caps;
   color: #d7e2eb;
 }
 
@@ -1948,17 +1998,19 @@
 [data-theme="glass"]
   .hexaclear-pmenu-settings-body
   .hexaclear-menu-settings-group-label {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
+  font-variant-caps: small-caps;
   color: #aebdca;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-settings-title {
-  font-family: 'Cinzel Decorative', 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-display);
+  text-transform: none;
   color: #d7e2eb;
 }
 
 [data-theme="glass"] .hexaclear-pmenu-runlink {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-body);
   color: rgba(215, 226, 235, 0.62);
 }
 
@@ -1973,7 +2025,8 @@
 [data-theme="glass"] .hexaclear-pmenu-settings-chip {
   border: 1px solid rgba(184, 200, 214, 0.35);
   background: rgba(8, 12, 16, 0.34);
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: var(--glass-font-ui);
+  font-variant-caps: small-caps;
   color: #d7e2eb;
 }
 
