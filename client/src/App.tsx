@@ -3345,13 +3345,14 @@ function App() {
       y: boardRender.layout.height / 2,
     })
   }, [boardRender])
-  // Stone tracery is wider than the thin pane lead, so it gets a deeper
-  // perimeter clip. This keeps inter-rosette mullions from crossing over the
-  // interior side of the exterior stone reveal at hull junctions.
+  // Clip stone tracery to the hull lead, not deep inside the pane field.
+  // The inter-rosette mullions should terminate against the black perimeter
+  // stroke; clipping them farther inward leaves colored glass bleeding into
+  // the junction and makes the exterior mullion appear to interrupt them.
   const glassStoneTraceryClipLoop = useMemo(() => {
     const loop = stitchClosedLoop(boardRender.outlineSegments)
     if (loop.length < 3) return null
-    return insetClosedLoop(loop, 7.5, {
+    return insetClosedLoop(loop, 2.5, {
       x: boardRender.layout.width / 2,
       y: boardRender.layout.height / 2,
     })
